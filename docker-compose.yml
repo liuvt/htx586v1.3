@@ -1,0 +1,17 @@
+services:
+  htx586contract:
+    build: .
+    container_name: htx586contract
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Default: ${HTX586CONTRACT_DB}
+      Seed__AdminUserName: ${HTX586CONTRACT_ADMIN_USER:-admin}
+      Seed__AdminPassword: ${HTX586CONTRACT_ADMIN_PASSWORD}
+    volumes:
+      - htx586contract_uploads:/app/wwwroot/uploads/contracts
+    restart: unless-stopped
+
+volumes:
+  htx586contract_uploads:

@@ -1,0 +1,47 @@
+@page "/admin/accounts"
+@attribute [Authorize(Roles = "Admin")]
+@inject IAdminAccountService AdminAccountService
+@inject ISnackbar Snackbar
+
+<PageTitle>Quản lý tài khoản</PageTitle>
+<PageHeader Title="Quản lý tài khoản" Subtitle="Quản lý tài khoản đăng nhập hệ thống. Company được gán tại module tài xế." />
+
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudTextField T="string" @bind-Value="_keyword" Placeholder="Tìm tài khoản, họ tên, mã nhân viên..." Immediate="true" Clearable="true" Variant="Variant.Outlined" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
+</MudPaper>
+
+<MudTable T="AdminAccountListItem" Items="FilteredItems" Loading="_loading" Hover="true" Striped="true" Breakpoint="Breakpoint.Sm">
+    <HeaderContent>
+        <MudTh>Tài khoản</MudTh><MudTh>Họ tên</MudTh><MudTh>Mã nhân viên</MudTh><MudTh>Điện thoại</MudTh><MudTh>Email</MudTh><MudTh>Trạng thái</MudTh><MudTh></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Tài khoản">@context.UserName</MudTd>
+        <MudTd DataLabel="Họ tên">@context.FullName</MudTd>
+        <MudTd DataLabel="Mã nhân viên">@(context.EmployeeCode ?? "—")</MudTd>
+        <MudTd DataLabel="Điện thoại">@(context.PhoneNumber ?? "—")</MudTd>
+        <MudTd DataLabel="Email">@(context.Email ?? "—")</MudTd>
+        <MudTd DataLabel="Trạng thái">
+            <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Error)">@(context.IsActive ? "Hoạt động" : "Đã khóa")</MudChip>
+        </MudTd>
+        <MudTd><MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" Href="@($"/admin/accounts/{context.Id}")" /></MudTd>
+    </RowTemplate>
+</MudTable>
+
+@code {
+    private bool _loading;
+    private string? _keyword;
+    private IReadOnlyList<AdminAccountListItem> _items = [];
+    private IEnumerable<AdminAccountListItem> FilteredItems => string.IsNullOrWhiteSpace(_keyword)
+        ? _items
+        : _items.Where(x => Contains(x.UserName) || Contains(x.FullName) || Contains(x.EmployeeCode) || Contains(x.PhoneNumber) || Contains(x.Email));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+        try { _items = await AdminAccountService.GetAccountsAsync(); }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _loading = false; }
+    }
+
+    private bool Contains(string? value) => !string.IsNullOrWhiteSpace(value) && value.Contains(_keyword!.Trim(), StringComparison.OrdinalIgnoreCase);
+}

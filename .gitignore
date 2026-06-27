@@ -1,0 +1,27 @@
+# .NET
+**/bin/
+**/obj/
+.vs/
+*.user
+*.suo
+
+# Local configuration / secrets
+.env
+appsettings.Local.json
+secrets.json
+
+# Runtime uploads
+src/HTX586CONTRACT.Web/wwwroot/uploads/contracts/**
+!src/HTX586CONTRACT.Web/wwwroot/uploads/contracts/.gitkeep
+
+# Logs and temporary files
+logs/
+*.log
+*.tmp
+*.uploading
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

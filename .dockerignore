@@ -1,0 +1,7 @@
+**/bin
+**/obj
+.git
+.vs
+.vscode
+src/HTX586CONTRACT.Web/wwwroot/uploads/contracts/*
+!src/HTX586CONTRACT.Web/wwwroot/uploads/contracts/.gitkeep
