@@ -302,13 +302,10 @@ public sealed class PdfContractTemplateRenderer(
             ["PAYMENT_TIME"] = First(contract.PaymentTime, "..."),
             ["CONTRACT_NOTE"] = First(contract.Note, "Không có"),
 
-            ["SIG_OFFICE_NAME"] = SignatureName(
-                contract,
-                SignatureParty.RepresentativeOffice,
-                First(company?.RepresentativeName, contract.CompanyRepresentativeSnapshot, "...")),
-            ["SIG_OWNER_NAME"] = SignatureName(contract, SignatureParty.VehicleOwner, ownerName),
+            ["SIG_OFFICE_NAME"] = First(company?.RepresentativeName, contract.CompanyRepresentativeSnapshot, "..."),
+            ["SIG_OWNER_NAME"] = ownerName,
             ["SIG_CUSTOMER_NAME"] = SignatureName(contract, SignatureParty.Customer, customerRepresentative),
-            ["SIG_DRIVER_NAME"] = SignatureName(contract, SignatureParty.Driver, driverName),
+            ["SIG_DRIVER_NAME"] = driverName,
             ["VERIFY_CODE"] = ShortHash(contract.ContractHash ?? contract.Id.ToString("N"))
         };
 
@@ -333,16 +330,21 @@ public sealed class PdfContractTemplateRenderer(
     private Dictionary<string, string?> BuildImageValues(Contract contract)
         => new(StringComparer.Ordinal)
         {
-            ["SIG_OFFICE"] = SignaturePath(contract, SignatureParty.RepresentativeOffice),
-            ["SIG_OWNER"] = SignaturePath(contract, SignatureParty.VehicleOwner),
-            ["SIG_CUSTOMER"] = SignaturePath(contract, SignatureParty.Customer),
-            ["SIG_CUSTOMER_2"] = SignaturePath(contract, SignatureParty.Customer),
-            ["SIG_DRIVER"] = SignaturePath(contract, SignatureParty.Driver)
+            // Chữ ký cố định lấy từ danh mục Company/Vehicle/User.
+            ["SIG_OFFICE"] = StoredSignaturePath(contract.CompanyProfile?.RepresentativeSignatureFileUrl),
+            ["SIG_OWNER"] = StoredSignaturePath(contract.Vehicle?.OwnerSignatureFileUrl),
+            ["SIG_DRIVER"] = StoredSignaturePath(contract.Driver?.DriverSignatureFileUrl),
+
+            // Chữ ký khách hàng vẫn là chữ ký theo từng hợp đồng.
+            ["SIG_CUSTOMER"] = ContractSignaturePath(contract, SignatureParty.Customer),
+            ["SIG_CUSTOMER_2"] = ContractSignaturePath(contract, SignatureParty.Customer)
         };
 
-    private string? SignaturePath(Contract contract, SignatureParty party)
+    private string? ContractSignaturePath(Contract contract, SignatureParty party)
+        => StoredSignaturePath(contract.Signatures.FirstOrDefault(x => x.Party == party)?.SignatureFileUrl);
+
+    private string? StoredSignaturePath(string? relativeUrl)
     {
-        var relativeUrl = contract.Signatures.FirstOrDefault(x => x.Party == party)?.SignatureFileUrl;
         if (string.IsNullOrWhiteSpace(relativeUrl))
             return null;
 

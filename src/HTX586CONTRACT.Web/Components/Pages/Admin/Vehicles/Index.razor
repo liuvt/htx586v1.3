@@ -1,7 +1,8 @@
 @page "/admin/vehicles"
-@attribute [Authorize(Roles = "Admin")]
+@attribute [Authorize(Roles = "Owner,Admin")]
 @inject IDbContextFactory<ApplicationDbContext> Factory
 @inject ISnackbar Snackbar
+@inject MasterSignatureService MasterSignatureService
 
 <PageTitle>Xe và chủ sở hữu</PageTitle>
 <PageHeader Title="Quản lý xe" Subtitle="Xe và chủ sở hữu xe là dữ liệu độc lập, không gắn trực tiếp với CompanyProfile." />
@@ -18,6 +19,18 @@
         <MudItem xs="12" md="4"><MudDatePicker @bind-Date="_model.OwnerCitizenIdIssuedDate" Label="Ngày cấp CCCD" Variant="Variant.Outlined" /></MudItem>
         <MudItem xs="12" md="8"><MudTextField @bind-Value="_model.OwnerCitizenIdIssuedPlace" Label="Nơi cấp CCCD" Variant="Variant.Outlined" /></MudItem>
         <MudItem xs="12"><MudTextField @bind-Value="_model.OwnerAddress" Label="Địa chỉ chủ xe" Variant="Variant.Outlined" /></MudItem>
+        <MudItem xs="12" md="6">
+            <MudText Typo="Typo.subtitle1">Chữ ký cố định chủ xe</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Contract sẽ tự động lấy chữ ký này theo xe được chọn.</MudText>
+            <SignaturePad ExistingSignatureUrl="@_model.OwnerSignatureFileUrl"
+                          SignerName="@_model.OwnerName"
+                          SignedAt="@_model.OwnerSignedAt"
+                          OnSignatureSaved="CaptureOwnerSignature" />
+            @if (!string.IsNullOrWhiteSpace(_ownerSignatureDataUrl))
+            {
+                <MudChip T="string" Class="mt-2" Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.Check">Đã nhận chữ ký cố định</MudChip>
+            }
+        </MudItem>
         <MudItem xs="12">
             <MudStack Row="true"><MudButton Variant="Variant.Outlined" Disabled="@(!_editing)" OnClick="ResetForm">Hủy sửa</MudButton><MudSpacer /><MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_saving" OnClick="SaveAsync">@(_editing ? "Cập nhật xe" : "Thêm xe")</MudButton></MudStack>
         </MudItem>
@@ -25,13 +38,14 @@
 </MudPaper>
 
 <MudTable T="Vehicle" Items="_items" Loading="_loading" Hover="true" Striped="true" Class="mt-4" Breakpoint="Breakpoint.Sm">
-    <HeaderContent><MudTh>Biển số</MudTh><MudTh>Nhãn hiệu</MudTh><MudTh>Số chỗ</MudTh><MudTh>Chủ sở hữu</MudTh><MudTh>CCCD</MudTh><MudTh>Trạng thái</MudTh><MudTh></MudTh></HeaderContent>
+    <HeaderContent><MudTh>Biển số</MudTh><MudTh>Nhãn hiệu</MudTh><MudTh>Số chỗ</MudTh><MudTh>Chủ sở hữu</MudTh><MudTh>CCCD</MudTh><MudTh>Chữ ký</MudTh><MudTh>Trạng thái</MudTh><MudTh></MudTh></HeaderContent>
     <RowTemplate>
         <MudTd DataLabel="Biển số"><b>@context.PlateNumber</b></MudTd>
         <MudTd DataLabel="Nhãn hiệu">@(context.Brand ?? "—")</MudTd>
         <MudTd DataLabel="Số chỗ">@(context.SeatCount?.ToString() ?? "—")</MudTd>
         <MudTd DataLabel="Chủ sở hữu">@context.OwnerName</MudTd>
         <MudTd DataLabel="CCCD">@(context.OwnerCitizenId ?? "—")</MudTd>
+        <MudTd DataLabel="Chữ ký"><MudChip T="string" Size="Size.Small" Color="@(string.IsNullOrWhiteSpace(context.OwnerSignatureFileUrl) ? Color.Warning : Color.Success)">@(string.IsNullOrWhiteSpace(context.OwnerSignatureFileUrl) ? "Thiếu" : "Đã lưu")</MudChip></MudTd>
         <MudTd DataLabel="Trạng thái"><MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">@(context.IsActive ? "Hoạt động" : "Ngừng")</MudChip></MudTd>
         <MudTd><MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="@(() => Edit(context))" /></MudTd>
     </RowTemplate>
@@ -44,6 +58,7 @@
     private bool _loading;
     private bool _saving;
     private bool _editing;
+    private string? _ownerSignatureDataUrl;
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -79,8 +94,12 @@
             OwnerCitizenIdIssuedPlace = item.OwnerCitizenIdIssuedPlace,
             OwnerAddress = item.OwnerAddress,
             OwnerPhoneNumber = item.OwnerPhoneNumber,
+            OwnerSignatureFileUrl = item.OwnerSignatureFileUrl,
+            OwnerSignatureHash = item.OwnerSignatureHash,
+            OwnerSignedAt = item.OwnerSignedAt,
             IsActive = item.IsActive
         };
+        _ownerSignatureDataUrl = null;
     }
 
     private async Task SaveAsync()
@@ -88,6 +107,13 @@
         if (string.IsNullOrWhiteSpace(_model.PlateNumber) || string.IsNullOrWhiteSpace(_model.OwnerName))
         {
             Snackbar.Add("Vui lòng nhập biển số và chủ sở hữu xe.", Severity.Warning);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_model.OwnerSignatureFileUrl) &&
+            string.IsNullOrWhiteSpace(_ownerSignatureDataUrl))
+        {
+            Snackbar.Add("Vui lòng ký chữ ký cố định của chủ xe.", Severity.Warning);
             return;
         }
 
@@ -116,7 +142,11 @@
             }
 
             await db.SaveChangesAsync();
-            Snackbar.Add(_editing ? "Đã cập nhật xe." : "Đã thêm xe.", Severity.Success);
+
+            if (!string.IsNullOrWhiteSpace(_ownerSignatureDataUrl))
+                await MasterSignatureService.SaveVehicleOwnerSignatureAsync(_model.Id, _ownerSignatureDataUrl);
+
+            Snackbar.Add(_editing ? "Đã cập nhật xe." : "Đã thêm xe và chữ ký cố định.", Severity.Success);
             ResetForm();
             await LoadAsync();
         }
@@ -124,7 +154,19 @@
         finally { _saving = false; }
     }
 
-    private void ResetForm() { _editing = false; _model = NewVehicle(); }
+    private Task CaptureOwnerSignature(string data)
+    {
+        _ownerSignatureDataUrl = data;
+        Snackbar.Add("Đã nhận chữ ký cố định chủ xe.", Severity.Success);
+        return Task.CompletedTask;
+    }
+
+    private void ResetForm()
+    {
+        _editing = false;
+        _ownerSignatureDataUrl = null;
+        _model = NewVehicle();
+    }
     private static Vehicle NewVehicle() => new() { IsActive = true };
 
     private static void Map(Vehicle target, Vehicle source)

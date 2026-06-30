@@ -1,8 +1,9 @@
 @page "/admin/companies/{Id:guid}"
-@attribute [Authorize(Roles = "Admin")]
+@attribute [Authorize(Roles = "Owner,Admin")]
 @inject ICompanyProfileService CompanyService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
+@inject MasterSignatureService MasterSignatureService
 
 <PageTitle>Chi tiết đơn vị</PageTitle>
 <PageHeader Title="Chi tiết công ty/văn phòng đại diện" Subtitle="Company là danh mục độc lập; tài xế được gán Company trong hồ sơ tài xế." />
@@ -34,6 +35,14 @@ else
             <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.BankAccountNumber" Label="Số tài khoản" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.BankName" Label="Ngân hàng" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12"><MudSwitch T="bool" @bind-Value="_model.IsActive" Color="Color.Success" Label="Đang hoạt động" /></MudItem>
+            <MudItem xs="12" md="6">
+                <MudText Typo="Typo.subtitle1">Chữ ký cố định người đại diện</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Contract sẽ tự động lấy chữ ký này.</MudText>
+                <SignaturePad ExistingSignatureUrl="@_detail.RepresentativeSignatureFileUrl"
+                              SignerName="@_detail.RepresentativeName"
+                              SignedAt="@_detail.RepresentativeSignedAt"
+                              OnSignatureSaved="SaveCompanySignatureAsync" />
+            </MudItem>
         </MudGrid>
 
         <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4">
@@ -84,6 +93,20 @@ else
             }
         }
         finally { _loading = false; }
+    }
+
+    private async Task SaveCompanySignatureAsync(string data)
+    {
+        try
+        {
+            await MasterSignatureService.SaveCompanyRepresentativeSignatureAsync(Id, data);
+            Snackbar.Add("Đã lưu chữ ký cố định người đại diện.", Severity.Success);
+            _detail = await CompanyService.GetByIdAsync(Id);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
     }
 
     private async Task SaveAsync()

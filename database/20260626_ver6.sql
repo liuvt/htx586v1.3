@@ -26,6 +26,38 @@ BEGIN
         ALTER TABLE dbo.Contracts ADD SecondDriverLicenseClass nvarchar(max) NULL;
 END;
 
+
+
+IF OBJECT_ID(N'dbo.CompanyProfiles', N'U') IS NOT NULL
+BEGIN
+    IF COL_LENGTH(N'dbo.CompanyProfiles', N'RepresentativeSignatureFileUrl') IS NULL
+        ALTER TABLE dbo.CompanyProfiles ADD RepresentativeSignatureFileUrl nvarchar(500) NULL;
+    IF COL_LENGTH(N'dbo.CompanyProfiles', N'RepresentativeSignatureHash') IS NULL
+        ALTER TABLE dbo.CompanyProfiles ADD RepresentativeSignatureHash nvarchar(128) NULL;
+    IF COL_LENGTH(N'dbo.CompanyProfiles', N'RepresentativeSignedAt') IS NULL
+        ALTER TABLE dbo.CompanyProfiles ADD RepresentativeSignedAt datetime2 NULL;
+END;
+
+IF OBJECT_ID(N'dbo.Vehicles', N'U') IS NOT NULL
+BEGIN
+    IF COL_LENGTH(N'dbo.Vehicles', N'OwnerSignatureFileUrl') IS NULL
+        ALTER TABLE dbo.Vehicles ADD OwnerSignatureFileUrl nvarchar(500) NULL;
+    IF COL_LENGTH(N'dbo.Vehicles', N'OwnerSignatureHash') IS NULL
+        ALTER TABLE dbo.Vehicles ADD OwnerSignatureHash nvarchar(128) NULL;
+    IF COL_LENGTH(N'dbo.Vehicles', N'OwnerSignedAt') IS NULL
+        ALTER TABLE dbo.Vehicles ADD OwnerSignedAt datetime2 NULL;
+END;
+
+IF OBJECT_ID(N'dbo.AspNetUsers', N'U') IS NOT NULL
+BEGIN
+    IF COL_LENGTH(N'dbo.AspNetUsers', N'DriverSignatureFileUrl') IS NULL
+        ALTER TABLE dbo.AspNetUsers ADD DriverSignatureFileUrl nvarchar(500) NULL;
+    IF COL_LENGTH(N'dbo.AspNetUsers', N'DriverSignatureHash') IS NULL
+        ALTER TABLE dbo.AspNetUsers ADD DriverSignatureHash nvarchar(128) NULL;
+    IF COL_LENGTH(N'dbo.AspNetUsers', N'DriverSignedAt') IS NULL
+        ALTER TABLE dbo.AspNetUsers ADD DriverSignedAt datetime2 NULL;
+END;
+
 IF OBJECT_ID(N'dbo.ContractPassengers', N'U') IS NULL
 BEGIN
     CREATE TABLE dbo.ContractPassengers
@@ -127,4 +159,28 @@ IF NOT EXISTS
 BEGIN
     CREATE INDEX IX_ContractSignatures_ServerSignedAt
         ON dbo.ContractSignatures(ServerSignedAt DESC);
+END;
+
+/* Ver7 - phân quyền Owner/Admin/Driver.
+   Owner là tài khoản quản lý tổng. CompanyProfile không còn được seed mặc định;
+   Owner tạo Admin thì app tạo CompanyProfile và chữ ký cố định cho Admin đó. */
+IF OBJECT_ID(N'dbo.AspNetRoles', N'U') IS NOT NULL
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM dbo.AspNetRoles WHERE NormalizedName = N'OWNER')
+    BEGIN
+        INSERT INTO dbo.AspNetRoles (Id, Name, NormalizedName, ConcurrencyStamp)
+        VALUES (CONVERT(nvarchar(36), NEWID()), N'Owner', N'OWNER', CONVERT(nvarchar(36), NEWID()));
+    END;
+
+    IF NOT EXISTS (SELECT 1 FROM dbo.AspNetRoles WHERE NormalizedName = N'ADMIN')
+    BEGIN
+        INSERT INTO dbo.AspNetRoles (Id, Name, NormalizedName, ConcurrencyStamp)
+        VALUES (CONVERT(nvarchar(36), NEWID()), N'Admin', N'ADMIN', CONVERT(nvarchar(36), NEWID()));
+    END;
+
+    IF NOT EXISTS (SELECT 1 FROM dbo.AspNetRoles WHERE NormalizedName = N'DRIVER')
+    BEGIN
+        INSERT INTO dbo.AspNetRoles (Id, Name, NormalizedName, ConcurrencyStamp)
+        VALUES (CONVERT(nvarchar(36), NEWID()), N'Driver', N'DRIVER', CONVERT(nvarchar(36), NEWID()));
+    END;
 END;

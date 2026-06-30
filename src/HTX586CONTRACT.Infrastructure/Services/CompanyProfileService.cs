@@ -43,8 +43,9 @@ public sealed class CompanyProfileService(IDbContextFactory<ApplicationDbContext
                 PhoneNumber = x.PhoneNumber,
                 Email = x.Email,
                 RepresentativeName = x.RepresentativeName,
+                RepresentativeSignatureFileUrl = x.RepresentativeSignatureFileUrl,
                 IsActive = x.IsActive,
-                DriverCount = x.Drivers.Count,
+                DriverCount = db.Users.Count(u => u.CompanyProfileId == x.Id && db.UserRoles.Any(ur => ur.UserId == u.Id && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == "Driver"))),
                 ContractCount = x.Contracts.Count,
                 CreatedAt = x.CreatedAt
             })
@@ -73,8 +74,10 @@ public sealed class CompanyProfileService(IDbContextFactory<ApplicationDbContext
                 RepresentativeCitizenIdIssuedPlace = x.RepresentativeCitizenIdIssuedPlace,
                 BankAccountNumber = x.BankAccountNumber,
                 BankName = x.BankName,
+                RepresentativeSignatureFileUrl = x.RepresentativeSignatureFileUrl,
+                RepresentativeSignedAt = x.RepresentativeSignedAt,
                 IsActive = x.IsActive,
-                DriverCount = x.Drivers.Count,
+                DriverCount = db.Users.Count(u => u.CompanyProfileId == x.Id && db.UserRoles.Any(ur => ur.UserId == u.Id && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == "Driver"))),
                 ContractCount = x.Contracts.Count,
                 CreatedAt = x.CreatedAt,
                 UpdatedAt = x.UpdatedAt
@@ -136,7 +139,7 @@ public sealed class CompanyProfileService(IDbContextFactory<ApplicationDbContext
             ?? throw new KeyNotFoundException("Không tìm thấy công ty/văn phòng đại diện.");
 
         if (await db.Users.AnyAsync(x => x.CompanyProfileId == id, ct))
-            throw new InvalidOperationException("Không thể xóa vì đơn vị đang được gán cho tài xế.");
+            throw new InvalidOperationException("Không thể xóa vì đơn vị đang được gán cho tài khoản Admin/Driver.");
         if (await db.Contracts.AnyAsync(x => x.CompanyProfileId == id, ct))
             throw new InvalidOperationException("Không thể xóa vì đơn vị đã được sử dụng trong hợp đồng.");
 

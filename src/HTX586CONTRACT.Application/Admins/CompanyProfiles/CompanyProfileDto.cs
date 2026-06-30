@@ -17,6 +17,8 @@ public sealed class CompanyProfileDto
     public string? RepresentativeCitizenIdIssuedPlace { get; set; }
     public string? BankAccountNumber { get; set; }
     public string? BankName { get; set; }
+    public string? RepresentativeSignatureFileUrl { get; set; }
+    public DateTime? RepresentativeSignedAt { get; set; }
     public bool IsActive { get; set; }
     public int DriverCount { get; set; }
     public int ContractCount { get; set; }

@@ -1,4 +1,3 @@
-using HTX586CONTRACT.Domain.Companies;
 using HTX586CONTRACT.Domain.Contracts;
 using HTX586CONTRACT.Domain.Identity;
 using Microsoft.AspNetCore.Identity;
@@ -27,98 +26,97 @@ public static class DatabaseSeeder
         await DatabaseSchemaInitializer.ApplyAsync(db);
 
         await SeedRolesAsync(roleManager);
-        await SeedAdminAsync(userManager, configuration);
-        await SeedCompaniesAsync(db);
+        await SeedOwnerAsync(userManager, configuration);
+
+        // CompanyProfile không seed mặc định nữa.
+        // Owner tạo tài khoản Admin mới thì hệ thống tạo CompanyProfile + chữ ký cố định cho Admin đó.
         await SeedContractTypesAsync(db);
     }
 
     private static async Task SeedRolesAsync(RoleManager<IdentityRole> roleManager)
     {
-        foreach (var role in new[] { "Admin", "Driver" })
+        foreach (var role in new[] { "Owner", "Admin", "Driver" })
         {
             if (await roleManager.RoleExistsAsync(role)) continue;
             Ensure(await roleManager.CreateAsync(new IdentityRole(role)), $"Không thể tạo quyền {role}");
         }
     }
 
-    private static async Task SeedAdminAsync(
+    private static async Task SeedOwnerAsync(
         UserManager<ApplicationUser> userManager,
         IConfiguration configuration)
     {
-        var userName = configuration["Seed:AdminUserName"]?.Trim();
+        // Nếu database đã có Owner thì không tạo thêm Owner mới, tránh đổi config rồi phát sinh tài khoản rác.
+        var existingOwners = await userManager.GetUsersInRoleAsync("Owner");
+        if (existingOwners.Count > 0) return;
+
+        var userName = configuration["Seed:OwnerUserName"]?.Trim();
         if (string.IsNullOrWhiteSpace(userName))
-            userName = "admin";
+            userName = configuration["Seed:AdminUserName"]?.Trim();
+        if (string.IsNullOrWhiteSpace(userName))
+            userName = "owner";
 
-        var user = await userManager.FindByNameAsync(userName);
-        if (user is null)
+        var configuredUser = await userManager.FindByNameAsync(userName);
+        if (configuredUser is not null)
         {
-            var password = configuration["Seed:AdminPassword"];
-            if (string.IsNullOrWhiteSpace(password))
-                throw new InvalidOperationException(
-                    "Database chưa có tài khoản quản trị. Hãy cấu hình Seed:AdminPassword " +
-                    "bằng user-secrets hoặc biến môi trường Seed__AdminPassword rồi chạy lại ứng dụng.");
+            Ensure(await userManager.AddToRoleAsync(configuredUser, "Owner"), "Không thể gán quyền Owner cho tài khoản đã cấu hình");
+            return;
+        }
 
-            user = new ApplicationUser
+        var password = configuration["Seed:OwnerPassword"];
+        if (string.IsNullOrWhiteSpace(password))
+            password = configuration["Seed:AdminPassword"];
+
+        // Cho môi trường Development tự bootstrap Owner để chạy lần đầu không bị crash.
+        // Production/Staging vẫn bắt buộc cấu hình Seed:OwnerPassword để tránh tạo mật khẩu mặc định trên server thật.
+        var environmentName = configuration["ASPNETCORE_ENVIRONMENT"] ?? configuration["DOTNET_ENVIRONMENT"];
+        var useDevelopmentDefaultPassword = string.IsNullOrWhiteSpace(password)
+            && string.Equals(environmentName, "Development", StringComparison.OrdinalIgnoreCase);
+
+        if (useDevelopmentDefaultPassword)
+            password = "Owner@123456";
+
+        if (!string.IsNullOrWhiteSpace(password))
+        {
+            var owner = new ApplicationUser
             {
                 UserName = userName,
-                FullName = "Quản trị hệ thống",
-                EmployeeCode = "ADMIN",
+                FullName = "Owner hệ thống",
+                EmployeeCode = "OWNER",
                 IsActive = true,
-                MustChangePassword = true,
+                MustChangePassword = false,
                 CreatedAt = DateTime.UtcNow
             };
-            Ensure(await userManager.CreateAsync(user, password), "Không thể tạo tài khoản admin");
+
+            Ensure(await userManager.CreateAsync(owner, password), "Không thể tạo tài khoản Owner");
+            Ensure(await userManager.AddToRoleAsync(owner, "Owner"), "Không thể gán quyền Owner");
+            return;
         }
 
-        if (!await userManager.IsInRoleAsync(user, "Admin"))
-            Ensure(await userManager.AddToRoleAsync(user, "Admin"), "Không thể gán quyền Admin");
-    }
+        // Database cũ thường đã có tài khoản Admin nhưng không có Owner.
+        // Khi chưa cấu hình Seed:OwnerPassword, tự nâng cấp 1 Admin hiện hữu thành Owner để app không bị crash.
+        var legacyAdminUserName = configuration["Seed:AdminUserName"]?.Trim();
+        if (string.IsNullOrWhiteSpace(legacyAdminUserName))
+            legacyAdminUserName = "admin";
 
-    private static async Task SeedCompaniesAsync(ApplicationDbContext db)
-    {
-        var seeds = new[]
+        var legacyAdmin = await userManager.FindByNameAsync(legacyAdminUserName);
+        if (legacyAdmin is not null)
         {
-            new CompanyProfile
-            {
-                CompanyName = "HỢP TÁC XÃ VẬN TẢI 586 - CẦN THƠ",
-                BranchName = "Văn phòng đại diện Cần Thơ",
-                TaxCode = "1801774247",
-                BusinessLicenseNumber = "92240166/GPKDVT",
-                Address = "Khu dân cư lô số 11B - KĐT Nam Cần Thơ, Phường Cái Răng, Thành phố Cần Thơ",
-                PhoneNumber = "0920365507",
-                RepresentativeName = "Nguyễn Việt Kiều Anh",
-                RepresentativePosition = "Chủ tịch Hội đồng quản trị",
-                RepresentativeCitizenId = "092195007693",
-                RepresentativeCitizenIdIssuedDate = new DateTime(2021, 8, 14),
-                RepresentativeCitizenIdIssuedPlace = "Cục Cảnh sát quản lý hành chính về trật tự xã hội",
-                IsActive = true
-            }
-        };
-
-        foreach (var seed in seeds)
-        {
-            var existing = await db.CompanyProfiles.FirstOrDefaultAsync(x => x.TaxCode == seed.TaxCode);
-            if (existing is null)
-            {
-                db.CompanyProfiles.Add(seed);
-                continue;
-            }
-
-            existing.CompanyName = seed.CompanyName;
-            existing.BranchName = seed.BranchName;
-            existing.BusinessLicenseNumber = seed.BusinessLicenseNumber;
-            existing.Address = seed.Address;
-            existing.PhoneNumber = seed.PhoneNumber;
-            existing.RepresentativeName = seed.RepresentativeName;
-            existing.RepresentativePosition = seed.RepresentativePosition;
-            existing.RepresentativeCitizenId = seed.RepresentativeCitizenId;
-            existing.RepresentativeCitizenIdIssuedDate = seed.RepresentativeCitizenIdIssuedDate;
-            existing.RepresentativeCitizenIdIssuedPlace = seed.RepresentativeCitizenIdIssuedPlace;
-            existing.IsActive = true;
-            existing.UpdatedAt = DateTime.UtcNow;
+            Ensure(await userManager.AddToRoleAsync(legacyAdmin, "Owner"), "Không thể gán quyền Owner cho tài khoản admin cũ");
+            return;
         }
 
-        await db.SaveChangesAsync();
+        var admins = await userManager.GetUsersInRoleAsync("Admin");
+        var fallbackAdmin = admins.FirstOrDefault(x => x.IsActive) ?? admins.FirstOrDefault();
+        if (fallbackAdmin is not null)
+        {
+            Ensure(await userManager.AddToRoleAsync(fallbackAdmin, "Owner"), "Không thể gán quyền Owner cho tài khoản Admin hiện hữu");
+            return;
+        }
+
+        throw new InvalidOperationException(
+            "Database mới chưa có tài khoản Owner và chưa có tài khoản Admin cũ để nâng cấp. " +
+            "Hãy cấu hình Seed:OwnerPassword bằng user-secrets hoặc biến môi trường Seed__OwnerPassword rồi chạy lại ứng dụng.");
     }
 
     private static async Task SeedContractTypesAsync(ApplicationDbContext db)

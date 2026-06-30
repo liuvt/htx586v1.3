@@ -1,5 +1,5 @@
 @page "/admin/contracts"
-@attribute [Authorize(Roles="Admin")]
+@attribute [Authorize(Roles="Owner,Admin")]
 @inject IContractService ContractService
 @inject NavigationManager Nav
 @inject IDialogService Dialog

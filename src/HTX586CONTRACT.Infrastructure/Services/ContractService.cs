@@ -1,6 +1,7 @@
 using HTX586CONTRACT.Application.Abstractions;
 using HTX586CONTRACT.Application.Contracts;
 using HTX586CONTRACT.Domain.Contracts;
+using HTX586CONTRACT.Domain.Companies;
 using HTX586CONTRACT.Domain.Customers;
 using HTX586CONTRACT.Domain.Enums;
 using HTX586CONTRACT.Domain.Identity;
@@ -151,6 +152,9 @@ public sealed class ContractService(
         var vehicle = await ResolveVehicleAsync(db, request, ct);
         if (vehicle is null) return new(false, null, "Vui lòng chọn xe hợp lệ.");
 
+        var fixedSignatureError = ValidateFixedSignatures(driver, driver.CompanyProfile, vehicle);
+        if (fixedSignatureError is not null) return new(false, null, fixedSignatureError);
+
         var entity = new Contract
         {
             Id = Guid.NewGuid(),
@@ -175,7 +179,7 @@ public sealed class ContractService(
         AddPassengers(entity, request.Passengers, currentUserId);
         db.Contracts.Add(entity);
         await db.SaveChangesAsync(ct);
-        return new(true, entity.Id, "Đã tạo hợp đồng. Tiếp tục ký tên cho các bên.");
+        return new(true, entity.Id, "Đã tạo hợp đồng. Chỉ cần khách hàng ký để hoàn tất.");
     }
 
     public async Task<SaveContractResult> UpdateAsync(Guid id, SaveContractRequest request, string currentUserId, CancellationToken ct = default)
@@ -214,6 +218,9 @@ public sealed class ContractService(
         var customer = await ResolveCustomerAsync(db, request, driverId, currentUserId, ct);
         var vehicle = await ResolveVehicleAsync(db, request, ct);
         if (vehicle is null) return new(false, id, "Vui lòng chọn xe hợp lệ.");
+
+        var fixedSignatureError = ValidateFixedSignatures(driver, driver.CompanyProfile, vehicle);
+        if (fixedSignatureError is not null) return new(false, id, fixedSignatureError);
 
         entity.DriverId = driver.Id;
         entity.ContractTypeId = type.Id;
@@ -289,7 +296,7 @@ public sealed class ContractService(
             return false;
 
         var user = await userManager.FindByIdAsync(userId);
-        return user is not null && await userManager.IsInRoleAsync(user, "Admin");
+        return user is not null && (await userManager.IsInRoleAsync(user, "Owner") || await userManager.IsInRoleAsync(user, "Admin"));
     }
 
     private static async Task<ContractType?> ResolveTypeAsync(ApplicationDbContext db, SaveContractRequest request, CancellationToken ct)
@@ -340,6 +347,24 @@ public sealed class ContractService(
         return null;
     }
 
+    private static string? ValidateFixedSignatures(ApplicationUser driver, CompanyProfile company, Vehicle vehicle)
+    {
+        var missing = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(company.RepresentativeSignatureFileUrl))
+            missing.Add("chữ ký cố định Company/văn phòng đại diện");
+
+        if (string.IsNullOrWhiteSpace(vehicle.OwnerSignatureFileUrl))
+            missing.Add("chữ ký cố định chủ sở hữu xe");
+
+        if (string.IsNullOrWhiteSpace(driver.DriverSignatureFileUrl))
+            missing.Add("chữ ký cố định tài xế");
+
+        return missing.Count == 0
+            ? null
+            : $"Chưa thể tạo/cập nhật hợp đồng. Còn thiếu: {string.Join(", ", missing)}.";
+    }
+
     private static void Apply(Contract e, SaveContractRequest r)
     {
         if (!string.IsNullOrWhiteSpace(r.ContractNumber)) e.ContractNumber = r.ContractNumber.Trim();
@@ -362,7 +387,7 @@ public sealed class ContractService(
         e.Note = N(r.Note);
     }
 
-    private static void ApplySnapshots(Contract e, ApplicationUser driver, HTX586CONTRACT.Domain.Companies.CompanyProfile company, Customer customer, Vehicle vehicle)
+    private static void ApplySnapshots(Contract e, ApplicationUser driver, CompanyProfile company, Customer customer, Vehicle vehicle)
     {
         e.CompanyNameSnapshot = company.CompanyName;
         e.CompanyTaxCodeSnapshot = company.TaxCode;

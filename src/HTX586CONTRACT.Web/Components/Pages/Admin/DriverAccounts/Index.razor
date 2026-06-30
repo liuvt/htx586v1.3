@@ -1,5 +1,5 @@
 @page "/admin/driver-accounts"
-@attribute [Authorize(Roles = "Admin")]
+@attribute [Authorize(Roles = "Owner,Admin")]
 @inject IDriverAccountService Service
 @inject NavigationManager Navigation
 

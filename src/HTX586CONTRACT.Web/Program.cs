@@ -95,6 +95,8 @@ builder.Services.AddScoped<
 
 builder.Services.AddScoped<IContractService, ContractService>();
 builder.Services.AddSingleton<PdfContractTemplateRenderer>();
+builder.Services.AddSingleton<SignatureFileStorage>();
+builder.Services.AddScoped<MasterSignatureService>();
 builder.Services.AddScoped<IContractDocumentService, ContractDocumentService>();
 
 var app = builder.Build();

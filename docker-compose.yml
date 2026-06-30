@@ -7,8 +7,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__Default: ${HTX586CONTRACT_DB}
-      Seed__AdminUserName: ${HTX586CONTRACT_ADMIN_USER:-admin}
-      Seed__AdminPassword: ${HTX586CONTRACT_ADMIN_PASSWORD}
+      Seed__OwnerUserName: ${HTX586CONTRACT_OWNER_USER:-owner}
+      Seed__OwnerPassword: ${HTX586CONTRACT_OWNER_PASSWORD}
     volumes:
       - htx586contract_uploads:/app/wwwroot/uploads/contracts
     restart: unless-stopped

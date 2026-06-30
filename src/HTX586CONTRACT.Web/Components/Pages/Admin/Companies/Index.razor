@@ -1,11 +1,12 @@
 @page "/admin/companies"
-@attribute [Authorize(Roles = "Admin")]
+@attribute [Authorize(Roles = "Owner,Admin")]
 @inject ICompanyProfileService CompanyService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
+@inject MasterSignatureService MasterSignatureService
 
 <PageTitle>Công ty/Văn phòng đại diện</PageTitle>
-<PageHeader Title="Công ty/Văn phòng đại diện" Subtitle="Danh mục đơn vị đại diện độc lập. Đơn vị được gán cho tài xế tại module quản lý tài xế." />
+<PageHeader Title="Công ty/Văn phòng đại diện" Subtitle="CompanyProfile được tạo khi Owner tạo tài khoản Admin; tại đây chỉ quản lý/cập nhật hồ sơ và chữ ký." />
 
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudGrid>
@@ -13,7 +14,9 @@
             <MudTextField T="string" @bind-Value="_keyword" Placeholder="Tìm tên đơn vị, mã số thuế, người đại diện..." Immediate="true" Clearable="true" Variant="Variant.Outlined" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
         </MudItem>
         <MudItem xs="12" md="4" Class="d-flex align-center justify-end">
-            <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreate">Thêm đơn vị</MudButton>
+            <AuthorizeView Roles="Owner"><Authorized>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Add" Href="/admin/accounts/create">Tạo Admin + CompanyProfile</MudButton>
+            </Authorized></AuthorizeView>
         </MudItem>
     </MudGrid>
 </MudPaper>
@@ -34,6 +37,15 @@
             <MudItem xs="12" md="3"><MudTextField @bind-Value="_create.RepresentativeCitizenId" Label="CCCD người đại diện" Required="true" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="6"><MudTextField @bind-Value="_create.Email" Label="Email" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="6"><MudSwitch T="bool" @bind-Value="_create.IsActive" Color="Color.Success" Label="Đang hoạt động" /></MudItem>
+            <MudItem xs="12" md="6">
+                <MudText Typo="Typo.subtitle1">Chữ ký cố định người đại diện</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Chữ ký này sẽ tự động hiện trên mọi Contract, không cần ký lại.</MudText>
+                <SignaturePad OnSignatureSaved="CaptureCompanySignature" />
+                @if (!string.IsNullOrWhiteSpace(_companySignatureDataUrl))
+                {
+                    <MudChip T="string" Class="mt-2" Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.Check">Đã nhận chữ ký cố định</MudChip>
+                }
+            </MudItem>
         </MudGrid>
         <MudStack Row="true" Class="mt-4">
             <MudButton Variant="Variant.Outlined" OnClick="CancelCreate">Hủy</MudButton><MudSpacer />
@@ -65,6 +77,7 @@
     private string? _keyword;
     private IReadOnlyList<CompanyProfileListItemDto> _items = [];
     private CreateCompanyProfileRequest _create = NewCompany();
+    private string? _companySignatureDataUrl;
 
     private IEnumerable<CompanyProfileListItemDto> FilteredItems => string.IsNullOrWhiteSpace(_keyword)
         ? _items
@@ -80,16 +93,40 @@
         finally { _loading = false; }
     }
 
-    private void OpenCreate() { _create = NewCompany(); _showCreate = true; }
-    private void CancelCreate() => _showCreate = false;
+    private void OpenCreate()
+    {
+        _create = NewCompany();
+        _companySignatureDataUrl = null;
+        _showCreate = true;
+    }
+
+    private void CancelCreate()
+    {
+        _companySignatureDataUrl = null;
+        _showCreate = false;
+    }
+
+    private Task CaptureCompanySignature(string data)
+    {
+        _companySignatureDataUrl = data;
+        Snackbar.Add("Đã nhận chữ ký cố định người đại diện.", Severity.Success);
+        return Task.CompletedTask;
+    }
 
     private async Task CreateAsync()
     {
+        if (string.IsNullOrWhiteSpace(_companySignatureDataUrl))
+        {
+            Snackbar.Add("Vui lòng ký chữ ký cố định của người đại diện trước khi tạo đơn vị.", Severity.Warning);
+            return;
+        }
+
         _saving = true;
         try
         {
             var id = await CompanyService.CreateAsync(_create);
-            Snackbar.Add("Đã tạo công ty/văn phòng đại diện.", Severity.Success);
+            await MasterSignatureService.SaveCompanyRepresentativeSignatureAsync(id, _companySignatureDataUrl);
+            Snackbar.Add("Đã tạo công ty/văn phòng đại diện và lưu chữ ký cố định.", Severity.Success);
             _showCreate = false;
             await LoadAsync();
             Navigation.NavigateTo($"/admin/companies/{id}");

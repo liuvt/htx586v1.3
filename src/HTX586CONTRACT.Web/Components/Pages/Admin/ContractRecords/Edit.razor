@@ -1,6 +1,6 @@
 @page "/admin/contracts/create"
 @page "/admin/contracts/{Id:guid}"
-@attribute [Authorize(Roles = "Admin")]
+@attribute [Authorize(Roles = "Owner,Admin")]
 @inject IContractService ContractService
 @inject IContractDocumentService DocumentService
 @inject IDbContextFactory<ApplicationDbContext> Factory
@@ -92,38 +92,39 @@
 {
     <MudPaper Class="pa-4 mt-4" Elevation="1">
         <MudText Typo="Typo.h6" Class="mb-3">Ký hợp đồng</MudText>
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3">
+            Company/văn phòng đại diện, chủ sở hữu xe và tài xế dùng chữ ký cố định đã lưu trong danh mục.
+            Tại hợp đồng chỉ cần khách hàng ký.
+        </MudAlert>
         <MudGrid>
-            <MudItem xs="12" md="6">
+            <MudItem xs="12" md="3">
                 <MudText Typo="Typo.subtitle1">Văn phòng đại diện</MudText>
-                <SignaturePad Disabled="@IsSignatureDisabled(SignatureParty.RepresentativeOffice)"
-                              ExistingSignatureUrl="@SignatureUrl(SignatureParty.RepresentativeOffice)"
-                              SignerName="@SignatureName(SignatureParty.RepresentativeOffice)"
-                              SignedAt="@SignatureTime(SignatureParty.RepresentativeOffice)"
-                              OnSignatureSaved="SaveOfficeSignature" />
+                <SignaturePad Disabled="true"
+                              ExistingSignatureUrl="@FixedOfficeSignatureUrl"
+                              SignerName="@OfficeSigner"
+                              SignedAt="@FixedOfficeSignedAt" />
             </MudItem>
-            <MudItem xs="12" md="6">
+            <MudItem xs="12" md="3">
                 <MudText Typo="Typo.subtitle1">Chủ sở hữu xe</MudText>
-                <SignaturePad Disabled="@IsSignatureDisabled(SignatureParty.VehicleOwner)"
-                              ExistingSignatureUrl="@SignatureUrl(SignatureParty.VehicleOwner)"
-                              SignerName="@SignatureName(SignatureParty.VehicleOwner)"
-                              SignedAt="@SignatureTime(SignatureParty.VehicleOwner)"
-                              OnSignatureSaved="SaveOwnerSignature" />
+                <SignaturePad Disabled="true"
+                              ExistingSignatureUrl="@FixedOwnerSignatureUrl"
+                              SignerName="@OwnerSigner"
+                              SignedAt="@FixedOwnerSignedAt" />
             </MudItem>
-            <MudItem xs="12" md="6">
+            <MudItem xs="12" md="3">
+                <MudText Typo="Typo.subtitle1">Tài xế</MudText>
+                <SignaturePad Disabled="true"
+                              ExistingSignatureUrl="@FixedDriverSignatureUrl"
+                              SignerName="@DriverSigner"
+                              SignedAt="@FixedDriverSignedAt" />
+            </MudItem>
+            <MudItem xs="12" md="3">
                 <MudText Typo="Typo.subtitle1">Khách hàng (Người thuê xe)</MudText>
                 <SignaturePad Disabled="@IsSignatureDisabled(SignatureParty.Customer)"
                               ExistingSignatureUrl="@SignatureUrl(SignatureParty.Customer)"
                               SignerName="@SignatureName(SignatureParty.Customer)"
                               SignedAt="@SignatureTime(SignatureParty.Customer)"
                               OnSignatureSaved="SaveCustomerSignature" />
-            </MudItem>
-            <MudItem xs="12" md="6">
-                <MudText Typo="Typo.subtitle1">Tài xế chạy</MudText>
-                <SignaturePad Disabled="@IsSignatureDisabled(SignatureParty.Driver)"
-                              ExistingSignatureUrl="@SignatureUrl(SignatureParty.Driver)"
-                              SignerName="@SignatureName(SignatureParty.Driver)"
-                              SignedAt="@SignatureTime(SignatureParty.Driver)"
-                              OnSignatureSaved="SaveDriverSignature" />
             </MudItem>
         </MudGrid>
         <MudButton Class="mt-4"
@@ -232,13 +233,18 @@
         finally { _saving = false; }
     }
 
-    private string OfficeSigner => _drivers.FirstOrDefault(x => x.Id == _model.DriverId)?.CompanyProfile?.RepresentativeName ?? "Đại diện văn phòng";
-    private string OwnerSigner => _vehicles.FirstOrDefault(x => x.Id == _model.VehicleId)?.OwnerName ?? "Chủ sở hữu xe";
-    private string DriverSigner => _drivers.FirstOrDefault(x => x.Id == _model.DriverId)?.FullName ?? "Tài xế";
-    private Task SaveOfficeSignature(string data) => SaveSignature("RepresentativeOffice", OfficeSigner, data, "Đã lưu chữ ký văn phòng đại diện.");
-    private Task SaveOwnerSignature(string data) => SaveSignature("VehicleOwner", OwnerSigner, data, "Đã lưu chữ ký chủ sở hữu xe.");
+    private ApplicationUser? SelectedDriver => _drivers.FirstOrDefault(x => x.Id == _model.DriverId);
+    private Vehicle? SelectedVehicle => _vehicles.FirstOrDefault(x => x.Id == _model.VehicleId);
+    private string OfficeSigner => SelectedDriver?.CompanyProfile?.RepresentativeName ?? "Đại diện văn phòng";
+    private string OwnerSigner => SelectedVehicle?.OwnerName ?? "Chủ sở hữu xe";
+    private string DriverSigner => SelectedDriver?.FullName ?? "Tài xế";
+    private string? FixedOfficeSignatureUrl => SelectedDriver?.CompanyProfile?.RepresentativeSignatureFileUrl;
+    private DateTime? FixedOfficeSignedAt => SelectedDriver?.CompanyProfile?.RepresentativeSignedAt;
+    private string? FixedOwnerSignatureUrl => SelectedVehicle?.OwnerSignatureFileUrl;
+    private DateTime? FixedOwnerSignedAt => SelectedVehicle?.OwnerSignedAt;
+    private string? FixedDriverSignatureUrl => SelectedDriver?.DriverSignatureFileUrl;
+    private DateTime? FixedDriverSignedAt => SelectedDriver?.DriverSignedAt;
     private Task SaveCustomerSignature(string data) => SaveSignature("Customer", _model.CustomerName, data, "Đã lưu chữ ký khách hàng.");
-    private Task SaveDriverSignature(string data) => SaveSignature("Driver", DriverSigner, data, "Đã lưu chữ ký tài xế.");
 
     private async Task SaveSignature(string party, string name, string data, string message)
     {

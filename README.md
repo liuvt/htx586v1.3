@@ -21,15 +21,22 @@ dotnet user-secrets set `
   "Server=localhost;Database=HTX586CONTRACT;User Id=sa;Password=YOUR_PASSWORD;TrustServerCertificate=True" `
   --project .\src\HTX586CONTRACT.Web\HTX586CONTRACT.Web.csproj
 
-dotnet user-secrets set `
-  "Seed:AdminPassword" `
-  "YOUR_INITIAL_ADMIN_PASSWORD" `
-  --project .\src\HTX586CONTRACT.Web\HTX586CONTRACT.Web.csproj
+# Development đã có tài khoản bootstrap mặc định: owner / Owner@123456.
+# Khi deploy thật, hãy cấu hình Seed:OwnerPassword riêng bằng user-secrets hoặc biến môi trường.
 
 dotnet restore .\HTX586CONTRACT.slnx
 dotnet build .\HTX586CONTRACT.slnx
 dotnet run --project .\src\HTX586CONTRACT.Web\HTX586CONTRACT.Web.csproj
 ```
+
+## Phân quyền
+
+- `Owner`: quản lý tổng, được tạo từ seeding ban đầu. Owner tạo tài khoản `Admin`.
+- `Admin`: được tạo kèm `CompanyProfile` và chữ ký cố định người đại diện.
+- `Driver`: tài xế được gán vào `CompanyProfile` và có chữ ký cố định tài xế.
+- Database seeding không tạo `CompanyProfile` mặc định nữa; CompanyProfile phát sinh khi Owner tạo Admin mới.
+- Khi nâng cấp database cũ chưa có `Owner`, seeding sẽ tự gán quyền `Owner` cho tài khoản đã cấu hình bằng `Seed:OwnerUserName`/`Seed:AdminUserName`; nếu không tìm thấy thì tự gán cho Admin hiện hữu đầu tiên.
+- Database mới ở môi trường Development tự tạo tài khoản bootstrap `owner / Owner@123456` và bắt buộc đổi mật khẩu sau khi đăng nhập. Production/Staging vẫn nên cấu hình `Seed:OwnerPassword` riêng để bootstrap an toàn.
 
 ## Template runtime
 

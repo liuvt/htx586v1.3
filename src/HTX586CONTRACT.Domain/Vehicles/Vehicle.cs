@@ -25,6 +25,12 @@ public class Vehicle : BaseEntity
     public string? OwnerAddress { get; set; }
     public string? OwnerPhoneNumber { get; set; }
 
+    // Chữ ký cố định của chủ sở hữu xe.
+    // Contract tự lấy chữ ký này theo VehicleId tại thời điểm xuất PDF.
+    public string? OwnerSignatureFileUrl { get; set; }
+    public string? OwnerSignatureHash { get; set; }
+    public DateTime? OwnerSignedAt { get; set; }
+
     public bool IsActive { get; set; } = true;
     public ICollection<Contract> Contracts { get; set; } = [];
 }

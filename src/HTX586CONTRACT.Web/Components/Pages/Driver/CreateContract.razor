@@ -169,40 +169,40 @@ else
     @if (Id.HasValue)
     {
         <MudPaper Class="pa-4 mt-4" Elevation="1">
-            <MudText Typo="Typo.h6">Ký tên các bên</MudText>
-            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Tài xế tạo hợp đồng và đồng thời thực hiện bước cuối: ký xác nhận tài xế sau khi các bên đã ký.</MudText>
+            <MudText Typo="Typo.h6">Ký hợp đồng</MudText>
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3">
+                Company/văn phòng đại diện, chủ sở hữu xe và tài xế dùng chữ ký cố định đã lưu trong danh mục.
+                Hợp đồng chỉ yêu cầu khách hàng ký tại đây; sau khi khách ký có thể tạo PDF ngay.
+            </MudAlert>
             <MudGrid>
-                <MudItem xs="12" md="6">
+                <MudItem xs="12" md="3">
                     <MudText Typo="Typo.subtitle1">Văn phòng đại diện</MudText>
-                    <SignaturePad Disabled="@IsSignatureDisabled(SignatureParty.RepresentativeOffice)"
-                                  ExistingSignatureUrl="@SignatureUrl(SignatureParty.RepresentativeOffice)"
-                                  SignerName="@SignatureName(SignatureParty.RepresentativeOffice)"
-                                  SignedAt="@SignatureTime(SignatureParty.RepresentativeOffice)"
-                                  OnSignatureSaved="SaveOfficeSignature" />
+                    <SignaturePad Disabled="true"
+                                  ExistingSignatureUrl="@FixedOfficeSignatureUrl"
+                                  SignerName="@OfficeSigner"
+                                  SignedAt="@FixedOfficeSignedAt" />
                 </MudItem>
-                <MudItem xs="12" md="6">
+                <MudItem xs="12" md="3">
                     <MudText Typo="Typo.subtitle1">Chủ sở hữu xe</MudText>
-                    <SignaturePad Disabled="@IsSignatureDisabled(SignatureParty.VehicleOwner)"
-                                  ExistingSignatureUrl="@SignatureUrl(SignatureParty.VehicleOwner)"
-                                  SignerName="@SignatureName(SignatureParty.VehicleOwner)"
-                                  SignedAt="@SignatureTime(SignatureParty.VehicleOwner)"
-                                  OnSignatureSaved="SaveOwnerSignature" />
+                    <SignaturePad Disabled="true"
+                                  ExistingSignatureUrl="@FixedOwnerSignatureUrl"
+                                  SignerName="@OwnerSigner"
+                                  SignedAt="@FixedOwnerSignedAt" />
                 </MudItem>
-                <MudItem xs="12" md="6">
+                <MudItem xs="12" md="3">
+                    <MudText Typo="Typo.subtitle1">Tài xế</MudText>
+                    <SignaturePad Disabled="true"
+                                  ExistingSignatureUrl="@FixedDriverSignatureUrl"
+                                  SignerName="@DriverSigner"
+                                  SignedAt="@FixedDriverSignedAt" />
+                </MudItem>
+                <MudItem xs="12" md="3">
                     <MudText Typo="Typo.subtitle1">Khách hàng (Người thuê xe)</MudText>
                     <SignaturePad Disabled="@IsSignatureDisabled(SignatureParty.Customer)"
                                   ExistingSignatureUrl="@SignatureUrl(SignatureParty.Customer)"
                                   SignerName="@SignatureName(SignatureParty.Customer)"
                                   SignedAt="@SignatureTime(SignatureParty.Customer)"
                                   OnSignatureSaved="SaveCustomerSignature" />
-                </MudItem>
-                <MudItem xs="12" md="6">
-                    <MudText Typo="Typo.subtitle1">Tài xế chạy</MudText>
-                    <SignaturePad Disabled="@IsSignatureDisabled(SignatureParty.Driver)"
-                                  ExistingSignatureUrl="@SignatureUrl(SignatureParty.Driver)"
-                                  SignerName="@SignatureName(SignatureParty.Driver)"
-                                  SignedAt="@SignatureTime(SignatureParty.Driver)"
-                                  OnSignatureSaved="SaveDriverSignature" />
                 </MudItem>
             </MudGrid>
 
@@ -374,12 +374,17 @@ else
         finally { _saving = false; }
     }
 
+    private Vehicle? SelectedVehicle => _vehicles.FirstOrDefault(x => x.Id == _model.VehicleId);
     private string OfficeSigner => _driver?.CompanyProfile?.RepresentativeName ?? "Đại diện văn phòng";
-    private string OwnerSigner => _vehicles.FirstOrDefault(x => x.Id == _model.VehicleId)?.OwnerName ?? "Chủ sở hữu xe";
-    private Task SaveOfficeSignature(string data) => SaveSignature("RepresentativeOffice", OfficeSigner, data, "Đã lưu chữ ký văn phòng đại diện.");
-    private Task SaveOwnerSignature(string data) => SaveSignature("VehicleOwner", OwnerSigner, data, "Đã lưu chữ ký chủ sở hữu xe.");
+    private string OwnerSigner => SelectedVehicle?.OwnerName ?? "Chủ sở hữu xe";
+    private string DriverSigner => _driver?.FullName ?? "Tài xế";
+    private string? FixedOfficeSignatureUrl => _driver?.CompanyProfile?.RepresentativeSignatureFileUrl;
+    private DateTime? FixedOfficeSignedAt => _driver?.CompanyProfile?.RepresentativeSignedAt;
+    private string? FixedOwnerSignatureUrl => SelectedVehicle?.OwnerSignatureFileUrl;
+    private DateTime? FixedOwnerSignedAt => SelectedVehicle?.OwnerSignedAt;
+    private string? FixedDriverSignatureUrl => _driver?.DriverSignatureFileUrl;
+    private DateTime? FixedDriverSignedAt => _driver?.DriverSignedAt;
     private Task SaveCustomerSignature(string data) => SaveSignature("Customer", _model.CustomerName, data, "Đã lưu chữ ký khách hàng.");
-    private Task SaveDriverSignature(string data) => SaveSignature("Driver", _driver?.FullName ?? "Tài xế", data, "Đã lưu chữ ký tài xế.");
 
     private async Task SaveSignature(
         string party,

@@ -1,5 +1,5 @@
 @page "/admin/customers"
-@attribute [Authorize(Roles = "Admin")]
+@attribute [Authorize(Roles = "Owner,Admin")]
 @inject IDbContextFactory<ApplicationDbContext> Factory
 @inject ISnackbar Snackbar
 

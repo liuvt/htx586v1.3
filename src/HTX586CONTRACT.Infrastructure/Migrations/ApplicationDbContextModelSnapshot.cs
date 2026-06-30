@@ -89,6 +89,17 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("RepresentativeSignatureFileUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("RepresentativeSignatureHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime?>("RepresentativeSignedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("TaxCode")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -857,6 +868,17 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<string>("DriverSignatureFileUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("DriverSignatureHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime?>("DriverSignedAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Email")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
@@ -1136,6 +1158,17 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                     b.Property<string>("OwnerPhoneNumber")
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("OwnerSignatureFileUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("OwnerSignatureHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime?>("OwnerSignedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("PlateNumber")
                         .IsRequired()

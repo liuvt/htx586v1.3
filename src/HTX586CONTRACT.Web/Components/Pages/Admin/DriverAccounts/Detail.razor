@@ -1,9 +1,10 @@
 @page "/admin/driver-accounts/{UserId}"
-@attribute [Authorize(Roles = "Admin")]
+@attribute [Authorize(Roles = "Owner,Admin")]
 @inject IDriverAccountService DriverAccountService
 @inject ICompanyProfileService CompanyProfileService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
+@inject MasterSignatureService MasterSignatureService
 
 <PageTitle>Chi tiết tài xế</PageTitle>
 <PageHeader Title="Cập nhật tài xế" Subtitle="Quản lý tài khoản, hồ sơ, CCCD, GPLX và Company được gán." />
@@ -39,6 +40,14 @@ else
                 <MudItem xs="12" md="2"><MudDatePicker @bind-Date="_model.DriverLicenseExpiryDate" Label="Hết hạn GPLX" Variant="Variant.Outlined" /></MudItem>
                 <MudItem xs="12" md="6"><MudSwitch T="bool" @bind-Value="_model.IsActive" Color="Color.Success" Label="Tài khoản hoạt động" /></MudItem>
                 <MudItem xs="12" md="6"><MudSwitch T="bool" @bind-Value="_model.MustChangePassword" Color="Color.Warning" Label="Bắt buộc đổi mật khẩu" /></MudItem>
+                <MudItem xs="12" md="6">
+                    <MudText Typo="Typo.subtitle1">Chữ ký cố định tài xế</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">Contract sẽ tự động lấy chữ ký này.</MudText>
+                    <SignaturePad ExistingSignatureUrl="@_detail.DriverSignatureFileUrl"
+                                  SignerName="@_detail.FullName"
+                                  SignedAt="@_detail.DriverSignedAt"
+                                  OnSignatureSaved="SaveDriverSignatureAsync" />
+                </MudItem>
             </MudGrid>
             <MudStack Row="true" Class="mt-4"><MudButton Variant="Variant.Outlined" OnClick="@(() => Navigation.NavigateTo("/admin/driver-accounts"))">Quay lại</MudButton><MudSpacer /><MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_saving" OnClick="SaveAsync">Lưu thay đổi</MudButton></MudStack>
         </MudPaper>
@@ -88,6 +97,20 @@ else
         }
         catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
         finally { _loading = false; }
+    }
+
+    private async Task SaveDriverSignatureAsync(string data)
+    {
+        try
+        {
+            await MasterSignatureService.SaveDriverSignatureAsync(UserId, data);
+            Snackbar.Add("Đã lưu chữ ký cố định tài xế.", Severity.Success);
+            _detail = await DriverAccountService.GetDetailAsync(UserId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
     }
 
     private async Task SaveAsync()

@@ -97,8 +97,8 @@
                 return;
             }
 
-            // Ưu tiên Admin nếu tài khoản có nhiều role.
-            if (user.IsInRole("Admin"))
+            // Ưu tiên Owner/Admin nếu tài khoản có nhiều role.
+            if (user.IsInRole("Owner") || user.IsInRole("Admin"))
             {
                 NavigateOnce(
                     "/admin/dashboard");
@@ -116,7 +116,7 @@
 
             _redirecting = false;
             _errorMessage =
-                "Tài khoản chưa được cấp quyền Admin hoặc Driver.";
+                "Tài khoản chưa được cấp quyền Owner, Admin hoặc Driver.";
 
             StateHasChanged();
         }

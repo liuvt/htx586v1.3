@@ -6,6 +6,13 @@
 
 ---
 
+## Cập nhật phân quyền Owner/Admin/Driver
+
+- Thêm role `Owner` cho tài khoản quản lý tổng.
+- Seeding tạo role `Owner`, `Admin`, `Driver`; Development có tài khoản bootstrap mặc định `owner / Owner@123456`, Production/Staging nên dùng `Seed:OwnerPassword`.
+- Không seed CompanyProfile mặc định. Owner tạo Admin thì hệ thống tạo CompanyProfile và chữ ký cố định người đại diện cho Admin đó.
+- Admin và Driver được gán CompanyProfile để Contract lấy đúng chữ ký/đơn vị.
+
 ## 1. Mục tiêu của bản thiết kế lại
 
 Project này được tách thành một solution riêng, đổi toàn bộ tên project và namespace từ hệ thống cũ sang `HTX586CONTRACT`.
@@ -202,24 +209,24 @@ dotnet user-secrets set `
   --project .\src\HTX586CONTRACT.Web\HTX586CONTRACT.Web.csproj
 
 dotnet user-secrets set `
-  "Seed:AdminUserName" `
-  "admin" `
+  "Seed:OwnerUserName" `
+  "owner" `
   --project .\src\HTX586CONTRACT.Web\HTX586CONTRACT.Web.csproj
 
 dotnet user-secrets set `
-  "Seed:AdminPassword" `
-  "YOUR_INITIAL_ADMIN_PASSWORD" `
+  "Seed:OwnerPassword" `
+  "YOUR_INITIAL_OWNER_PASSWORD" `
   --project .\src\HTX586CONTRACT.Web\HTX586CONTRACT.Web.csproj
 ```
 
-`Seed:AdminPassword` chỉ được dùng khi database chưa có tài khoản quản trị. Tài khoản mới được đặt `MustChangePassword = true` và phải đổi mật khẩu ở lần đăng nhập đầu tiên.
+`Seed:OwnerPassword` chỉ được dùng khi database chưa có tài khoản Owner. Ở Development có fallback `owner / Owner@123456`. Tài khoản mới được đặt `MustChangePassword = true` và phải đổi mật khẩu ở lần đăng nhập đầu tiên.
 
 #### Biến môi trường khi deploy
 
 ```text
 ConnectionStrings__Default=Server=...;Database=...;User Id=...;Password=...;TrustServerCertificate=True
-Seed__AdminUserName=admin
-Seed__AdminPassword=YOUR_INITIAL_ADMIN_PASSWORD
+Seed__OwnerUserName=owner
+Seed__OwnerPassword=YOUR_INITIAL_OWNER_PASSWORD
 ```
 
 ---
@@ -269,8 +276,8 @@ Tạo file `.env` từ `.env.example`:
 
 ```text
 HTX586CONTRACT_DB=Server=YOUR_SQL_SERVER,1433;Database=htx586contract;User Id=sa;Password=YOUR_PASSWORD;TrustServerCertificate=True;
-HTX586CONTRACT_ADMIN_USER=admin
-HTX586CONTRACT_ADMIN_PASSWORD=YOUR_INITIAL_ADMIN_PASSWORD
+HTX586CONTRACT_OWNER_USER=owner
+HTX586CONTRACT_OWNER_PASSWORD=YOUR_INITIAL_OWNER_PASSWORD
 ```
 
 Chạy:
@@ -687,3 +694,11 @@ Service chỉ sinh PDF khi đủ bốn chân ký và tối đa 20 hành khách.
 - Các file chữ ký/PDF phát sinh từ project cũ không được đưa vào gói bàn giao.
 
 Môi trường tạo gói không có .NET SDK nên chưa chạy được `dotnet build`. Sau khi tải project, cần chạy restore/build bằng .NET SDK 9 trên máy phát triển hoặc trong Docker để xác nhận package restore và API tương thích với môi trường của bạn.
+
+## Cập nhật Owner seeding
+
+- Seed role `Owner`, `Admin`, `Driver`.
+- Không seed `CompanyProfile` mặc định.
+- Database mới ở Development tự tạo Owner mặc định `owner / Owner@123456`; khi Production/Staging cần cấu hình `Seed:OwnerPassword` để tạo tài khoản Owner ban đầu.
+- Database cũ chưa có Owner sẽ được nâng cấp mềm: nếu tìm thấy tài khoản theo `Seed:OwnerUserName`/`Seed:AdminUserName` thì gán Owner; nếu không, tự gán Owner cho Admin hiện hữu đầu tiên.
+- `ContractAuditLog` có query filter khớp với `Contract.IsDeleted` để loại warning EF Core required navigation.

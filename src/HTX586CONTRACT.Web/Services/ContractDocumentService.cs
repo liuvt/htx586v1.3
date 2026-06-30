@@ -26,6 +26,9 @@ public sealed class ContractDocumentService(
         if (!Enum.TryParse<SignatureParty>(party, true, out var role))
             throw new InvalidOperationException("Vai trò ký không hợp lệ.");
 
+        if (role != SignatureParty.Customer)
+            throw new InvalidOperationException("Company, chủ xe và tài xế dùng chữ ký cố định trong danh mục. Trên hợp đồng chỉ yêu cầu khách hàng ký.");
+
         logger.LogInformation(
             "Signature pipeline v3-rowversion-free. ContractId={ContractId}, Party={Party}.",
             contractId,
@@ -104,25 +107,6 @@ public sealed class ContractDocumentService(
                     throw new InvalidOperationException(
                         $"{RoleName(role)} đã ký trước đó. Chữ ký đã xác nhận không được phép ghi đè.");
 
-                // Tài xế là chân ký xác nhận cuối cùng.
-                if (role == SignatureParty.Driver)
-                {
-                    var requiredBeforeDriver = new[]
-                    {
-                        SignatureParty.RepresentativeOffice,
-                        SignatureParty.VehicleOwner,
-                        SignatureParty.Customer
-                    };
-
-                    var signedBeforeDriver = contract.Signatures
-                        .Select(x => x.Party)
-                        .ToHashSet();
-
-                    if (requiredBeforeDriver.Any(x => !signedBeforeDriver.Contains(x)))
-                        throw new InvalidOperationException(
-                            "Văn phòng đại diện, chủ sở hữu xe và khách hàng phải ký trước khi tài xế ký xác nhận cuối cùng.");
-                }
-
                 var now = DateTime.UtcNow;
                 var signature = new ContractSignature
                 {
@@ -163,31 +147,10 @@ public sealed class ContractDocumentService(
                 if (insertedRows != 1)
                     throw new InvalidOperationException("Không thể thêm bản ghi chữ ký vào SQL.");
 
-                var signedRoles = contract.Signatures
-                    .Select(x => x.Party)
-                    .Append(role)
-                    .ToHashSet();
-
-                var isFullySigned = Enum.GetValues<SignatureParty>()
-                    .All(signedRoles.Contains);
-
-                var readyForDriver = new[]
-                {
-                    SignatureParty.RepresentativeOffice,
-                    SignatureParty.VehicleOwner,
-                    SignatureParty.Customer
-                }.All(signedRoles.Contains);
-
-                var nextStatus = isFullySigned
-                    ? ContractStatus.Completed
-                    : readyForDriver
-                        ? ContractStatus.WaitingDriverConfirmation
-                        : signedRoles.Contains(SignatureParty.Customer)
-                            ? ContractStatus.CustomerSigned
-                            : ContractStatus.WaitingCustomerSignature;
+                var nextStatus = ContractStatus.Completed;
 
                 contract.Status = nextStatus;
-                contract.CompletedAt = isFullySigned ? now : null;
+                contract.CompletedAt = now;
                 contract.UpdatedAt = now;
                 var contractHash = ContractHash(contract);
 
@@ -197,7 +160,7 @@ public sealed class ContractDocumentService(
                     .Where(x => x.Id == contractId)
                     .ExecuteUpdateAsync(setters => setters
                         .SetProperty(x => x.Status, nextStatus)
-                        .SetProperty(x => x.CompletedAt, isFullySigned ? now : (DateTime?)null)
+                        .SetProperty(x => x.CompletedAt, now)
                         .SetProperty(x => x.UpdatedAt, now)
                         .SetProperty(x => x.ContractHash, contractHash),
                         ct);
@@ -275,15 +238,24 @@ public sealed class ContractDocumentService(
             .FirstOrDefaultAsync(x => x.Id == contractId, ct)
             ?? throw new KeyNotFoundException("Không tìm thấy hợp đồng.");
 
+        var missingSignatures = new List<string>();
         var signedRoles = contract.Signatures.Select(x => x.Party).ToHashSet();
-        var missingRoles = Enum.GetValues<SignatureParty>()
-            .Where(x => !signedRoles.Contains(x))
-            .Select(RoleName)
-            .ToArray();
 
-        if (missingRoles.Length > 0)
+        if (!StoredSignatureExists(contract.CompanyProfile?.RepresentativeSignatureFileUrl))
+            missingSignatures.Add("chữ ký cố định Company/văn phòng đại diện");
+
+        if (!StoredSignatureExists(contract.Vehicle?.OwnerSignatureFileUrl))
+            missingSignatures.Add("chữ ký cố định chủ sở hữu xe");
+
+        if (!StoredSignatureExists(contract.Driver?.DriverSignatureFileUrl))
+            missingSignatures.Add("chữ ký cố định tài xế");
+
+        if (!signedRoles.Contains(SignatureParty.Customer))
+            missingSignatures.Add("chữ ký khách hàng");
+
+        if (missingSignatures.Count > 0)
             throw new InvalidOperationException(
-                $"Chưa thể tạo PDF cuối cùng. Còn thiếu chữ ký: {string.Join(", ", missingRoles)}.");
+                $"Chưa thể tạo PDF cuối cùng. Còn thiếu: {string.Join(", ", missingSignatures)}.");
 
         var passengerCount = contract.Passengers.Count(x => !string.IsNullOrWhiteSpace(x.FullName));
         if (passengerCount > 20)
@@ -325,6 +297,18 @@ public sealed class ContractDocumentService(
         }
 
         return relativeUrl;
+    }
+
+    private bool StoredSignatureExists(string? relativeUrl)
+    {
+        if (string.IsNullOrWhiteSpace(relativeUrl))
+            return false;
+
+        var path = Path.Combine(
+            environment.WebRootPath,
+            relativeUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+
+        return File.Exists(path);
     }
 
     private static DateTime VietnamTime(DateTime value)

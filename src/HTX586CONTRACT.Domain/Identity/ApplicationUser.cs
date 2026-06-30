@@ -10,7 +10,7 @@ public class ApplicationUser : IdentityUser
     public string FullName { get; set; } = string.Empty;
     public string? EmployeeCode { get; set; }
 
-    // Admin gán một CompanyProfile cho tài xế. Admin có thể để null.
+    // Owner không cần CompanyProfile. Admin và Driver được gán CompanyProfile để xác định đơn vị quản lý/chữ ký.
     public Guid? CompanyProfileId { get; set; }
     public CompanyProfile? CompanyProfile { get; set; }
 
@@ -29,6 +29,13 @@ public class ApplicationUser : IdentityUser
     public DateTime? DriverLicenseExpiryDate { get; set; }
     public string? DriverLicenseFrontUrl { get; set; }
     public string? DriverLicenseBackUrl { get; set; }
+
+    // Chữ ký cố định của tài xế.
+    // Contract tự lấy chữ ký này, không bắt tài xế ký lại từng hợp đồng.
+    public string? DriverSignatureFileUrl { get; set; }
+    public string? DriverSignatureHash { get; set; }
+    public DateTime? DriverSignedAt { get; set; }
+
     public bool IsActive { get; set; } = true;
     public bool MustChangePassword { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

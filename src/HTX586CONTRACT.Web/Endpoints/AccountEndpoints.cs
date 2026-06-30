@@ -183,6 +183,9 @@ public static class AccountEndpoints
             await userManager.GetRolesAsync(user);
 
         if (roles.Contains(
+                "Owner",
+                StringComparer.OrdinalIgnoreCase) ||
+            roles.Contains(
                 "Admin",
                 StringComparer.OrdinalIgnoreCase))
         {

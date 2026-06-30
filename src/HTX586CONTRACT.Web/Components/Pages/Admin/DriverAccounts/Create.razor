@@ -1,9 +1,10 @@
 @page "/admin/driver-accounts/create"
-@attribute [Authorize(Roles = "Admin")]
+@attribute [Authorize(Roles = "Owner,Admin")]
 @inject IDriverAccountService DriverAccountService
 @inject ICompanyProfileService CompanyProfileService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
+@inject MasterSignatureService MasterSignatureService
 
 <PageTitle>Thêm tài xế</PageTitle>
 <PageHeader Title="Thêm tài xế" Subtitle="Tạo tài khoản đăng nhập, hồ sơ cá nhân, CCCD, GPLX và gán Company." />
@@ -31,6 +32,15 @@
             <MudItem xs="12" md="2"><MudDatePicker @bind-Date="_model.DriverLicenseIssuedDate" Label="Ngày cấp GPLX" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="2"><MudDatePicker @bind-Date="_model.DriverLicenseExpiryDate" Label="Hết hạn GPLX" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12"><MudSwitch T="bool" @bind-Value="_model.MustChangePassword" Color="Color.Warning" Label="Bắt buộc đổi mật khẩu khi đăng nhập lần đầu" /></MudItem>
+            <MudItem xs="12" md="6">
+                <MudText Typo="Typo.subtitle1">Chữ ký cố định tài xế</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Chữ ký này tự động hiển thị ở chân tài xế trên Contract.</MudText>
+                <SignaturePad OnSignatureSaved="CaptureDriverSignature" />
+                @if (!string.IsNullOrWhiteSpace(_driverSignatureDataUrl))
+                {
+                    <MudChip T="string" Class="mt-2" Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.Check">Đã nhận chữ ký cố định</MudChip>
+                }
+            </MudItem>
         </MudGrid>
         <MudStack Row="true" Class="mt-4"><MudButton Variant="Variant.Outlined" OnClick="@(() => Navigation.NavigateTo("/admin/driver-accounts"))">Hủy</MudButton><MudSpacer /><MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_saving" OnClick="SaveAsync">Tạo tài xế</MudButton></MudStack>
     </MudPaper>
@@ -42,6 +52,7 @@
     private bool _saving;
     private CreateDriverAccountRequest _model = new() { MustChangePassword = true };
     private IReadOnlyList<CompanyProfileOptionDto> _companies = [];
+    private string? _driverSignatureDataUrl;
 
     protected override async Task OnInitializedAsync()
     {
@@ -49,15 +60,29 @@
         _model.CompanyProfileId = _companies.FirstOrDefault()?.Id ?? Guid.Empty;
     }
 
+    private Task CaptureDriverSignature(string data)
+    {
+        _driverSignatureDataUrl = data;
+        Snackbar.Add("Đã nhận chữ ký cố định tài xế.", Severity.Success);
+        return Task.CompletedTask;
+    }
+
     private async Task SaveAsync()
     {
         await _form!.ValidateAsync();
         if (!_valid) return;
+        if (string.IsNullOrWhiteSpace(_driverSignatureDataUrl))
+        {
+            Snackbar.Add("Vui lòng ký chữ ký cố định của tài xế trước khi tạo tài khoản.", Severity.Warning);
+            return;
+        }
+
         _saving = true;
         try
         {
             var id = await DriverAccountService.CreateAsync(_model);
-            Snackbar.Add("Đã tạo tài khoản tài xế.", Severity.Success);
+            await MasterSignatureService.SaveDriverSignatureAsync(id, _driverSignatureDataUrl);
+            Snackbar.Add("Đã tạo tài khoản tài xế và lưu chữ ký cố định.", Severity.Success);
             Navigation.NavigateTo($"/admin/driver-accounts/{id}");
         }
         catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
