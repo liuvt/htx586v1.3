@@ -3,7 +3,7 @@ set -euo pipefail
 
 if [[ $# -lt 1 || $# -gt 4 ]]; then
   echo "Cách dùng: sudo $0 <thu_muc_data_cu> [thu_muc_data_moi] [service_user] [service_group]"
-  echo "Ví dụ: sudo $0 /var/www/htx586contract/HTX586CONTRACT_Data /var/www/htx586contract_data www-data www-data"
+  echo "Ví dụ: sudo $0 /var/www/htx586contract/htx586contract_data /var/www/htx586contract_data www-data www-data"
   exit 1
 fi
 

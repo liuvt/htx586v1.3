@@ -4,8 +4,8 @@
 publish/
 
 # Runtime data must never be committed or packaged with source
-HTX586CONTRACT_Data/
-**/HTX586CONTRACT_Data/
+htx586contract_data/
+**/htx586contract_data/
 
 # Local configuration
 *.user

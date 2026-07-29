@@ -83,7 +83,7 @@ Khi ứng dụng khởi động, `DatabaseSeeder` tự kiểm tra và bổ sung 
 Trước lần deploy đầu tiên, bắt buộc sao lưu:
 
 - Database SQL Server.
-- Thư mục `HTX586CONTRACT_Data`, đặc biệt là `uploads` và `dataprotection-keys`.
+- Thư mục `htx586contract_data`, đặc biệt là `uploads` và `dataprotection-keys`.
 
 ## 6. Build và deploy
 
