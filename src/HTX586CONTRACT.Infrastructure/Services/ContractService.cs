@@ -1,17 +1,19 @@
+using System.Data;
 using HTX586CONTRACT.Application.Abstractions;
 using HTX586CONTRACT.Application.Contracts;
 using HTX586CONTRACT.Domain.Contracts;
-using HTX586CONTRACT.Domain.Companies;
-using HTX586CONTRACT.Domain.Customers;
 using HTX586CONTRACT.Domain.Enums;
 using HTX586CONTRACT.Domain.Identity;
-using HTX586CONTRACT.Domain.Vehicles;
 using HTX586CONTRACT.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace HTX586CONTRACT.Infrastructure.Services;
 
+/// <summary>
+/// Luồng hợp đồng tinh gọn: chỉ Driver tạo/cập nhật. Công ty lấy từ Admin được
+/// gán cho Driver; xe/chủ xe và khách hàng được nhập trực tiếp rồi chụp snapshot.
+/// </summary>
 public sealed class ContractService(
     IDbContextFactory<ApplicationDbContext> factory,
     UserManager<ApplicationUser> userManager) : IContractService
@@ -34,8 +36,10 @@ public sealed class ContractService(
         if (filter.Status.HasValue) query = query.Where(x => x.Status == filter.Status.Value);
         if (filter.BusinessType.HasValue) query = query.Where(x => x.BusinessType == filter.BusinessType.Value);
         if (!string.IsNullOrWhiteSpace(filter.DriverId)) query = query.Where(x => x.DriverId == filter.DriverId);
-        if (filter.FromDate.HasValue) query = query.Where(x => x.CreatedAt >= filter.FromDate.Value.Date);
-        if (filter.ToDate.HasValue) query = query.Where(x => x.CreatedAt < filter.ToDate.Value.Date.AddDays(1));
+        if (!string.IsNullOrWhiteSpace(filter.AdminId)) query = query.Where(x => x.AdminId == filter.AdminId);
+        if (filter.CompanyProfileId.HasValue) query = query.Where(x => x.CompanyProfileId == filter.CompanyProfileId.Value);
+        if (filter.FromDate.HasValue) query = query.Where(x => (x.StartTime ?? x.CreatedAt) >= filter.FromDate.Value.Date);
+        if (filter.ToDate.HasValue) query = query.Where(x => (x.StartTime ?? x.CreatedAt) < filter.ToDate.Value.Date.AddDays(1));
 
         return await query.OrderByDescending(x => x.CreatedAt)
             .Select(x => new ContractListItemDto
@@ -46,6 +50,7 @@ public sealed class ContractService(
                 CompanyName = x.CompanyNameSnapshot,
                 CustomerName = x.CustomerNameSnapshot,
                 DriverName = x.DriverNameSnapshot,
+                VehicleId = x.VehicleId,
                 VehiclePlate = x.VehiclePlateSnapshot,
                 StartTime = x.StartTime,
                 ContractValue = x.ContractValue,
@@ -61,125 +66,149 @@ public sealed class ContractService(
     public async Task<ContractDetailDto?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
-        return await db.Contracts.AsNoTracking()
+        var contract = await db.Contracts.AsNoTracking()
             .Include(x => x.Passengers)
             .Include(x => x.Signatures)
-            .Where(x => x.Id == id)
-            .Select(x => new ContractDetailDto
+            .FirstOrDefaultAsync(x => x.Id == id, ct);
+
+        if (contract is null) return null;
+
+        var detail = new ContractDetailDto
+        {
+            Id = contract.Id,
+            ContractNumber = contract.ContractNumber,
+            BusinessType = contract.BusinessType,
+            ContractTypeId = contract.ContractTypeId,
+            Status = contract.Status,
+            AdminId = contract.AdminId,
+            CompanyProfileId = contract.CompanyProfileId,
+            CompanyName = contract.CompanyNameSnapshot,
+            CompanyTaxCode = contract.CompanyTaxCodeSnapshot,
+            CompanyAddress = contract.CompanyAddressSnapshot,
+            CompanyRepresentativeName = contract.CompanyRepresentativeSnapshot,
+            CompanyRepresentativePosition = contract.CompanyRepresentativePositionSnapshot,
+            DriverId = contract.DriverId,
+            DriverName = contract.DriverNameSnapshot,
+            DriverLicenseNumber = contract.DriverLicenseNumberSnapshot,
+            DriverLicenseClass = contract.DriverLicenseClassSnapshot,
+            CustomerId = contract.CustomerId,
+            CustomerName = contract.CustomerNameSnapshot,
+            CustomerPhone = contract.CustomerPhoneSnapshot,
+            CustomerCitizenId = contract.CustomerCitizenIdSnapshot,
+            CustomerAddress = contract.CustomerAddressSnapshot,
+            AreaCode = contract.AreaCode,
+            VehicleId = contract.VehicleId,
+            VehiclePlate = contract.VehiclePlateSnapshot,
+            VehicleBrand = contract.VehicleBrandSnapshot,
+            ActualPassengerCount = contract.ActualPassengerCount,
+            OwnerName = contract.VehicleOwnerNameSnapshot,
+            OwnerCitizenId = contract.VehicleOwnerCitizenIdSnapshot,
+            CargoName = contract.CargoName,
+            CargoWeight = contract.CargoWeight,
+            CargoUnit = contract.CargoUnit,
+            SecondDriverName = contract.SecondDriverName,
+            SecondDriverLicenseClass = contract.SecondDriverLicenseClass,
+            PickupLocation = contract.PickupLocation,
+            DropoffLocation = contract.DropoffLocation,
+            StartTime = contract.StartTime,
+            EndTime = contract.EndTime,
+            RouteDescription = contract.RouteDescription,
+            TotalKilometers = contract.TotalKilometers,
+            ContractValue = contract.ContractValue,
+            PaymentMethod = contract.PaymentMethod,
+            PaymentTime = contract.PaymentTime,
+            Note = contract.Note,
+            PdfFileUrl = contract.PdfFileUrl,
+            CreatedAt = contract.CreatedAt,
+            CreatedByUserId = contract.CreatedBy,
+            Passengers = contract.Passengers.OrderBy(x => x.SortOrder).Select(x => new ContractPassengerDto
             {
                 Id = x.Id,
-                ContractNumber = x.ContractNumber,
-                BusinessType = x.BusinessType,
-                ContractTypeId = x.ContractTypeId,
-                Status = x.Status,
-                CompanyProfileId = x.CompanyProfileId,
-                CompanyName = x.CompanyNameSnapshot,
-                DriverId = x.DriverId,
-                DriverName = x.DriverNameSnapshot,
-                DriverLicenseClass = x.DriverLicenseClassSnapshot,
-                CustomerId = x.CustomerId,
-                CustomerName = x.CustomerNameSnapshot,
-                CustomerPhone = x.CustomerPhoneSnapshot,
-                CustomerCitizenId = x.CustomerCitizenIdSnapshot,
-                CustomerAddress = x.CustomerAddressSnapshot,
-                AreaCode = x.AreaCode,
-                VehicleId = x.VehicleId,
-                VehiclePlate = x.VehiclePlateSnapshot,
-                VehicleBrand = x.VehicleBrandSnapshot,
-                ActualPassengerCount = x.ActualPassengerCount,
-                OwnerName = x.VehicleOwnerNameSnapshot,
-                OwnerCitizenId = x.VehicleOwnerCitizenIdSnapshot,
-                CargoName = x.CargoName,
-                CargoWeight = x.CargoWeight,
-                CargoUnit = x.CargoUnit,
-                SecondDriverName = x.SecondDriverName,
-                SecondDriverLicenseClass = x.SecondDriverLicenseClass,
-                PickupLocation = x.PickupLocation,
-                DropoffLocation = x.DropoffLocation,
-                StartTime = x.StartTime,
-                EndTime = x.EndTime,
-                RouteDescription = x.RouteDescription,
-                TotalKilometers = x.TotalKilometers,
-                ContractValue = x.ContractValue,
-                PaymentMethod = x.PaymentMethod,
-                PaymentTime = x.PaymentTime,
-                Note = x.Note,
-                PdfFileUrl = x.PdfFileUrl,
-                CreatedAt = x.CreatedAt,
-                Passengers = x.Passengers.OrderBy(p => p.SortOrder).Select(p => new ContractPassengerDto
-                {
-                    Id = p.Id,
-                    SortOrder = p.SortOrder,
-                    FullName = p.FullName,
-                    BirthYear = p.BirthYear,
-                    Note = p.Note
-                }).ToList(),
-                Signatures = x.Signatures.OrderBy(s => s.ServerSignedAt).Select(s => new ContractSignatureDto
-                {
-                    Id = s.Id,
-                    Party = s.Party,
-                    SignerName = s.SignerName,
-                    SignatureFileUrl = s.SignatureFileUrl,
-                    ServerSignedAt = s.ServerSignedAt
-                }).ToList()
-            })
-            .FirstOrDefaultAsync(ct);
+                SortOrder = x.SortOrder,
+                FullName = x.FullName,
+                BirthYear = x.BirthYear,
+                Note = x.Note
+            }).ToList(),
+            Signatures = contract.Signatures.OrderBy(x => x.ServerSignedAt).Select(x => new ContractSignatureDto
+            {
+                Id = x.Id,
+                Party = x.Party,
+                SignerName = x.SignerName,
+                SignatureFileUrl = x.SignatureFileUrl,
+                ServerSignedAt = x.ServerSignedAt
+            }).ToList()
+        };
+
+        var snapshot = ContractSnapshotData.FromJson(contract.ContractDataJson);
+        if (snapshot is not null)
+            ApplySnapshot(detail, snapshot);
+
+        detail.CreatedByName = await GetUserDisplayNameAsync(db, detail.CreatedByUserId, ct);
+        return detail;
     }
 
     public async Task<SaveContractResult> CreateAsync(SaveContractRequest request, string currentUserId, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(request.CustomerName) || string.IsNullOrWhiteSpace(request.CustomerPhone))
-            return new(false, null, "Vui lòng nhập tên và số điện thoại khách hàng.");
+        if (request.BusinessType != ContractBusinessType.Passenger)
+            return new(false, null, "Hiện chỉ sử dụng hợp đồng vận chuyển hành khách.");
 
         await using var db = await factory.CreateDbContextAsync(ct);
-        var isAdmin = await IsAdminAsync(currentUserId);
-        var driverId = isAdmin && !string.IsNullOrWhiteSpace(request.DriverId)
-            ? request.DriverId
-            : currentUserId;
-        var driver = await db.Users.Include(x => x.CompanyProfile).FirstOrDefaultAsync(x => x.Id == driverId, ct);
-        if (driver is null) return new(false, null, "Không tìm thấy tài xế.");
-        if (driver.CompanyProfileId is null || driver.CompanyProfile is null)
-            return new(false, null, "Tài xế chưa được gán công ty/văn phòng đại diện.");
-        if (!driver.CompanyProfile.IsActive)
-            return new(false, null, "Công ty/văn phòng đại diện của tài xế đã ngừng hoạt động.");
+        var driver = await LoadActiveDriverAsync(db, currentUserId, ct);
+        if (driver is null)
+            return new(false, null, "Không tìm thấy tài khoản Driver đang hoạt động hoặc yêu cầu đăng ký chưa được duyệt.");
+
+        var admin = await LoadAdminAsync(db, driver.AdminId, driver.CompanyProfileId, ct);
+        if (admin is null)
+            return new(false, null, "Tài xế chưa được gán tài khoản Admin/công ty đang hoạt động.");
+
+        var validation = ValidateManualData(request);
+        if (validation is not null) return new(false, null, validation);
 
         var type = await ResolveTypeAsync(db, request, ct);
-        if (type is null) return new(false, null, "Chưa cấu hình loại hợp đồng phù hợp.");
+        if (type is null) return new(false, null, "Chưa cấu hình loại hợp đồng vận chuyển hành khách.");
         var template = await db.ContractTemplates.FirstOrDefaultAsync(x => x.ContractTypeId == type.Id && x.IsActive, ct);
         if (template is null) return new(false, null, "Chưa cấu hình mẫu hợp đồng đang hoạt động.");
 
-        var customer = await ResolveCustomerAsync(db, request, driverId, currentUserId, ct);
-        var vehicle = await ResolveVehicleAsync(db, request, ct);
-        if (vehicle is null) return new(false, null, "Vui lòng chọn xe hợp lệ.");
-
-        var fixedSignatureError = ValidateFixedSignatures(driver, driver.CompanyProfile, vehicle);
-        if (fixedSignatureError is not null) return new(false, null, fixedSignatureError);
-
-        var entity = new Contract
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        try
         {
-            Id = Guid.NewGuid(),
-            ContractNumber = string.IsNullOrWhiteSpace(request.ContractNumber)
-                ? $"{DateTime.Now:yyyyMMddHHmmss}/{BusinessCode(request.BusinessType)}"
-                : request.ContractNumber.Trim(),
-            BusinessType = request.BusinessType,
-            ContractTypeId = type.Id,
-            ContractTemplateId = template.Id,
-            CompanyProfileId = driver.CompanyProfileId.Value,
-            DriverId = driver.Id,
-            CustomerId = customer.Id,
-            VehicleId = vehicle.Id,
-            Status = ContractStatus.Draft,
-            ContractContentSnapshot = template.HtmlContent,
-            CreatedBy = currentUserId,
-            CreatedAt = DateTime.UtcNow
-        };
+            // Đếm toàn bộ lịch sử, kể cả hợp đồng đã hủy/ẩn, rồi +1.
+            var contractSequence = await db.Contracts.IgnoreQueryFilters()
+                .CountAsync(x => x.DriverId == driver.Id, ct) + 1;
 
-        Apply(entity, request);
-        ApplySnapshots(entity, driver, driver.CompanyProfile, customer, vehicle);
-        AddPassengers(entity, request.Passengers, currentUserId);
-        db.Contracts.Add(entity);
-        await db.SaveChangesAsync(ct);
-        return new(true, entity.Id, "Đã tạo hợp đồng. Chỉ cần khách hàng ký để hoàn tất.");
+            var entity = new Contract
+            {
+                Id = Guid.NewGuid(),
+                ContractNumber = contractSequence.ToString(),
+                BusinessType = ContractBusinessType.Passenger,
+                ContractTypeId = type.Id,
+                ContractTemplateId = template.Id,
+                AdminId = admin.Id,
+                DriverId = driver.Id,
+                CompanyProfileId = null,
+                CustomerId = null,
+                VehicleId = null,
+                Status = ContractStatus.Draft,
+                ContractContentSnapshot = template.HtmlContent,
+                CreatedBy = currentUserId,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            ApplyBusinessData(entity, request);
+            ApplySnapshots(entity, admin, driver, request);
+            AddPassengers(entity, request.Passengers, currentUserId);
+            entity.ContractDataJson = BuildSnapshot(admin, driver, request).ToJson();
+
+            db.Contracts.Add(entity);
+            await db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            return new(true, entity.Id, $"Đã lưu tạm hợp đồng số {entity.ContractNumber}.");
+        }
+        catch
+        {
+            await transaction.RollbackAsync(ct);
+            throw;
+        }
     }
 
     public async Task<SaveContractResult> UpdateAsync(Guid id, SaveContractRequest request, string currentUserId, CancellationToken ct = default)
@@ -187,93 +216,143 @@ public sealed class ContractService(
         await using var db = await factory.CreateDbContextAsync(ct);
         var entity = await db.Contracts
             .Include(x => x.Passengers)
-            .Include(x => x.Signatures)
             .FirstOrDefaultAsync(x => x.Id == id, ct);
+
         if (entity is null) return new(false, null, "Không tìm thấy hợp đồng.");
-        if (entity.Status is ContractStatus.Completed or ContractStatus.Cancelled or ContractStatus.Invalidated)
-            return new(false, id, "Hợp đồng đã hoàn tất, đã hủy hoặc đã vô hiệu hóa và không thể chỉnh sửa.");
+        if (!string.Equals(entity.DriverId, currentUserId, StringComparison.Ordinal))
+            return new(false, id, "Chỉ tài xế tạo hợp đồng mới được cập nhật.");
+        if (entity.Status is ContractStatus.Completed or ContractStatus.Cancelled or ContractStatus.Expired or ContractStatus.Invalidated)
+            return new(false, id, "Hợp đồng đã khóa hoặc đã hủy nên không thể chỉnh sửa.");
 
-        var isAdmin = await IsAdminAsync(currentUserId);
-        if (!isAdmin && !string.Equals(entity.DriverId, currentUserId, StringComparison.Ordinal))
-            return new(false, id, "Bạn không có quyền cập nhật hợp đồng này.");
+        var driver = await LoadActiveDriverAsync(db, currentUserId, ct);
+        if (driver is null) return new(false, id, "Tài khoản tài xế không còn hoạt động.");
 
-        if (!isAdmin && entity.Signatures.Count != 0)
-            return new(false, id, "Hợp đồng đã có chữ ký. Tài xế không được cập nhật nội dung hợp đồng.");
+        // Nếu đã có snapshot thì không cần đọc lại Admin cũ. Nhờ vậy hợp đồng nháp vẫn
+        // chỉnh sửa được khi tài xế đổi công ty hoặc Admin cũ bị ngưng hoạt động.
+        var existingSnapshot = ContractSnapshotData.FromJson(entity.ContractDataJson);
+        ApplicationUser? admin = null;
+        if (existingSnapshot is null)
+        {
+            var adminId = entity.AdminId ?? driver.AdminId;
+            admin = await LoadAdminAsync(db, adminId, driver.CompanyProfileId, ct);
+            if (admin is null) return new(false, id, "Không tìm thấy snapshot hoặc Admin/công ty của hợp đồng.");
+        }
 
-        if (string.IsNullOrWhiteSpace(request.CustomerName) || string.IsNullOrWhiteSpace(request.CustomerPhone))
-            return new(false, id, "Vui lòng nhập tên và số điện thoại khách hàng.");
+        var validation = ValidateManualData(request);
+        if (validation is not null) return new(false, id, validation);
 
-        var driverId = isAdmin && !string.IsNullOrWhiteSpace(request.DriverId)
-            ? request.DriverId
-            : entity.DriverId;
-        var driver = await db.Users.Include(x => x.CompanyProfile).FirstOrDefaultAsync(x => x.Id == driverId, ct);
-        if (driver?.CompanyProfileId is null || driver.CompanyProfile is null)
-            return new(false, id, "Tài xế chưa được gán công ty/văn phòng đại diện.");
-
-        var type = await ResolveTypeAsync(db, request, ct);
-        if (type is null) return new(false, id, "Chưa cấu hình loại hợp đồng phù hợp.");
-        var template = await db.ContractTemplates.FirstOrDefaultAsync(x => x.ContractTypeId == type.Id && x.IsActive, ct);
-        if (template is null) return new(false, id, "Chưa cấu hình mẫu hợp đồng đang hoạt động.");
-
-        var customer = await ResolveCustomerAsync(db, request, driverId, currentUserId, ct);
-        var vehicle = await ResolveVehicleAsync(db, request, ct);
-        if (vehicle is null) return new(false, id, "Vui lòng chọn xe hợp lệ.");
-
-        var fixedSignatureError = ValidateFixedSignatures(driver, driver.CompanyProfile, vehicle);
-        if (fixedSignatureError is not null) return new(false, id, fixedSignatureError);
-
-        entity.DriverId = driver.Id;
-        entity.ContractTypeId = type.Id;
-        entity.ContractTemplateId = template.Id;
-        entity.ContractContentSnapshot = template.HtmlContent;
-        entity.CompanyProfileId = driver.CompanyProfileId.Value;
-        entity.CustomerId = customer.Id;
-        entity.VehicleId = vehicle.Id;
-        entity.BusinessType = request.BusinessType;
-        Apply(entity, request);
-        ApplySnapshots(entity, driver, driver.CompanyProfile, customer, vehicle);
+        ApplyBusinessData(entity, request);
+        ApplyManualSnapshots(entity, request);
         db.ContractPassengers.RemoveRange(entity.Passengers);
         AddPassengers(entity, request.Passengers, currentUserId);
+        entity.ContractDataJson = existingSnapshot is not null
+            ? BuildUpdatedSnapshot(existingSnapshot, request).ToJson()
+            : BuildSnapshot(admin!, driver, request).ToJson();
+        entity.Status = ContractStatus.Draft;
+        entity.PdfFileUrl = null;
+        entity.PdfSha256 = null;
+        entity.PdfGeneratedAt = null;
+        entity.ContractHash = null;
         entity.UpdatedAt = DateTime.UtcNow;
         entity.UpdatedBy = currentUserId;
+
         await db.SaveChangesAsync(ct);
-        return new(true, id, "Đã cập nhật hợp đồng.");
+        return new(true, id, "Đã cập nhật bản lưu tạm. Có thể tiếp tục ký lại cho đến khi bấm Hoàn thành.");
     }
 
-    public async Task<SaveContractResult> CancelByDriverAsync(
-        Guid id,
-        string currentUserId,
-        string? reason = null,
-        CancellationToken ct = default)
+    public async Task<SaveContractResult> CompleteAsync(Guid id, string currentUserId, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+
         var entity = await db.Contracts
             .Include(x => x.Signatures)
             .FirstOrDefaultAsync(x => x.Id == id, ct);
 
-        if (entity is null)
-            return new(false, null, "Không tìm thấy hợp đồng.");
+        if (entity is null) return new(false, null, "Không tìm thấy hợp đồng.");
+        if (!string.Equals(entity.DriverId, currentUserId, StringComparison.Ordinal))
+            return new(false, id, "Chỉ tài xế tạo hợp đồng mới được hoàn thành.");
+        if (entity.Status == ContractStatus.Completed)
+            return new(true, id, "Hợp đồng đã hoàn thành trước đó.");
+        if (entity.Status is ContractStatus.Cancelled or ContractStatus.Expired or ContractStatus.Invalidated)
+            return new(false, id, "Hợp đồng đã hủy, hết hạn hoặc vô hiệu hóa.");
 
+        var snapshot = ContractSnapshotData.FromJson(entity.ContractDataJson);
+        if (snapshot is null)
+            return new(false, id, "Hợp đồng chưa có snapshot dữ liệu hợp lệ. Vui lòng lưu lại trước khi hoàn thành.");
+
+        // Hỗ trợ hợp đồng nháp được tạo trước khi Admin/tài xế hoàn thiện chữ ký cố định.
+        // Chỉ bù chữ ký, không thay đổi các thông tin snapshot khác của công ty/tài xế.
+        var snapshotChanged = false;
+        if (string.IsNullOrWhiteSpace(snapshot.Company.RepresentativeSignatureFileUrl))
+        {
+            var fixedAdminId = snapshot.Company.AdminId ?? entity.AdminId;
+            if (!string.IsNullOrWhiteSpace(fixedAdminId))
+            {
+                var fixedAdmin = await db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == fixedAdminId, ct);
+                if (fixedAdmin is not null)
+                {
+                    snapshot.Company.RepresentativeSignatureFileUrl = fixedAdmin.CompanySignatureFileUrl;
+                    snapshot.Company.RepresentativeSignatureHash = fixedAdmin.CompanySignatureHash;
+                    snapshot.Company.RepresentativeSignedAt = fixedAdmin.CompanySignedAt;
+                    snapshotChanged = !string.IsNullOrWhiteSpace(snapshot.Company.RepresentativeSignatureFileUrl);
+                }
+            }
+        }
+        if (string.IsNullOrWhiteSpace(snapshot.Driver.SignatureFileUrl))
+        {
+            var fixedDriver = await db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == entity.DriverId, ct);
+            if (fixedDriver is not null)
+            {
+                snapshot.Driver.SignatureFileUrl = fixedDriver.DriverSignatureFileUrl;
+                snapshot.Driver.SignatureHash = fixedDriver.DriverSignatureHash;
+                snapshot.Driver.SignedAt = fixedDriver.DriverSignedAt;
+                snapshotChanged |= !string.IsNullOrWhiteSpace(snapshot.Driver.SignatureFileUrl);
+            }
+        }
+        if (snapshotChanged)
+            entity.ContractDataJson = snapshot.ToJson();
+
+        var missing = new List<string>();
+        if (string.IsNullOrWhiteSpace(snapshot.Company.RepresentativeSignatureFileUrl)) missing.Add("chữ ký công ty");
+        if (string.IsNullOrWhiteSpace(snapshot.Driver.SignatureFileUrl)) missing.Add("chữ ký tài xế");
+        if (string.IsNullOrWhiteSpace(snapshot.Vehicle.OwnerSignatureFileUrl) &&
+            !entity.Signatures.Any(x => x.Party == SignatureParty.VehicleOwner))
+            missing.Add("chữ ký chủ sở hữu xe");
+        if (string.IsNullOrWhiteSpace(snapshot.Customer.SignatureFileUrl) &&
+            !entity.Signatures.Any(x => x.Party == SignatureParty.Customer))
+            missing.Add("chữ ký khách hàng");
+
+        if (missing.Count > 0)
+            return new(false, id, $"Chưa thể hoàn thành. Còn thiếu: {string.Join(", ", missing)}.");
+
+        var now = DateTime.UtcNow;
+        entity.Status = ContractStatus.Completed;
+        entity.CompletedAt = now;
+        entity.UpdatedAt = now;
+        entity.UpdatedBy = currentUserId;
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return new(true, id, "Đã hoàn thành và khóa hợp đồng. Hệ thống sẽ tạo PDF chính thức.");
+    }
+
+    public async Task<SaveContractResult> CancelByDriverAsync(Guid id, string currentUserId, string? reason = null, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var entity = await db.Contracts.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (entity is null) return new(false, null, "Không tìm thấy hợp đồng.");
         if (!string.Equals(entity.DriverId, currentUserId, StringComparison.Ordinal))
             return new(false, id, "Bạn không có quyền hủy hợp đồng này.");
-
+        if (entity.Status == ContractStatus.Completed)
+            return new(false, id, "Hợp đồng đã hoàn thành và bị khóa.");
         if (entity.Status == ContractStatus.Cancelled)
-            return new(false, id, "Hợp đồng đã được hủy trước đó.");
-
-        if (entity.Status is ContractStatus.Completed or ContractStatus.Invalidated)
-            return new(false, id, "Hợp đồng đã hoàn tất hoặc đã vô hiệu hóa nên không thể hủy.");
-
-        if (entity.Signatures.Count != 0)
-            return new(false, id, "Hợp đồng đã có chân ký nên không thể hủy.");
+            return new(false, id, "Hợp đồng đã được hủy.");
 
         entity.Status = ContractStatus.Cancelled;
         entity.CancelledAt = DateTime.UtcNow;
-        entity.CancelReason = string.IsNullOrWhiteSpace(reason)
-            ? "Tài xế hủy trước khi các bên ký."
-            : reason.Trim();
+        entity.CancelReason = N(reason) ?? "Tài xế hủy hợp đồng.";
         entity.UpdatedAt = DateTime.UtcNow;
         entity.UpdatedBy = currentUserId;
-
         await db.SaveChangesAsync(ct);
         return new(true, id, "Đã hủy hợp đồng.");
     }
@@ -283,6 +362,8 @@ public sealed class ContractService(
         await using var db = await factory.CreateDbContextAsync(ct);
         var entity = await db.Contracts.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (entity is null || entity.Status == ContractStatus.Completed) return false;
+        if (!string.Equals(entity.DriverId, currentUserId, StringComparison.Ordinal)) return false;
+
         entity.IsDeleted = true;
         entity.DeletedAt = DateTime.UtcNow;
         entity.DeletedBy = currentUserId;
@@ -290,135 +371,304 @@ public sealed class ContractService(
         return true;
     }
 
-    private async Task<bool> IsAdminAsync(string userId)
+    private async Task<ApplicationUser?> LoadActiveDriverAsync(ApplicationDbContext db, string userId, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(userId))
-            return false;
+        var driver = await db.Users.FirstOrDefaultAsync(x =>
+            x.Id == userId && x.IsActive && !x.IsDeleted && x.RegistrationStatus == "Approved", ct);
+        if (driver is null || !await userManager.IsInRoleAsync(driver, "Driver")) return null;
+        return driver;
+    }
 
-        var user = await userManager.FindByIdAsync(userId);
-        return user is not null && (await userManager.IsInRoleAsync(user, "Owner") || await userManager.IsInRoleAsync(user, "Admin"));
+    private async Task<ApplicationUser?> LoadAdminAsync(ApplicationDbContext db, string? adminId, Guid? legacyCompanyId, CancellationToken ct)
+    {
+        ApplicationUser? admin = null;
+        if (!string.IsNullOrWhiteSpace(adminId))
+            admin = await db.Users.FirstOrDefaultAsync(x => x.Id == adminId && x.IsActive && !x.IsDeleted, ct);
+
+        // Tương thích dữ liệu cũ: tìm Admin đang gắn CompanyProfile của tài xế.
+        if (admin is null && legacyCompanyId.HasValue)
+        {
+            admin = await (from user in db.Users
+                           join userRole in db.UserRoles on user.Id equals userRole.UserId
+                           join role in db.Roles on userRole.RoleId equals role.Id
+                           where user.CompanyProfileId == legacyCompanyId && role.Name == "Admin" && user.IsActive && !user.IsDeleted
+                           select user).FirstOrDefaultAsync(ct);
+        }
+
+        if (admin is null || !await userManager.IsInRoleAsync(admin, "Admin")) return null;
+        return admin;
+    }
+
+    private static string? ValidateManualData(SaveContractRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.VehiclePlate)) return "Vui lòng nhập biển số xe.";
+        if (string.IsNullOrWhiteSpace(request.OwnerName)) return "Vui lòng nhập họ tên chủ sở hữu xe.";
+        if (string.IsNullOrWhiteSpace(request.CustomerName)) return "Vui lòng nhập tên khách hàng/người thuê.";
+        if (string.IsNullOrWhiteSpace(request.CustomerPhone)) return "Vui lòng nhập số điện thoại khách hàng.";
+        if (request.Passengers.Count(x => !string.IsNullOrWhiteSpace(x.FullName)) > 20)
+            return "Danh sách hành khách tối đa 20 người theo mẫu PDF hiện tại.";
+        return null;
     }
 
     private static async Task<ContractType?> ResolveTypeAsync(ApplicationDbContext db, SaveContractRequest request, CancellationToken ct)
     {
         if (request.ContractTypeId.HasValue)
-            return await db.ContractTypes.FirstOrDefaultAsync(x => x.Id == request.ContractTypeId.Value && x.IsActive, ct);
-
-        var code = request.BusinessType switch
         {
-            ContractBusinessType.Cargo => "CARGO",
-            ContractBusinessType.LongDistance => "LONG_DISTANCE",
-            _ => "DRIVER"
+            var selected = await db.ContractTypes.FirstOrDefaultAsync(x => x.Id == request.ContractTypeId && x.IsActive, ct);
+            if (selected is not null) return selected;
+        }
+        return await db.ContractTypes.FirstOrDefaultAsync(x => x.Code == "PASSENGER" && x.IsActive, ct);
+    }
+
+    private static void ApplyBusinessData(Contract entity, SaveContractRequest request)
+    {
+        entity.AreaCode = N(request.AreaCode) ?? "N/A";
+        entity.CargoName = N(request.CargoName);
+        entity.CargoWeight = request.CargoWeight;
+        entity.CargoUnit = N(request.CargoUnit);
+        entity.ActualPassengerCount = request.Passengers.Count(x => !string.IsNullOrWhiteSpace(x.FullName));
+        entity.SecondDriverName = N(request.SecondDriverName);
+        entity.SecondDriverLicenseClass = N(request.SecondDriverLicenseClass);
+        entity.PickupLocation = N(request.PickupLocation);
+        entity.DropoffLocation = N(request.DropoffLocation);
+        entity.StartTime = request.StartTime;
+        entity.EndTime = request.EndTime;
+        entity.RouteDescription = N(request.RouteDescription);
+        entity.TotalKilometers = request.TotalKilometers;
+        entity.ContractValue = request.ContractValue;
+        entity.PaymentMethod = N(request.PaymentMethod);
+        entity.PaymentTime = N(request.PaymentTime);
+        entity.Note = N(request.Note);
+    }
+
+    private static void ApplySnapshots(Contract entity, ApplicationUser admin, ApplicationUser driver, SaveContractRequest request)
+    {
+        entity.AdminId = admin.Id;
+        entity.DriverId = driver.Id;
+        entity.CompanyNameSnapshot = CompanyDisplayName(admin);
+        entity.CompanyTaxCodeSnapshot = N(admin.CompanyTaxCode) ?? string.Empty;
+        entity.CompanyAddressSnapshot = N(admin.CompanyAddress) ?? string.Empty;
+        entity.CompanyRepresentativeSnapshot = N(admin.CompanyRepresentativeName) ?? admin.FullName;
+        entity.CompanyRepresentativePositionSnapshot = N(admin.CompanyRepresentativePosition);
+        entity.DriverNameSnapshot = driver.FullName;
+        entity.DriverLicenseNumberSnapshot = N(driver.DriverLicenseNumber);
+        entity.DriverLicenseClassSnapshot = N(driver.DriverLicenseClass);
+        ApplyManualSnapshots(entity, request);
+    }
+
+    private static void ApplyManualSnapshots(Contract entity, SaveContractRequest request)
+    {
+        entity.CustomerNameSnapshot = request.CustomerName.Trim();
+        entity.CustomerPhoneSnapshot = request.CustomerPhone.Trim();
+        entity.CustomerCitizenIdSnapshot = N(request.CustomerCitizenId);
+        entity.CustomerAddressSnapshot = N(request.CustomerAddress);
+        entity.VehiclePlateSnapshot = request.VehiclePlate?.Trim().ToUpperInvariant();
+        entity.VehicleBrandSnapshot = N(request.VehicleBrand);
+        entity.VehicleOwnerNameSnapshot = request.OwnerName?.Trim();
+        entity.VehicleOwnerCitizenIdSnapshot = N(request.OwnerCitizenId);
+    }
+
+    private static ContractSnapshotData BuildSnapshot(ApplicationUser admin, ApplicationUser driver, SaveContractRequest request)
+        => ContractSnapshotData.CaptureManual(
+            admin,
+            driver,
+            new CustomerSnapshot
+            {
+                FullName = N(request.CustomerName),
+                OrganizationName = N(request.CustomerOrganizationName),
+                TaxCode = N(request.CustomerTaxCode),
+                PhoneNumber = N(request.CustomerPhone),
+                CitizenId = N(request.CustomerCitizenId),
+                CitizenIdIssuedDate = request.CustomerCitizenIdIssuedDate,
+                CitizenIdIssuedPlace = N(request.CustomerCitizenIdIssuedPlace),
+                Address = N(request.CustomerAddress),
+                Email = N(request.CustomerEmail)
+            },
+            new VehicleSnapshot
+            {
+                PlateNumber = request.VehiclePlate?.Trim().ToUpperInvariant(),
+                VehicleCode = N(request.VehicleCode),
+                Brand = N(request.VehicleBrand),
+                Model = N(request.VehicleModel),
+                VehicleType = N(request.VehicleType),
+                SeatCount = request.SeatCount,
+                Color = N(request.VehicleColor),
+                ChassisNumber = N(request.ChassisNumber),
+                EngineNumber = N(request.EngineNumber),
+                OwnerName = N(request.OwnerName),
+                OwnerCitizenId = N(request.OwnerCitizenId),
+                OwnerCitizenIdIssuedDate = request.OwnerCitizenIdIssuedDate,
+                OwnerCitizenIdIssuedPlace = N(request.OwnerCitizenIdIssuedPlace),
+                OwnerAddress = N(request.OwnerAddress),
+                OwnerPhoneNumber = N(request.OwnerPhoneNumber)
+            },
+            request.Passengers
+                .Where(x => !string.IsNullOrWhiteSpace(x.FullName))
+                .Select((x, index) => new PassengerSnapshot
+                {
+                    SortOrder = index + 1,
+                    FullName = x.FullName.Trim(),
+                    BirthYear = x.BirthYear,
+                    Note = N(x.Note)
+                }));
+
+    private static ContractSnapshotData BuildUpdatedSnapshot(
+        ContractSnapshotData existing,
+        SaveContractRequest request)
+    {
+        var updated = new ContractSnapshotData
+        {
+            Version = Math.Max(existing.Version, 3),
+            CapturedAtUtc = existing.CapturedAtUtc,
+            Company = existing.Company,
+            Driver = existing.Driver,
+            Customer = new CustomerSnapshot
+            {
+                FullName = N(request.CustomerName),
+                OrganizationName = N(request.CustomerOrganizationName),
+                TaxCode = N(request.CustomerTaxCode),
+                PhoneNumber = N(request.CustomerPhone),
+                CitizenId = N(request.CustomerCitizenId),
+                CitizenIdIssuedDate = request.CustomerCitizenIdIssuedDate,
+                CitizenIdIssuedPlace = N(request.CustomerCitizenIdIssuedPlace),
+                Address = N(request.CustomerAddress),
+                Email = N(request.CustomerEmail),
+                SignatureFileUrl = existing.Customer.SignatureFileUrl,
+                SignatureHash = existing.Customer.SignatureHash,
+                SignedAt = existing.Customer.SignedAt
+            },
+            Vehicle = new VehicleSnapshot
+            {
+                PlateNumber = request.VehiclePlate?.Trim().ToUpperInvariant(),
+                VehicleCode = N(request.VehicleCode),
+                Brand = N(request.VehicleBrand),
+                Model = N(request.VehicleModel),
+                VehicleType = N(request.VehicleType),
+                SeatCount = request.SeatCount,
+                Color = N(request.VehicleColor),
+                ChassisNumber = N(request.ChassisNumber),
+                EngineNumber = N(request.EngineNumber),
+                OwnerName = N(request.OwnerName),
+                OwnerCitizenId = N(request.OwnerCitizenId),
+                OwnerCitizenIdIssuedDate = request.OwnerCitizenIdIssuedDate,
+                OwnerCitizenIdIssuedPlace = N(request.OwnerCitizenIdIssuedPlace),
+                OwnerAddress = N(request.OwnerAddress),
+                OwnerPhoneNumber = N(request.OwnerPhoneNumber),
+                OwnerSignatureFileUrl = existing.Vehicle.OwnerSignatureFileUrl,
+                OwnerSignatureHash = existing.Vehicle.OwnerSignatureHash,
+                OwnerSignedAt = existing.Vehicle.OwnerSignedAt
+            },
+            Passengers = request.Passengers
+                .Where(x => !string.IsNullOrWhiteSpace(x.FullName))
+                .Select((x, index) => new PassengerSnapshot
+                {
+                    SortOrder = index + 1,
+                    FullName = x.FullName.Trim(),
+                    BirthYear = x.BirthYear,
+                    Note = N(x.Note)
+                })
+                .ToList()
         };
-        return await db.ContractTypes.FirstOrDefaultAsync(x => x.Code == code && x.IsActive, ct);
+        return updated;
     }
 
-    private static async Task<Customer> ResolveCustomerAsync(ApplicationDbContext db, SaveContractRequest request, string driverId, string currentUserId, CancellationToken ct)
+    private static void AddPassengers(Contract entity, IEnumerable<ContractPassengerDto> passengers, string userId)
     {
-        Customer? customer = null;
-        if (request.CustomerId.HasValue)
-            customer = await db.Customers.FirstOrDefaultAsync(x => x.Id == request.CustomerId.Value, ct);
-        if (customer is null && !string.IsNullOrWhiteSpace(request.CustomerPhone))
-            customer = await db.Customers.FirstOrDefaultAsync(x => x.PhoneNumber == request.CustomerPhone && x.CreatedByDriverId == driverId, ct);
-
-        if (customer is null)
+        foreach (var item in passengers.Where(x => !string.IsNullOrWhiteSpace(x.FullName)).Select((value, index) => (value, index)))
         {
-            customer = new Customer { Id = Guid.NewGuid(), CreatedByDriverId = driverId, CreatedBy = currentUserId };
-            db.Customers.Add(customer);
+            entity.Passengers.Add(new ContractPassenger
+            {
+                SortOrder = item.index + 1,
+                FullName = item.value.FullName.Trim(),
+                BirthYear = item.value.BirthYear,
+                Note = N(item.value.Note),
+                CreatedBy = userId
+            });
         }
-
-        customer.FullName = request.CustomerName.Trim();
-        customer.PhoneNumber = request.CustomerPhone.Trim();
-        customer.CitizenId = N(request.CustomerCitizenId);
-        customer.Address = N(request.CustomerAddress);
-        customer.LastUsedAt = DateTime.UtcNow;
-        return customer;
     }
 
-    private static async Task<Vehicle?> ResolveVehicleAsync(ApplicationDbContext db, SaveContractRequest request, CancellationToken ct)
+    private static void ApplySnapshot(ContractDetailDto detail, ContractSnapshotData snapshot)
     {
-        if (request.VehicleId.HasValue)
-            return await db.Vehicles.FirstOrDefaultAsync(x => x.Id == request.VehicleId.Value && x.IsActive, ct);
-        if (!string.IsNullOrWhiteSpace(request.VehiclePlate))
+        detail.AdminId = snapshot.Company.AdminId ?? detail.AdminId;
+        detail.CompanyName = snapshot.Company.DisplayName;
+        detail.CompanyTaxCode = snapshot.Company.TaxCode;
+        detail.CompanyAddress = snapshot.Company.Address;
+        detail.CompanyPhone = snapshot.Company.PhoneNumber;
+        detail.CompanyRepresentativeName = snapshot.Company.RepresentativeName;
+        detail.CompanyRepresentativePosition = snapshot.Company.RepresentativePosition;
+        detail.CompanyRepresentativeSignatureFileUrl = snapshot.Company.RepresentativeSignatureFileUrl;
+        detail.CompanyRepresentativeSignedAt = snapshot.Company.RepresentativeSignedAt;
+
+        detail.DriverName = snapshot.Driver.FullName ?? string.Empty;
+        detail.DriverPhone = snapshot.Driver.PhoneNumber;
+        detail.DriverCitizenId = snapshot.Driver.CitizenId;
+        detail.DriverLicenseNumber = snapshot.Driver.DriverLicenseNumber;
+        detail.DriverLicenseClass = snapshot.Driver.DriverLicenseClass;
+        detail.DriverSignatureFileUrl = snapshot.Driver.SignatureFileUrl;
+        detail.DriverSignedAt = snapshot.Driver.SignedAt;
+
+        detail.CustomerName = snapshot.Customer.FullName ?? string.Empty;
+        detail.CustomerPhone = snapshot.Customer.PhoneNumber ?? string.Empty;
+        detail.CustomerCitizenId = snapshot.Customer.CitizenId;
+        detail.CustomerCitizenIdIssuedDate = snapshot.Customer.CitizenIdIssuedDate;
+        detail.CustomerCitizenIdIssuedPlace = snapshot.Customer.CitizenIdIssuedPlace;
+        detail.CustomerAddress = snapshot.Customer.Address;
+        detail.CustomerEmail = snapshot.Customer.Email;
+        detail.CustomerOrganizationName = snapshot.Customer.OrganizationName;
+        detail.CustomerTaxCode = snapshot.Customer.TaxCode;
+
+        detail.VehiclePlate = snapshot.Vehicle.PlateNumber;
+        detail.VehicleCode = snapshot.Vehicle.VehicleCode;
+        detail.VehicleBrand = snapshot.Vehicle.Brand;
+        detail.VehicleModel = snapshot.Vehicle.Model;
+        detail.VehicleType = snapshot.Vehicle.VehicleType;
+        detail.SeatCount = snapshot.Vehicle.SeatCount;
+        detail.VehicleColor = snapshot.Vehicle.Color;
+        detail.ChassisNumber = snapshot.Vehicle.ChassisNumber;
+        detail.EngineNumber = snapshot.Vehicle.EngineNumber;
+        detail.OwnerName = snapshot.Vehicle.OwnerName;
+        detail.OwnerCitizenId = snapshot.Vehicle.OwnerCitizenId;
+        detail.OwnerCitizenIdIssuedDate = snapshot.Vehicle.OwnerCitizenIdIssuedDate;
+        detail.OwnerCitizenIdIssuedPlace = snapshot.Vehicle.OwnerCitizenIdIssuedPlace;
+        detail.OwnerAddress = snapshot.Vehicle.OwnerAddress;
+        detail.OwnerPhoneNumber = snapshot.Vehicle.OwnerPhoneNumber;
+        AddSnapshotSignature(detail, SignatureParty.VehicleOwner, snapshot.Vehicle.OwnerName,
+            snapshot.Vehicle.OwnerSignatureFileUrl, snapshot.Vehicle.OwnerSignedAt, snapshot.CapturedAtUtc);
+        AddSnapshotSignature(detail, SignatureParty.Customer, snapshot.Customer.FullName,
+            snapshot.Customer.SignatureFileUrl, snapshot.Customer.SignedAt, snapshot.CapturedAtUtc);
+        detail.VehicleOwnerSignatureFileUrl = detail.Signatures.FirstOrDefault(x => x.Party == SignatureParty.VehicleOwner)?.SignatureFileUrl;
+        detail.VehicleOwnerSignedAt = detail.Signatures.FirstOrDefault(x => x.Party == SignatureParty.VehicleOwner)?.ServerSignedAt;
+    }
+
+    private static void AddSnapshotSignature(
+        ContractDetailDto detail,
+        SignatureParty party,
+        string? signerName,
+        string? signatureFileUrl,
+        DateTime? signedAt,
+        DateTime fallbackTime)
+    {
+        if (string.IsNullOrWhiteSpace(signatureFileUrl) || detail.Signatures.Any(x => x.Party == party)) return;
+        detail.Signatures.Add(new ContractSignatureDto
         {
-            var plate = request.VehiclePlate.Trim().ToUpperInvariant();
-            return await db.Vehicles.FirstOrDefaultAsync(x => x.PlateNumber == plate && x.IsActive, ct);
-        }
-        return null;
+            Id = Guid.Empty,
+            Party = party,
+            SignerName = N(signerName) ?? string.Empty,
+            SignatureFileUrl = signatureFileUrl,
+            ServerSignedAt = signedAt ?? fallbackTime
+        });
     }
 
-    private static string? ValidateFixedSignatures(ApplicationUser driver, CompanyProfile company, Vehicle vehicle)
+    private static async Task<string> GetUserDisplayNameAsync(ApplicationDbContext db, string? userId, CancellationToken ct)
     {
-        var missing = new List<string>();
-
-        if (string.IsNullOrWhiteSpace(company.RepresentativeSignatureFileUrl))
-            missing.Add("chữ ký cố định Company/văn phòng đại diện");
-
-        if (string.IsNullOrWhiteSpace(vehicle.OwnerSignatureFileUrl))
-            missing.Add("chữ ký cố định chủ sở hữu xe");
-
-        if (string.IsNullOrWhiteSpace(driver.DriverSignatureFileUrl))
-            missing.Add("chữ ký cố định tài xế");
-
-        return missing.Count == 0
-            ? null
-            : $"Chưa thể tạo/cập nhật hợp đồng. Còn thiếu: {string.Join(", ", missing)}.";
+        if (string.IsNullOrWhiteSpace(userId)) return "Hệ thống";
+        return await db.Users.AsNoTracking().Where(x => x.Id == userId).Select(x => x.FullName).FirstOrDefaultAsync(ct) ?? userId;
     }
 
-    private static void Apply(Contract e, SaveContractRequest r)
-    {
-        if (!string.IsNullOrWhiteSpace(r.ContractNumber)) e.ContractNumber = r.ContractNumber.Trim();
-        e.AreaCode = string.IsNullOrWhiteSpace(r.AreaCode) ? "N/A" : r.AreaCode.Trim();
-        e.CargoName = N(r.CargoName);
-        e.CargoWeight = r.CargoWeight;
-        e.CargoUnit = N(r.CargoUnit);
-        e.ActualPassengerCount = r.ActualPassengerCount;
-        e.SecondDriverName = N(r.SecondDriverName);
-        e.SecondDriverLicenseClass = N(r.SecondDriverLicenseClass);
-        e.PickupLocation = N(r.PickupLocation);
-        e.DropoffLocation = N(r.DropoffLocation);
-        e.StartTime = r.StartTime;
-        e.EndTime = r.EndTime;
-        e.RouteDescription = N(r.RouteDescription);
-        e.TotalKilometers = r.TotalKilometers;
-        e.ContractValue = r.ContractValue;
-        e.PaymentMethod = N(r.PaymentMethod);
-        e.PaymentTime = N(r.PaymentTime);
-        e.Note = N(r.Note);
-    }
-
-    private static void ApplySnapshots(Contract e, ApplicationUser driver, CompanyProfile company, Customer customer, Vehicle vehicle)
-    {
-        e.CompanyNameSnapshot = company.CompanyName;
-        e.CompanyTaxCodeSnapshot = company.TaxCode;
-        e.CompanyAddressSnapshot = company.Address;
-        e.CompanyRepresentativeSnapshot = company.RepresentativeName;
-        e.CompanyRepresentativePositionSnapshot = company.RepresentativePosition;
-        e.DriverNameSnapshot = driver.FullName;
-        e.DriverLicenseNumberSnapshot = driver.DriverLicenseNumber;
-        e.DriverLicenseClassSnapshot = driver.DriverLicenseClass;
-        e.CustomerNameSnapshot = customer.FullName;
-        e.CustomerPhoneSnapshot = customer.PhoneNumber;
-        e.CustomerCitizenIdSnapshot = customer.CitizenId;
-        e.CustomerAddressSnapshot = customer.Address;
-        e.VehiclePlateSnapshot = vehicle.PlateNumber;
-        e.VehicleBrandSnapshot = vehicle.Brand;
-        e.VehicleOwnerNameSnapshot = vehicle.OwnerName;
-        e.VehicleOwnerCitizenIdSnapshot = vehicle.OwnerCitizenId;
-    }
-
-    private static void AddPassengers(Contract e, IEnumerable<ContractPassengerDto> passengers, string userId)
-    {
-        foreach (var item in passengers.Where(x => !string.IsNullOrWhiteSpace(x.FullName)).Select((x, i) => (x, i)))
-            e.Passengers.Add(new ContractPassenger { SortOrder = item.i + 1, FullName = item.x.FullName.Trim(), BirthYear = item.x.BirthYear, Note = N(item.x.Note), CreatedBy = userId });
-    }
-
-    private static string BusinessCode(ContractBusinessType type) => type switch
-    {
-        ContractBusinessType.Cargo => "HH",
-        ContractBusinessType.LongDistance => "ĐD",
-        _ => "TX"
-    };
+    private static string CompanyDisplayName(ApplicationUser admin)
+        => string.IsNullOrWhiteSpace(admin.CompanyBranchName)
+            ? N(admin.CompanyName) ?? admin.FullName
+            : $"{N(admin.CompanyName) ?? admin.FullName} - {admin.CompanyBranchName.Trim()}";
 
     private static string? N(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

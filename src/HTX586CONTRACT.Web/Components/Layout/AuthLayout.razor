@@ -1,4 +1,54 @@
 @inherits LayoutComponentBase
 @using HTX586CONTRACT.Web.Themes
-<MudThemeProvider Theme="_theme"/><MudPopoverProvider/><MudDialogProvider/><div class="auth-page"><section class="auth-brand-panel"><div><MudIcon Icon="@Icons.Material.Filled.AssignmentTurnedIn" Size="Size.Large"/><MudText Typo="Typo.h3" Class="mt-4">HTX586CONTRACT</MudText><MudText Typo="Typo.h6" Class="mt-3">Tạo hợp đồng, ký và xác thực vị trí ngay trên điện thoại.</MudText></div></section><section class="auth-form-panel"><div class="auth-form-container">@Body</div></section></div><MudSnackbarProvider/>
-@code{private readonly MudTheme _theme=AppMudTheme.Create();}
+
+<MudThemeProvider Theme="_theme" />
+<MudPopoverProvider />
+<MudDialogProvider />
+
+<div class="auth-page">
+    <section class="auth-brand-panel">
+        <div class="auth-brand-content">
+            <div class="brand-lockup auth-brand-lockup">
+                <div class="brand-symbol">
+                    <MudIcon Icon="@Icons.Material.Filled.Route" />
+                </div>
+                <div class="brand-copy">
+                    <div class="brand-name" style="color:white;">HTX<span style="color:#75dbc7;">586</span></div>
+                    <div class="brand-tagline" style="color:rgba(255,255,255,.58);">CONTRACT PLATFORM</div>
+                </div>
+            </div>
+
+            <MudText Typo="Typo.h2" Class="auth-hero-title">
+                Hợp đồng vận tải.<br />Nhanh hơn, rõ ràng hơn.
+            </MudText>
+            <MudText Typo="Typo.body1" Class="auth-hero-description">
+                Một nền tảng thống nhất để quản lý công ty, phương tiện, tài xế, khách hàng và toàn bộ quy trình ký hợp đồng.
+            </MudText>
+
+            <div class="auth-feature-list">
+                <div class="auth-feature">
+                    <MudIcon Icon="@Icons.Material.Filled.Verified" />
+                    <span>Ký và lưu trữ chữ ký an toàn</span>
+                </div>
+                <div class="auth-feature">
+                    <MudIcon Icon="@Icons.Material.Filled.SpaceDashboard" />
+                    <span>Điều hành tập trung theo vai trò</span>
+                </div>
+                <div class="auth-feature">
+                    <MudIcon Icon="@Icons.Material.Filled.PictureAsPdf" />
+                    <span>Xuất hợp đồng PDF và báo cáo Excel</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="auth-form-panel">
+        <div class="auth-form-container">@Body</div>
+    </section>
+</div>
+
+<MudSnackbarProvider />
+
+@code {
+    private readonly MudTheme _theme = AppMudTheme.Create();
+}

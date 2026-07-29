@@ -1,0 +1,40 @@
+<MudChip T="string"
+         Size="@ChipSize"
+         Color="@StatusColor"
+         Variant="Variant.Filled"
+         Style="font-weight:700; white-space:nowrap;">
+    @StatusText
+</MudChip>
+
+@code {
+    [Parameter, EditorRequired]
+    public ContractStatus Status { get; set; }
+
+    [Parameter]
+    public Size ChipSize { get; set; } = MudBlazor.Size.Small;
+
+    private Color StatusColor => Status switch
+    {
+        ContractStatus.Completed => Color.Success,
+        ContractStatus.Draft => Color.Primary,
+        ContractStatus.WaitingCustomerSignature => Color.Warning,
+        ContractStatus.CustomerSigned => Color.Info,
+        ContractStatus.WaitingDriverConfirmation => Color.Secondary,
+        ContractStatus.Cancelled or ContractStatus.Invalidated => Color.Error,
+        ContractStatus.Expired => Color.Default,
+        _ => Color.Default
+    };
+
+    private string StatusText => Status switch
+    {
+        ContractStatus.Draft => "Phát xuống cho tài xế",
+        ContractStatus.WaitingCustomerSignature => "Chờ khách ký",
+        ContractStatus.CustomerSigned => "Khách đã ký",
+        ContractStatus.WaitingDriverConfirmation => "Chờ tài xế xác nhận",
+        ContractStatus.Completed => "Hoàn tất",
+        ContractStatus.Cancelled => "Đã hủy",
+        ContractStatus.Expired => "Hết hạn",
+        ContractStatus.Invalidated => "Vô hiệu",
+        _ => "Đang xử lý"
+    };
+}

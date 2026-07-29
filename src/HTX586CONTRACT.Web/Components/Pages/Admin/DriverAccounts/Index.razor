@@ -1,121 +1,63 @@
 @page "/admin/driver-accounts"
-@attribute [Authorize(Roles = "Owner,Admin")]
-@inject IDriverAccountService Service
-@inject NavigationManager Navigation
+@attribute [Authorize(Roles = "Admin")]
+@inject IDriverAccountService DriverAccountService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ISnackbar Snackbar
 
-<PageTitle>Quản lý tài xế</PageTitle>
+<PageTitle>Tài xế</PageTitle>
+<PageHeader Title="Tài xế" Subtitle="Tài xế thuộc trực tiếp tài khoản Admin hiện tại. Tài xế mới gửi yêu cầu đăng ký và chữ ký cố định." />
 
-<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
-    <MudText Typo="Typo.h4">Quản lý tài xế</MudText>
-    <MudButton Color="Color.Primary"
-               Variant="Variant.Filled"
-               StartIcon="@Icons.Material.Filled.Add"
-               OnClick="CreateDriver">
-        Tạo tài xế
-    </MudButton>
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <MudTextField @bind-Value="_search" Label="Tìm họ tên, tài khoản, điện thoại, CCCD" Immediate="true" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
+    <MudSpacer />
+    <MudButton Href="/admin/driver-registrations" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAddAlt1">Yêu cầu đăng ký</MudButton>
 </MudStack>
 
-<MudPaper Class="pa-4 mt-4" Elevation="1">
-    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End">
-        <MudTextField T="string"
-                      @bind-Value="_filter.Keyword"
-                      Label="Tìm theo họ tên, tài khoản, CCCD, GPLX"
-                      Variant="Variant.Outlined"
-                      Immediate="true"
-                      Adornment="Adornment.Start"
-                      AdornmentIcon="@Icons.Material.Filled.Search"
-                      OnKeyDown="HandleSearchKeyDown" />
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="LoadAsync">
-            Tìm kiếm
-        </MudButton>
-    </MudStack>
-</MudPaper>
-
-<MudTable Items="_items" Loading="_loading" Hover="true" Striped="true" Class="mt-4">
-    <HeaderContent>
-        <MudTh>Mã nhân viên</MudTh>
-        <MudTh>Họ tên</MudTh>
-        <MudTh>Công ty</MudTh>
-        <MudTh>CCCD</MudTh>
-        <MudTh>GPLX</MudTh>
-        <MudTh>Trạng thái</MudTh>
-        <MudTh></MudTh>
-    </HeaderContent>
-    <RowTemplate>
-        <MudTd DataLabel="Mã nhân viên">@Display(context.EmployeeCode)</MudTd>
-        <MudTd DataLabel="Họ tên">@Display(context.FullName)</MudTd>
-        <MudTd DataLabel="Công ty">@Display(context.CompanyName)</MudTd>
-        <MudTd DataLabel="CCCD">@Display(context.CitizenId)</MudTd>
-        <MudTd DataLabel="GPLX">
-            @DisplayLicense(context.DriverLicenseNumber, context.DriverLicenseClass)
-        </MudTd>
-        <MudTd DataLabel="Trạng thái">
-            <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Error)">
-                @(context.IsActive ? "Hoạt động" : "Đã khóa")
-            </MudChip>
-        </MudTd>
-        <MudTd>
-            <MudIconButton Icon="@Icons.Material.Filled.Visibility"
-                           Color="Color.Primary"
-                           OnClick="@(() => OpenDetail(context.Id))" />
-        </MudTd>
-    </RowTemplate>
-    <NoRecordsContent>
-        <MudText Class="pa-4">Không có tài xế phù hợp.</MudText>
-    </NoRecordsContent>
-</MudTable>
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <MudTable T="DriverAccountDto" Items="FilteredItems" Hover="true" Breakpoint="Breakpoint.Sm" RowsPerPage="20">
+        <HeaderContent>
+            <MudTh>Tài xế</MudTh><MudTh>Điện thoại</MudTh><MudTh>GPLX</MudTh><MudTh>Chữ ký</MudTh><MudTh>Trạng thái</MudTh><MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Tài xế"><b>@context.FullName</b><br /><span class="text-secondary">@context.UserName</span></MudTd>
+            <MudTd DataLabel="Điện thoại">@(context.PhoneNumber ?? "—")</MudTd>
+            <MudTd DataLabel="GPLX">@(context.DriverLicenseNumber ?? "—") @(context.DriverLicenseClass)</MudTd>
+            <MudTd DataLabel="Chữ ký">
+                <MudChip T="string" Size="Size.Small" Color="@(context.DriverSignatureIsActive ? Color.Success : Color.Warning)">@context.DriverSignatureStatusText</MudChip>
+            </MudTd>
+            <MudTd DataLabel="Trạng thái"><MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">@(context.IsActive ? "Hoạt động" : "Đã khóa")</MudChip></MudTd>
+            <MudTd DataLabel="Thao tác">
+                <MudIconButton Href="@($"/admin/driver-accounts/{context.Id}")" Icon="@Icons.Material.Filled.Visibility" />
+                <MudIconButton Href="@($"/admin/driver-accounts/{context.Id}/edit")" Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" />
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent><MudText Class="pa-4">Chưa có tài xế.</MudText></NoRecordsContent>
+        <PagerContent><MudTablePager PageSizeOptions="_pageSizeOptions" /></PagerContent>
+    </MudTable>
+}
 
 @code {
-    private readonly DriverAccountFilter _filter = new()
+    private static readonly int[] _pageSizeOptions = [10, 20, 50, 100];
+    private string _adminId = string.Empty;
+    private string? _search;
+    private bool _loading = true;
+    private IReadOnlyList<DriverAccountDto> _items = [];
+    private IEnumerable<DriverAccountDto> FilteredItems => string.IsNullOrWhiteSpace(_search) ? _items : _items.Where(x =>
+        x.FullName.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) ||
+        x.UserName.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) ||
+        (x.PhoneNumber?.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) ?? false) ||
+        (x.CitizenId?.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) ?? false));
+
+    protected override async Task OnInitializedAsync()
     {
-        Page = 1,
-        PageSize = 100
-    };
-
-    private IReadOnlyList<DriverAccountDto> _items = Array.Empty<DriverAccountDto>();
-    private bool _loading;
-
-    protected override Task OnInitializedAsync() => LoadAsync();
-
-    private async Task LoadAsync()
-    {
-        _loading = true;
-        try
-        {
-            _items = await Service.GetListAsync(_filter);
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private async Task HandleSearchKeyDown(KeyboardEventArgs args)
-    {
-        if (args.Key == "Enter")
-        {
-            await LoadAsync();
-        }
-    }
-
-    private void CreateDriver() =>
-        Navigation.NavigateTo("/admin/driver-accounts/create");
-
-    private void OpenDetail(string userId) =>
-        Navigation.NavigateTo($"/admin/driver-accounts/{userId}");
-
-    private static string Display(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? "—" : value;
-
-    private static string DisplayLicense(string? number, string? licenseClass)
-    {
-        if (string.IsNullOrWhiteSpace(number) && string.IsNullOrWhiteSpace(licenseClass))
-        {
-            return "—";
-        }
-
-        return string.IsNullOrWhiteSpace(licenseClass)
-            ? number ?? "—"
-            : $"{number} ({licenseClass})";
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _adminId = state.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        _items = await DriverAccountService.GetListAsync(new DriverAccountFilter { AdminId = _adminId, PageSize = 500 });
+        _loading = false;
     }
 }

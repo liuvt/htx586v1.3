@@ -7,6 +7,7 @@ public interface IContractService
     Task<ContractDetailDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
     Task<SaveContractResult> CreateAsync(SaveContractRequest request, string userId, CancellationToken cancellationToken = default);
     Task<SaveContractResult> UpdateAsync(Guid id, SaveContractRequest request, string userId, CancellationToken cancellationToken = default);
+    Task<SaveContractResult> CompleteAsync(Guid id, string userId, CancellationToken cancellationToken = default);
     Task<SaveContractResult> CancelByDriverAsync(Guid id, string userId, string? reason = null, CancellationToken cancellationToken = default);
     Task<bool> DeleteAsync(Guid id, string userId, CancellationToken cancellationToken = default);
 }

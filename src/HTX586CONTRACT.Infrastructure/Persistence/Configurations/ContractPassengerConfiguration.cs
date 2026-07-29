@@ -6,15 +6,32 @@ namespace HTX586CONTRACT.Infrastructure.Persistence.Configurations;
 
 public sealed class ContractPassengerConfiguration : IEntityTypeConfiguration<ContractPassenger>
 {
-    public void Configure(EntityTypeBuilder<ContractPassenger> b)
+    public void Configure(EntityTypeBuilder<ContractPassenger> builder)
     {
-        b.ToTable("ContractPassengers");
-        b.HasKey(x => x.Id);
-        b.Property(x => x.FullName).HasMaxLength(200).IsRequired();
-        b.Property(x => x.Note).HasMaxLength(500);
-        b.Property(x => x.RowVersion).IsRowVersion();
-        b.HasOne(x => x.Contract).WithMany(x => x.Passengers).HasForeignKey(x => x.ContractId).OnDelete(DeleteBehavior.Cascade);
-        b.HasIndex(x => new { x.ContractId, x.SortOrder }).IsUnique();
-        b.HasQueryFilter(x => !x.IsDeleted);
+        builder.ToTable("ContractPassengers");
+
+        builder.HasKey(x => x.Id);
+
+        builder.Property(x => x.FullName)
+            .HasMaxLength(200)
+            .IsRequired();
+
+        builder.Property(x => x.Note)
+            .HasMaxLength(500);
+
+        builder.Property(x => x.RowVersion)
+            .IsRowVersion();
+
+        builder.HasOne(x => x.Contract)
+            .WithMany(x => x.Passengers)
+            .HasForeignKey(x => x.ContractId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(x => new { x.ContractId, x.SortOrder })
+            .IsUnique()
+            .HasFilter("[IsDeleted] = 0")
+            .HasDatabaseName("UX_ContractPassengers_Contract_SortOrder");
+
+        builder.HasQueryFilter(x => !x.IsDeleted);
     }
 }

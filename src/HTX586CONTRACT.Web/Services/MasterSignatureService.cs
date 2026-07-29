@@ -4,68 +4,55 @@ using Microsoft.EntityFrameworkCore;
 namespace HTX586CONTRACT.Web.Services;
 
 /// <summary>
-/// Quản lý chữ ký cố định của Company, Vehicle và User(Driver).
-/// Những chữ ký này được tạo một lần ở danh mục và tự động chèn vào mọi hợp đồng.
+/// Quản lý hai chữ ký cố định của luồng tinh gọn: công ty theo Admin và tài xế.
+/// Hai chữ ký được chụp vào snapshot khi tạo hợp đồng mới.
 /// </summary>
 public sealed class MasterSignatureService(
     IDbContextFactory<ApplicationDbContext> factory,
-    SignatureFileStorage storage)
+    IUploadFileStorage storage)
 {
-    public async Task<string> SaveCompanyRepresentativeSignatureAsync(
-        Guid companyId,
+    public async Task<string> SaveAdminCompanySignatureAsync(
+        string adminId,
         string dataUrl,
         CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(adminId))
+            throw new InvalidOperationException("Thiếu tài khoản Admin.");
+
         var stored = await storage.SavePngDataUrlAsync(
-            ["master-signatures", "companies", companyId.ToString("N")],
-            "representative",
+            ["master-signatures", "admins", adminId],
+            "company",
             dataUrl,
             ct);
 
         await using var db = await factory.CreateDbContextAsync(ct);
-        var updated = await db.CompanyProfiles
-            .Where(x => x.Id == companyId)
+        var updated = await db.Users
+            .Where(x => x.Id == adminId && !x.IsDeleted
+                && db.UserRoles.Any(ur => ur.UserId == x.Id
+                    && db.Roles.Any(role => role.Id == ur.RoleId && role.Name == "Admin")))
             .ExecuteUpdateAsync(setters => setters
-                .SetProperty(x => x.RepresentativeSignatureFileUrl, stored.RelativeUrl)
-                .SetProperty(x => x.RepresentativeSignatureHash, stored.Sha256Hash)
-                .SetProperty(x => x.RepresentativeSignedAt, stored.SavedAt)
-                .SetProperty(x => x.UpdatedAt, stored.SavedAt),
-                ct);
+                .SetProperty(x => x.CompanySignatureFileUrl, stored.RelativeUrl)
+                .SetProperty(x => x.CompanySignatureHash, stored.Sha256Hash)
+                .SetProperty(x => x.CompanySignedAt, stored.SavedAt)
+                .SetProperty(x => x.UpdatedAt, stored.SavedAt), ct);
 
         if (updated != 1)
-            throw new KeyNotFoundException("Không tìm thấy công ty/văn phòng đại diện để lưu chữ ký.");
+            throw new KeyNotFoundException("Không tìm thấy tài khoản Admin để lưu chữ ký công ty.");
 
         return stored.RelativeUrl;
     }
 
-    public async Task<string> SaveVehicleOwnerSignatureAsync(
-        Guid vehicleId,
-        string dataUrl,
-        CancellationToken ct = default)
+    public async Task<string> SaveDriverInitialSignatureAsync(string userId, string dataUrl, CancellationToken ct = default)
     {
-        var stored = await storage.SavePngDataUrlAsync(
-            ["master-signatures", "vehicles", vehicleId.ToString("N")],
-            "owner",
-            dataUrl,
-            ct);
-
-        await using var db = await factory.CreateDbContextAsync(ct);
-        var updated = await db.Vehicles
-            .Where(x => x.Id == vehicleId)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(x => x.OwnerSignatureFileUrl, stored.RelativeUrl)
-                .SetProperty(x => x.OwnerSignatureHash, stored.Sha256Hash)
-                .SetProperty(x => x.OwnerSignedAt, stored.SavedAt)
-                .SetProperty(x => x.UpdatedAt, stored.SavedAt),
-                ct);
-
-        if (updated != 1)
-            throw new KeyNotFoundException("Không tìm thấy xe để lưu chữ ký chủ xe.");
-
-        return stored.RelativeUrl;
+        await using (var checkDb = await factory.CreateDbContextAsync(ct))
+        {
+            var alreadySigned = await checkDb.Users.AsNoTracking().AnyAsync(x => x.Id == userId && !x.IsDeleted && x.DriverSignedAt != null, ct);
+            if (alreadySigned) throw new InvalidOperationException("Tài xế đã tạo chữ ký lần đầu. Không thể ký lại.");
+        }
+        return await SaveDriverSignatureAsync(userId, dataUrl, ct);
     }
 
-    public async Task<string> SaveDriverSignatureAsync(
+    private async Task<string> SaveDriverSignatureAsync(
         string userId,
         string dataUrl,
         CancellationToken ct = default)
@@ -81,11 +68,15 @@ public sealed class MasterSignatureService(
 
         await using var db = await factory.CreateDbContextAsync(ct);
         var updated = await db.Users
-            .Where(x => x.Id == userId)
+            .Where(x => x.Id == userId && !x.IsDeleted
+                && db.UserRoles.Any(ur => ur.UserId == x.Id
+                    && db.Roles.Any(role => role.Id == ur.RoleId && role.Name == "Driver")))
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(x => x.DriverSignatureFileUrl, stored.RelativeUrl)
                 .SetProperty(x => x.DriverSignatureHash, stored.Sha256Hash)
                 .SetProperty(x => x.DriverSignedAt, stored.SavedAt)
+                .SetProperty(x => x.DriverSignatureIsActive, true)
+                .SetProperty(x => x.DriverSignatureInactiveAt, (DateTime?)null)
                 .SetProperty(x => x.UpdatedAt, stored.SavedAt),
                 ct);
 

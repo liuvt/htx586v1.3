@@ -1,74 +1,69 @@
 <AuthorizeView>
     <Authorized Context="ctx">
-        <MudMenu Icon="@Icons.Material.Filled.AccountCircle"
-                 Color="Color.Inherit">
+        <MudMenu Label="@DisplayName(ctx.User)"
+                 StartIcon="@Icons.Material.Filled.AccountCircle"
+                 Variant="Variant.Text"
+                 Class="workspace-user-menu"
+                 AnchorOrigin="Origin.BottomRight"
+                 TransformOrigin="Origin.TopRight">
+            <div class="user-menu-summary">
+                <div class="user-menu-avatar">@Initials(ctx.User)</div>
+                <div>
+                    <strong>@DisplayName(ctx.User)</strong>
+                    <span>@RoleName(ctx.User)</span>
+                </div>
+            </div>
+            <MudDivider />
 
             @if (ctx.User.IsInRole("Driver"))
             {
-
-                <MudMenuItem Icon="@Icons.Material.Filled.ManageAccounts"
-                             Href="/driver/account">
-                    Tài khoản
+                <MudMenuItem Icon="@Icons.Material.Filled.ManageAccounts" Href="/driver/account">
+                    Tài khoản của tôi
                 </MudMenuItem>
-                <MudMenuItem Icon="@Icons.Material.Filled.LockReset"
-                             OnClick="OpenChangePasswordAsync">
-                    Đổi mật khẩu
-                </MudMenuItem>
-
-                <MudDivider />
-            }
-
-            @if (ctx.User.IsInRole("Owner"))
-            {
-                <MudMenuItem Icon="@Icons.Material.Filled.ManageAccounts"
-                             Href="/admin/accounts">
-                    Tài khoản
-                </MudMenuItem>
-
-                <MudMenuItem Href="/admin/companies" Icon="@Icons.Material.Filled.Business">Công ty</MudMenuItem>
-
-                <MudMenuItem Icon="@Icons.Material.Filled.LockReset"
-                             OnClick="OpenChangePasswordAsync">
-                    Đổi mật khẩu
-                </MudMenuItem>
-
-                <MudDivider />
             }
             else if (ctx.User.IsInRole("Admin"))
             {
-                <MudMenuItem Href="/admin/companies" Icon="@Icons.Material.Filled.Business">Công ty</MudMenuItem>
-
-                <MudMenuItem Icon="@Icons.Material.Filled.LockReset"
-                             OnClick="OpenChangePasswordAsync">
-                    Đổi mật khẩu
+                <MudMenuItem Href="/admin/company-profile" Icon="@Icons.Material.Filled.Business">
+                    Thông tin công ty
                 </MudMenuItem>
-
-                <MudDivider />
             }
 
-            <MudMenuItem Icon="@Icons.Material.Filled.ExitToApp" IconColor="Color.Error">
-                <form method="post"
-                      action="/account/logout/submit"
-                      class="logout-form">
+            <MudMenuItem Icon="@Icons.Material.Filled.LockReset" OnClick="OpenChangePasswordAsync">
+                Đổi mật khẩu
+            </MudMenuItem>
+            <MudDivider />
+            <MudMenuItem Icon="@Icons.Material.Filled.Logout" IconColor="Color.Error">
+                <form method="post" action="/account/logout/submit" class="logout-form">
                     <AntiforgeryToken />
-
-                    <button type="submit"
-                            class="logout-button">
-                        Đăng xuất
-                    </button>
+                    <button type="submit" class="logout-button">Đăng xuất</button>
                 </form>
             </MudMenuItem>
-
         </MudMenu>
     </Authorized>
 </AuthorizeView>
 
 @code {
-    [Parameter]
-    public EventCallback OnChangePassword { get; set; }
+    [Parameter] public EventCallback OnChangePassword { get; set; }
 
-    private Task OpenChangePasswordAsync()
+    private Task OpenChangePasswordAsync() => OnChangePassword.InvokeAsync();
+
+    private static string DisplayName(ClaimsPrincipal user)
+        => user.FindFirstValue(ClaimTypes.Name)
+           ?? user.Identity?.Name
+           ?? "Tài khoản";
+
+    private static string RoleName(ClaimsPrincipal user)
+        => user.IsInRole("Admin") ? "Quản trị công ty"
+         : user.IsInRole("Driver") ? "Tài xế"
+         : "Người dùng";
+
+    private static string Initials(ClaimsPrincipal user)
     {
-        return OnChangePassword.InvokeAsync();
+        var name = DisplayName(user).Trim();
+        if (string.IsNullOrWhiteSpace(name)) return "U";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 1
+            ? parts[0][0].ToString().ToUpperInvariant()
+            : $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
     }
 }

@@ -1,28 +1,103 @@
 @inherits LayoutComponentBase
+@implements IDisposable
 @using HTX586CONTRACT.Web.Themes
 @inject NavigationManager Navigation
 
 <MudThemeProvider Theme="_theme" />
 <MudPopoverProvider />
 <MudDialogProvider />
+<ActiveAccountGuard />
+<FirstLoginSignatureOverlay />
 <ForcePasswordChangeOverlay @ref="_forcePasswordChangeOverlay" />
 
-<MudLayout>
-    <MudAppBar Elevation="1" Dense="true">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="(() => _drawerOpen = !_drawerOpen)" />
-        <MudIcon Icon="@Icons.Material.Filled.Description" Class="mr-2" /><MudText Typo="Typo.h6">HTX586CONTRACT</MudText>
+<MudLayout Class="app-shell">
+    <MudAppBar Class="workspace-topbar" Elevation="0" Color="Color.Default">
+        <MudIconButton Icon="@Icons.Material.Filled.MenuOpen"
+                       Class="topbar-menu-button"
+                       Edge="Edge.Start"
+                       OnClick="ToggleDrawer" />
+
+        <MudHidden Breakpoint="Breakpoint.MdAndUp">
+            <div class="mobile-brand-mark">586</div>
+        </MudHidden>
+
+        <div class="topbar-context">
+            <MudText Typo="Typo.caption" Class="topbar-eyebrow">TRUNG TÂM ĐIỀU HÀNH</MudText>
+            <MudText Typo="Typo.subtitle1" Class="topbar-title">Quản lý hợp đồng vận tải</MudText>
+        </div>
+
         <MudSpacer />
+
+        <MudHidden Breakpoint="Breakpoint.SmAndDown">
+            <div class="topbar-date">
+                <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" Size="Size.Small" />
+                <span>@DateTime.Today.ToString("dddd, dd/MM/yyyy", new System.Globalization.CultureInfo("vi-VN"))</span>
+            </div>
+        </MudHidden>
+
         <UserMenu OnChangePassword="OpenChangePasswordAsync" />
     </MudAppBar>
-    <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Responsive" Breakpoint="Breakpoint.Md" Elevation="1">
-        <NavMenu />
+
+    <MudDrawer @bind-Open="_drawerOpen"
+               Variant="DrawerVariant.Responsive"
+               Breakpoint="Breakpoint.Md"
+               Elevation="0"
+               Class="workspace-drawer">
+        <div class="drawer-shell">
+            <div class="brand-lockup">
+                <div class="brand-symbol">
+                    <MudIcon Icon="@Icons.Material.Filled.Route" />
+                </div>
+                <div class="brand-copy">
+                    <div class="brand-name">HTX<span>586</span></div>
+                    <div class="brand-tagline">CONTRACT PLATFORM</div>
+                </div>
+            </div>
+
+            <div class="drawer-status">
+                <span class="status-pulse"></span>
+                <div>
+                    <strong>Hệ thống sẵn sàng</strong>
+                    <small>Vận hành &amp; ký số hợp đồng</small>
+                </div>
+            </div>
+
+            <div class="drawer-navigation">
+                <NavMenu />
+            </div>
+
+            <div class="drawer-footer">
+                <div class="drawer-footer-icon">
+                    <MudIcon Icon="@Icons.Material.Filled.VerifiedUser" Size="Size.Small" />
+                </div>
+                <div>
+                    <strong>Dữ liệu được bảo vệ</strong>
+                    <span>HTX586 Enterprise · v3</span>
+                </div>
+            </div>
+        </div>
     </MudDrawer>
-    <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.False" Class="page-container">@Body</MudContainer>
+
+    <MudMainContent Class="workspace-content">
+        <CascadingValue Name="OpenChangePassword" Value="@((Func<Task>)OpenChangePasswordAsync)">
+            <MudContainer MaxWidth="MaxWidth.False" Class="page-container">
+                <ErrorBoundary @ref="_errorBoundary">
+                    <ChildContent>
+                        @Body
+                    </ChildContent>
+                    <ErrorContent Context="exception">
+                        <ErrorsPage StatusCode="500" />
+                    </ErrorContent>
+                </ErrorBoundary>
+            </MudContainer>
+        </CascadingValue>
     </MudMainContent>
+
     <AuthorizeView Roles="Driver">
         <Authorized>
-            <MudHidden Breakpoint="Breakpoint.SmAndUp"><MobileBottomNav /></MudHidden>
+            <MudHidden Breakpoint="Breakpoint.SmAndUp">
+                <MobileBottomNav />
+            </MudHidden>
         </Authorized>
     </AuthorizeView>
 </MudLayout>
@@ -31,19 +106,39 @@
 
 @code {
     private readonly MudTheme _theme = AppMudTheme.Create();
-
     private bool _drawerOpen = true;
-    private void ToggleDrawer()
+    private ForcePasswordChangeOverlay? _forcePasswordChangeOverlay;
+    private ErrorBoundary? _errorBoundary;
+
+    protected override void OnInitialized()
     {
-        _drawerOpen = !_drawerOpen;
+        Navigation.LocationChanged += OnLocationChanged;
     }
 
-    private ForcePasswordChangeOverlay? _forcePasswordChangeOverlay;
+    private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+
     private async Task OpenChangePasswordAsync()
     {
         if (_forcePasswordChangeOverlay is not null)
-        {
             await _forcePasswordChangeOverlay.ShowAsync();
+    }
+
+    private async void OnLocationChanged(
+        object? sender,
+        LocationChangedEventArgs args)
+    {
+        try
+        {
+            await InvokeAsync(() => _errorBoundary?.Recover());
         }
+        catch
+        {
+            // Không làm gián đoạn điều hướng nếu ErrorBoundary đã được giải phóng.
+        }
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
     }
 }

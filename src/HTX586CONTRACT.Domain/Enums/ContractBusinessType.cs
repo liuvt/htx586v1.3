@@ -1,2 +1,10 @@
 namespace HTX586CONTRACT.Domain.Enums;
-public enum ContractBusinessType { Driver = 1, Cargo = 2, LongDistance = 3 }
+
+//Loai hợp đồng kinh doanh
+public enum ContractBusinessType
+{
+    // Loại hợp đồng hành khách
+    Passenger = 1, 
+    // Loại hợp đồng hàng hóa
+    Cargo = 2
+}

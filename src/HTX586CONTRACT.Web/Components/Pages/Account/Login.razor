@@ -10,7 +10,7 @@
 
 <MudText Color="Color.Secondary"
          Class="mb-5">
-    Dùng mã tài xế, số điện thoại, email hoặc tên đăng nhập.
+    Đăng nhập bằng số điện thoại hoặc tên đăng nhập.
 </MudText>
 
 @if (!string.IsNullOrWhiteSpace(ErrorMessage))
@@ -49,7 +49,7 @@
                name="LoginName"
                type="text"
                autocomplete="username"
-               placeholder="Mã tài xế, số điện thoại hoặc email"
+               placeholder="Số điện thoại hoặc tên đăng nhập"
                required />
     </div>
 
@@ -81,6 +81,8 @@
     </button>
 </form>
 
+<MudButton Href="/account/driver-register" FullWidth="true" Variant="Variant.Text" Class="mt-3">Tài xế gửi yêu cầu tạo tài khoản</MudButton>
+
 <MudAlert Severity="Severity.Info"
           Variant="Variant.Text"
           Class="mt-5">
@@ -107,10 +109,16 @@
         ErrorCode?.Trim().ToLowerInvariant() switch
         {
             "invalid" =>
-                "Tên đăng nhập hoặc mật khẩu không chính xác.",
+                "Số điện thoại/tên đăng nhập hoặc mật khẩu không chính xác.",
 
             "inactive" =>
                 "Tài khoản đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.",
+
+            "pending" =>
+                "Yêu cầu đăng ký đang chờ quản trị viên xét duyệt.",
+
+            "rejected" =>
+                "Yêu cầu đăng ký không được duyệt. Vui lòng liên hệ quản trị viên.",
 
             "locked" =>
                 "Tài khoản đang bị khóa tạm thời do đăng nhập sai nhiều lần.",

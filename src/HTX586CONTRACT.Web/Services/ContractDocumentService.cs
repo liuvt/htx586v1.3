@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using HTX586CONTRACT.Application.Abstractions;
+using HTX586CONTRACT.Domain.Contracts;
 using HTX586CONTRACT.Domain.Enums;
 using HTX586CONTRACT.Domain.Signatures;
 using HTX586CONTRACT.Infrastructure.Persistence;
@@ -12,215 +13,209 @@ namespace HTX586CONTRACT.Web.Services;
 
 public sealed class ContractDocumentService(
     IDbContextFactory<ApplicationDbContext> factory,
-    IWebHostEnvironment environment,
     PdfContractTemplateRenderer pdfTemplateRenderer,
+    IUploadFileStorage storage,
     ILogger<ContractDocumentService> logger) : IContractDocumentService
 {
+    // Lưu chữ ký tay theo từng hợp đồng. Chủ xe và khách hàng có thể ký lại
+    // nhiều lần cho đến khi tài xế bấm Hoàn thành.
     public async Task<string> SaveSignatureAsync(
         Guid contractId,
+        string currentUserId,
         string party,
         string signerName,
         string dataUrl,
         CancellationToken ct = default)
     {
-        if (!Enum.TryParse<SignatureParty>(party, true, out var role))
-            throw new InvalidOperationException("Vai trò ký không hợp lệ.");
+        if (string.IsNullOrWhiteSpace(currentUserId))
+            throw new InvalidOperationException("Không xác định được tài khoản tài xế.");
 
-        if (role != SignatureParty.Customer)
-            throw new InvalidOperationException("Company, chủ xe và tài xế dùng chữ ký cố định trong danh mục. Trên hợp đồng chỉ yêu cầu khách hàng ký.");
-
-        logger.LogInformation(
-            "Signature pipeline v3-rowversion-free. ContractId={ContractId}, Party={Party}.",
-            contractId,
-            role);
+        if (!Enum.TryParse<SignatureParty>(party, true, out var role) ||
+            role is not (SignatureParty.Customer or SignatureParty.VehicleOwner))
+        {
+            throw new InvalidOperationException("Chỉ chữ ký chủ sở hữu xe và khách hàng được ký tay trên hợp đồng.");
+        }
 
         var comma = dataUrl.IndexOf(',');
-        if (comma < 0)
-            throw new InvalidOperationException("Dữ liệu chữ ký không hợp lệ.");
+        if (comma < 0) throw new InvalidOperationException("Dữ liệu chữ ký không hợp lệ.");
 
         byte[] bytes;
-        try
-        {
-            bytes = Convert.FromBase64String(dataUrl[(comma + 1)..]);
-        }
-        catch (FormatException)
-        {
-            throw new InvalidOperationException("Dữ liệu chữ ký không đúng định dạng Base64.");
-        }
-
+        try { bytes = Convert.FromBase64String(dataUrl[(comma + 1)..]); }
+        catch (FormatException) { throw new InvalidOperationException("Dữ liệu chữ ký không đúng định dạng Base64."); }
         if (bytes.Length == 0 || bytes.Length > 2 * 1024 * 1024)
             throw new InvalidOperationException("Dung lượng chữ ký không hợp lệ hoặc vượt quá 2 MB.");
 
-        var directory = Path.Combine(
-            environment.WebRootPath,
-            "uploads",
-            "contracts",
-            contractId.ToString("N"),
-            "signatures");
+        var extension = DetectImageExtension(bytes)
+            ?? throw new InvalidOperationException("Chữ ký phải là ảnh PNG hoặc JPG hợp lệ.");
+        var folderSegments = new[] { "contracts", contractId.ToString("N"), "signatures" };
+        var directory = storage.GetPhysicalDirectory(folderSegments);
         Directory.CreateDirectory(directory);
-
-        // Mỗi lần ký dùng một tên file riêng. File chỉ trở thành file chính thức
-        // sau khi INSERT chữ ký và UPDATE trạng thái hợp đồng đều thành công.
-        var fileName = $"{role.ToString().ToLowerInvariant()}-{Guid.NewGuid():N}.png";
+        var fileName = $"{role.ToString().ToLowerInvariant()}-{Guid.NewGuid():N}{extension}";
         var fullPath = Path.Combine(directory, fileName);
         var tempPath = Path.Combine(directory, $".{fileName}.uploading");
-        var relativeUrl = $"/uploads/contracts/{contractId:N}/signatures/{fileName}";
-
+        var relativeUrl = storage.BuildRelativeUrl(folderSegments, fileName);
         await File.WriteAllBytesAsync(tempPath, bytes, ct);
-        var finalFileCreated = false;
 
+        string? oldSignatureUrl = null;
+        var finalFileCreated = false;
         try
         {
             await using var db = await factory.CreateDbContextAsync(ct);
-            db.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
-            db.ChangeTracker.AutoDetectChangesEnabled = false;
+            var caller = await db.Users.FirstOrDefaultAsync(x =>
+                x.Id == currentUserId && x.IsActive && !x.IsDeleted && x.RegistrationStatus == "Approved", ct);
+            if (caller is null)
+                throw new InvalidOperationException("Tài khoản Driver không còn hoạt động.");
 
-            // Transaction Serializable được mở TRƯỚC khi đọc hợp đồng. Nhờ đó hai
-            // thao tác ký cùng một hợp đồng không thể cùng vượt qua bước kiểm tra.
-            await using var transaction = await db.Database.BeginTransactionAsync(
-                IsolationLevel.Serializable,
-                ct);
+            var isDriver = await (from userRole in db.UserRoles
+                                  join identityRole in db.Roles on userRole.RoleId equals identityRole.Id
+                                  where userRole.UserId == currentUserId && identityRole.Name == "Driver"
+                                  select userRole.UserId).AnyAsync(ct);
+            if (!isDriver)
+                throw new InvalidOperationException("Chỉ tài khoản Driver mới được ghi nhận chữ ký hợp đồng.");
 
+            await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
             try
             {
-                // Không track Contract để EF không sinh UPDATE có điều kiện RowVersion
-                // từ một bản ghi đã bị thay đổi bởi thao tác ký khác.
                 var contract = await db.Contracts
-                    .FromSqlInterpolated($"""
-                        SELECT *
-                        FROM [dbo].[Contracts] WITH (UPDLOCK, HOLDLOCK, ROWLOCK)
-                        WHERE [Id] = {contractId}
-                        """)
-                    .AsNoTracking()
                     .Include(x => x.Signatures)
-                    .FirstOrDefaultAsync(ct)
+                    .FirstOrDefaultAsync(x => x.Id == contractId, ct)
                     ?? throw new KeyNotFoundException("Không tìm thấy hợp đồng.");
 
-                if (contract.Status is ContractStatus.Cancelled or ContractStatus.Invalidated)
-                    throw new InvalidOperationException("Hợp đồng đã bị hủy hoặc vô hiệu hóa.");
-
+                if (!string.Equals(contract.DriverId, currentUserId, StringComparison.Ordinal))
+                    throw new InvalidOperationException("Chỉ tài xế tạo hợp đồng mới được ghi nhận chữ ký.");
                 if (contract.Status == ContractStatus.Completed)
-                    throw new InvalidOperationException(
-                        "Hợp đồng đã đủ chữ ký và bị khóa. Không thể thay đổi chữ ký.");
+                    throw new InvalidOperationException("Hợp đồng đã hoàn thành và bị khóa.");
+                if (contract.Status is ContractStatus.Cancelled or ContractStatus.Expired or ContractStatus.Invalidated)
+                    throw new InvalidOperationException("Hợp đồng đã hủy, hết hạn hoặc vô hiệu hóa.");
 
-                if (contract.Signatures.Any(x => x.Party == role))
-                    throw new InvalidOperationException(
-                        $"{RoleName(role)} đã ký trước đó. Chữ ký đã xác nhận không được phép ghi đè.");
+                var snapshotJson = await EnsureCompletionSnapshotAsync(db, contract, ct);
+                var snapshot = ContractSnapshotData.FromJson(snapshotJson)
+                    ?? throw new InvalidOperationException("Không thể đọc snapshot hợp đồng.");
 
                 var now = DateTime.UtcNow;
-                var signature = new ContractSignature
+                var hash = Convert.ToHexString(SHA256.HashData(bytes));
+                var existing = contract.Signatures.FirstOrDefault(x => x.Party == role);
+                if (existing is null)
                 {
-                    Id = Guid.NewGuid(),
-                    ContractId = contractId,
-                    Party = role,
-                    SignerName = string.IsNullOrWhiteSpace(signerName)
-                        ? DefaultSignerName(contract, role)
-                        : signerName.Trim(),
-                    SignatureFileUrl = relativeUrl,
-                    SignatureHash = Convert.ToHexString(SHA256.HashData(bytes)),
-                    ContractHashAtSigning = ContractHash(contract),
-                    DeviceSignedAt = now,
-                    ServerSignedAt = now,
-                    CreatedAt = now,
-                    UpdatedAt = now
-                };
+                    existing = new ContractSignature
+                    {
+                        Id = Guid.NewGuid(),
+                        ContractId = contractId,
+                        Party = role,
+                        CreatedAt = now
+                    };
+                    contract.Signatures.Add(existing);
+                }
+                else
+                {
+                    oldSignatureUrl = existing.SignatureFileUrl;
+                }
 
-                // INSERT trực tiếp để luồng ký tuyệt đối không đi qua ChangeTracker/SaveChanges.
-                // Vì vậy EF không thể phát sinh UPDATE Contracts kèm RowVersion cũ.
-                var insertedRows = await db.Database.ExecuteSqlInterpolatedAsync($"""
-                    INSERT INTO [dbo].[ContractSignatures]
-                    (
-                        [Id], [ContractId], [Party], [SignerName],
-                        [SignatureFileUrl], [SignatureHash], [ContractHashAtSigning],
-                        [DeviceSignedAt], [ServerSignedAt],
-                        [CreatedAt], [UpdatedAt], [IsDeleted]
-                    )
-                    VALUES
-                    (
-                        {signature.Id}, {signature.ContractId}, {(int)signature.Party}, {signature.SignerName},
-                        {signature.SignatureFileUrl}, {signature.SignatureHash}, {signature.ContractHashAtSigning},
-                        {signature.DeviceSignedAt}, {signature.ServerSignedAt},
-                        {signature.CreatedAt}, {signature.UpdatedAt}, {false}
-                    );
-                    """, ct);
+                existing.SignerName = string.IsNullOrWhiteSpace(signerName)
+                    ? DefaultSignerName(contract, role)
+                    : signerName.Trim();
+                existing.SignatureFileUrl = relativeUrl;
+                existing.SignatureHash = hash;
+                existing.ContractHashAtSigning = ContractHash(contract);
+                existing.DeviceSignedAt = now;
+                existing.ServerSignedAt = now;
+                existing.UpdatedAt = now;
 
-                if (insertedRows != 1)
-                    throw new InvalidOperationException("Không thể thêm bản ghi chữ ký vào SQL.");
+                if (role == SignatureParty.VehicleOwner)
+                {
+                    snapshot.Vehicle.OwnerSignatureFileUrl = relativeUrl;
+                    snapshot.Vehicle.OwnerSignatureHash = hash;
+                    snapshot.Vehicle.OwnerSignedAt = now;
+                }
+                else
+                {
+                    snapshot.Customer.SignatureFileUrl = relativeUrl;
+                    snapshot.Customer.SignatureHash = hash;
+                    snapshot.Customer.SignedAt = now;
+                }
 
-                var nextStatus = ContractStatus.Completed;
-
-                contract.Status = nextStatus;
-                contract.CompletedAt = now;
+                contract.ContractDataJson = snapshot.ToJson();
+                contract.Status = ContractStatus.WaitingCustomerSignature;
                 contract.UpdatedAt = now;
-                var contractHash = ContractHash(contract);
+                contract.UpdatedBy = currentUserId;
+                contract.PdfFileUrl = null;
+                contract.PdfSha256 = null;
+                contract.PdfGeneratedAt = null;
+                contract.ContractHash = null;
 
-                // ExecuteUpdate tạo UPDATE nguyên tử theo Id và không dùng RowVersion cũ.
-                // Transaction Serializable vẫn bảo đảm không ghi đè một thao tác ký khác.
-                var updatedRows = await db.Contracts
-                    .Where(x => x.Id == contractId)
-                    .ExecuteUpdateAsync(setters => setters
-                        .SetProperty(x => x.Status, nextStatus)
-                        .SetProperty(x => x.CompletedAt, now)
-                        .SetProperty(x => x.UpdatedAt, now)
-                        .SetProperty(x => x.ContractHash, contractHash),
-                        ct);
-
-                if (updatedRows != 1)
-                    throw new InvalidOperationException(
-                        "Không thể cập nhật trạng thái hợp đồng sau khi lưu chữ ký.");
-
+                await db.SaveChangesAsync(ct);
                 File.Move(tempPath, fullPath);
                 finalFileCreated = true;
-
                 await transaction.CommitAsync(ct);
-                return relativeUrl;
             }
             catch
             {
-                try
-                {
-                    await transaction.RollbackAsync(ct);
-                }
-                catch (Exception rollbackException)
-                {
-                    logger.LogError(
-                        rollbackException,
-                        "Không thể rollback giao dịch lưu chữ ký của hợp đồng {ContractId}.",
-                        contractId);
-                }
-
+                await transaction.RollbackAsync(ct);
                 throw;
             }
+
+            if (!string.IsNullOrWhiteSpace(oldSignatureUrl) &&
+                !string.Equals(oldSignatureUrl, relativeUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                var oldPath = storage.ToPhysicalPath(oldSignatureUrl);
+                if (!string.IsNullOrWhiteSpace(oldPath)) TryDeleteFile(oldPath);
+            }
+
+            return relativeUrl;
         }
         catch (Exception ex)
         {
             TryDeleteFile(tempPath);
-            if (finalFileCreated)
-                TryDeleteFile(fullPath);
-
-            logger.LogError(
-                ex,
-                "Lưu chữ ký thất bại. ContractId={ContractId}, Party={Party}.",
-                contractId,
-                role);
-
-            throw ex switch
-            {
-                DbUpdateConcurrencyException => new InvalidOperationException(
-                    "Không thể đồng bộ trạng thái hợp đồng khi lưu chữ ký. Vui lòng thử ký lại.",
-                    ex),
-                DbUpdateException => new InvalidOperationException(
-                    "Không thể lưu chữ ký vào SQL. Hệ thống đã xóa file ảnh tạm để tránh lệch dữ liệu. " +
-                    "Hãy kiểm tra bảng ContractSignatures và nhật ký lỗi SQL.",
-                    ex),
-                IOException => new InvalidOperationException(
-                    "SQL đã được rollback vì không thể hoàn tất file ảnh chữ ký. Vui lòng kiểm tra quyền ghi thư mục wwwroot/uploads.",
-                    ex),
-                _ => ex
-            };
+            if (finalFileCreated) TryDeleteFile(fullPath);
+            logger.LogError(ex, "Lưu/ghi đè chữ ký thất bại. ContractId={ContractId}, Party={Party}.", contractId, role);
+            throw;
         }
     }
 
+    private static async Task<string> EnsureCompletionSnapshotAsync(
+        ApplicationDbContext db,
+        Contract contract,
+        CancellationToken ct)
+    {
+        var snapshot = ContractSnapshotData.FromJson(contract.ContractDataJson);
+        var driver = await db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == contract.DriverId, ct);
+        var admin = !string.IsNullOrWhiteSpace(contract.AdminId)
+            ? await db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == contract.AdminId, ct)
+            : null;
+
+        if (snapshot is null)
+        {
+            contract.Driver = driver ?? throw new InvalidOperationException("Không tìm thấy hồ sơ tài xế.");
+            contract.AdminAccount = admin;
+            if (contract.CompanyProfileId.HasValue)
+                contract.CompanyProfile = await db.CompanyProfiles.AsNoTracking().FirstOrDefaultAsync(x => x.Id == contract.CompanyProfileId, ct);
+            if (contract.CustomerId.HasValue)
+                contract.Customer = await db.Customers.AsNoTracking().FirstOrDefaultAsync(x => x.Id == contract.CustomerId, ct);
+            if (contract.VehicleId.HasValue)
+                contract.Vehicle = await db.Vehicles.AsNoTracking().FirstOrDefaultAsync(x => x.Id == contract.VehicleId, ct);
+            snapshot = ContractSnapshotData.CaptureLegacy(contract);
+        }
+        else
+        {
+            // Hai chữ ký tự động luôn lấy từ Admin/Driver hiện có nếu snapshot cũ còn thiếu.
+            if (admin is not null)
+            {
+                snapshot.Company.RepresentativeSignatureFileUrl ??= admin.CompanySignatureFileUrl;
+                snapshot.Company.RepresentativeSignatureHash ??= admin.CompanySignatureHash;
+                snapshot.Company.RepresentativeSignedAt ??= admin.CompanySignedAt;
+            }
+            if (driver is not null)
+            {
+                snapshot.Driver.SignatureFileUrl ??= driver.DriverSignatureFileUrl;
+                snapshot.Driver.SignatureHash ??= driver.DriverSignatureHash;
+                snapshot.Driver.SignedAt ??= driver.DriverSignedAt;
+            }
+        }
+
+        return snapshot.ToJson();
+    }
+
+    // Tạo PDF cuối cùng từ dữ liệu hợp đồng và chữ ký đã lưu. PDF được tạo trực tiếp từ layout JSON, không cần Word/LibreOffice.
     public async Task<string> GeneratePdfAsync(Guid contractId, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
@@ -229,6 +224,7 @@ public sealed class ContractDocumentService(
         // Dữ liệu được điền trực tiếp lên PDF nền 2 trang theo file layout JSON.
         // Runtime không cần Word, LibreOffice hoặc executable cài ngoài.
         var contract = await db.Contracts.AsNoTracking()
+            .Include(x => x.AdminAccount)
             .Include(x => x.CompanyProfile)
             .Include(x => x.Driver)
             .Include(x => x.Customer)
@@ -238,41 +234,66 @@ public sealed class ContractDocumentService(
             .FirstOrDefaultAsync(x => x.Id == contractId, ct)
             ?? throw new KeyNotFoundException("Không tìm thấy hợp đồng.");
 
+        if (contract.Status != ContractStatus.Completed)
+            throw new InvalidOperationException("Chỉ hợp đồng đã hoàn tất mới được tạo PDF chính thức.");
+
+        // PDF đã sinh của hợp đồng hoàn tất là tài liệu bất biến. Không render lại
+        // từ template hoặc danh mục hiện tại nếu file chính thức vẫn còn tồn tại.
+        if (!string.IsNullOrWhiteSpace(contract.PdfFileUrl) && storage.FileExists(contract.PdfFileUrl))
+            return contract.PdfFileUrl;
+
+        var snapshot = ContractSnapshotData.FromJson(contract.ContractDataJson);
+        if (snapshot is null)
+        {
+            snapshot = ContractSnapshotData.CaptureLegacy(contract);
+            contract.ContractDataJson = snapshot.ToJson();
+
+            await db.Contracts
+                .Where(x => x.Id == contractId && (x.ContractDataJson == null || x.ContractDataJson == "{}"))
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(x => x.ContractDataJson, contract.ContractDataJson),
+                    ct);
+        }
+
         var missingSignatures = new List<string>();
-        var signedRoles = contract.Signatures.Select(x => x.Party).ToHashSet();
 
-        if (!StoredSignatureExists(contract.CompanyProfile?.RepresentativeSignatureFileUrl))
-            missingSignatures.Add("chữ ký cố định Company/văn phòng đại diện");
+        if (!StoredSignatureExists(snapshot.Company.RepresentativeSignatureFileUrl))
+            missingSignatures.Add("chữ ký cố định Company/văn phòng đại diện tại thời điểm lập hợp đồng");
 
-        if (!StoredSignatureExists(contract.Vehicle?.OwnerSignatureFileUrl))
-            missingSignatures.Add("chữ ký cố định chủ sở hữu xe");
+        if (!StoredSignatureExists(snapshot.Driver.SignatureFileUrl))
+            missingSignatures.Add("chữ ký cố định tài xế tại thời điểm lập hợp đồng");
 
-        if (!StoredSignatureExists(contract.Driver?.DriverSignatureFileUrl))
-            missingSignatures.Add("chữ ký cố định tài xế");
+        var ownerSignatureUrl = snapshot.Vehicle.OwnerSignatureFileUrl
+            ?? contract.Signatures.FirstOrDefault(x => x.Party == SignatureParty.VehicleOwner)?.SignatureFileUrl;
+        if (!StoredSignatureExists(ownerSignatureUrl))
+            missingSignatures.Add("chữ ký chủ sở hữu xe");
 
-        if (!signedRoles.Contains(SignatureParty.Customer))
+        var customerSignatureUrl = snapshot.Customer.SignatureFileUrl
+            ?? contract.Signatures.FirstOrDefault(x => x.Party == SignatureParty.Customer)?.SignatureFileUrl;
+        if (!StoredSignatureExists(customerSignatureUrl))
             missingSignatures.Add("chữ ký khách hàng");
 
         if (missingSignatures.Count > 0)
             throw new InvalidOperationException(
                 $"Chưa thể tạo PDF cuối cùng. Còn thiếu: {string.Join(", ", missingSignatures)}.");
 
-        var passengerCount = contract.Passengers.Count(x => !string.IsNullOrWhiteSpace(x.FullName));
+        var passengerCount = snapshot.Passengers.Count(x => !string.IsNullOrWhiteSpace(x.FullName));
         if (passengerCount > 20)
             throw new InvalidOperationException(
                 "Mẫu PDF 2 trang chỉ hỗ trợ tối đa 20 hành khách. Vui lòng giảm danh sách trước khi tạo PDF.");
 
-        var directory = Path.Combine(
-            environment.WebRootPath,
-            "uploads",
+        var pdfFolderSegments = new[]
+        {
             "contracts",
             contractId.ToString("N"),
-            "pdf");
+            "pdf"
+        };
+        var directory = storage.GetPhysicalDirectory(pdfFolderSegments);
         Directory.CreateDirectory(directory);
 
         var fileName = $"hop-dong-{SafeFileName(contract.ContractNumber)}-{contractId:N}.pdf";
         var fullPath = Path.Combine(directory, fileName);
-        var relativeUrl = $"/uploads/contracts/{contractId:N}/pdf/{fileName}";
+        var relativeUrl = storage.BuildRelativeUrl(pdfFolderSegments, fileName);
 
         await pdfTemplateRenderer.RenderPdfAsync(contract, fullPath, ct);
 
@@ -286,8 +307,7 @@ public sealed class ContractDocumentService(
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(x => x.PdfFileUrl, relativeUrl)
                 .SetProperty(x => x.PdfSha256, pdfHash)
-                .SetProperty(x => x.PdfGeneratedAt, generatedAt)
-                .SetProperty(x => x.UpdatedAt, generatedAt),
+                .SetProperty(x => x.PdfGeneratedAt, generatedAt),
                 ct);
 
         if (updatedRows != 1)
@@ -299,17 +319,9 @@ public sealed class ContractDocumentService(
         return relativeUrl;
     }
 
+
     private bool StoredSignatureExists(string? relativeUrl)
-    {
-        if (string.IsNullOrWhiteSpace(relativeUrl))
-            return false;
-
-        var path = Path.Combine(
-            environment.WebRootPath,
-            relativeUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
-
-        return File.Exists(path);
-    }
+        => storage.FileExists(relativeUrl);
 
     private static DateTime VietnamTime(DateTime value)
         => value.Kind == DateTimeKind.Utc ? value.AddHours(7) : value;
@@ -328,8 +340,6 @@ public sealed class ContractDocumentService(
             ? "... đồng"
             : $"{value.Value.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"))} đồng";
 
-    private static string First(params string?[] values)
-        => values.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))?.Trim() ?? string.Empty;
 
     private static string NumberToVietnameseWords(decimal? amount)
     {
@@ -344,6 +354,7 @@ public sealed class ContractDocumentService(
         return ReadPositiveNumber(number);
     }
 
+    // Chuyển số nguyên dương sang chữ tiếng Việt, ví dụ 123456789 -> "một trăm hai mươi ba triệu bốn trăm năm mươi sáu nghìn bảy trăm tám mươi chín"
     private static string ReadPositiveNumber(long number)
     {
         string[] units = ["", "nghìn", "triệu", "tỷ", "nghìn tỷ", "triệu tỷ"];
@@ -372,6 +383,7 @@ public sealed class ContractDocumentService(
         return string.Join(" ", parts);
     }
 
+    // Chuyển một số nguyên từ 0 đến 999 sang chữ tiếng Việt, ví dụ 123 -> "một trăm hai mươi ba"
     private static string ReadThreeDigits(int number, bool full)
     {
         string[] digit = ["không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín"];
@@ -416,13 +428,17 @@ public sealed class ContractDocumentService(
     }
 
 
+    // Chuyển tên hợp đồng sang dạng an toàn cho tên file, ví dụ "Hợp đồng #123" -> "hop-dong-123"
     private static string SafeFileName(string value)
     {
         var invalid = Path.GetInvalidFileNameChars();
         var sanitized = new string(value
-            .Select(character => invalid.Contains(character) ? '-' : character)
-            .ToArray());
-        return string.IsNullOrWhiteSpace(sanitized) ? "hop-dong" : sanitized.Trim();
+            .Select(character => invalid.Contains(character) || !(char.IsLetterOrDigit(character) || character is '-' or '_' or '.')
+                ? '-'
+                : character)
+            .ToArray())
+            .Trim('-');
+        return string.IsNullOrWhiteSpace(sanitized) ? "hop-dong" : sanitized;
     }
 
     private static string ShortHash(string value)
@@ -430,9 +446,8 @@ public sealed class ContractDocumentService(
 
     private byte[]? ReadSignature(string? relativeUrl)
     {
-        if (string.IsNullOrWhiteSpace(relativeUrl)) return null;
-        var path = Path.Combine(environment.WebRootPath, relativeUrl.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
-        return File.Exists(path) ? File.ReadAllBytes(path) : null;
+        var path = storage.ToPhysicalPath(relativeUrl);
+        return path is not null && File.Exists(path) ? File.ReadAllBytes(path) : null;
     }
 
     private static void TryDeleteFile(string path)
@@ -448,10 +463,61 @@ public sealed class ContractDocumentService(
         }
     }
 
-    private static string ContractHash(HTX586CONTRACT.Domain.Contracts.Contract contract)
-        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
-            $"{contract.Id}|{contract.ContractNumber}|{contract.CompanyProfileId}|{contract.DriverId}|{contract.CustomerId}|{contract.VehicleId}|{contract.ContractValue}|{contract.UpdatedAt:o}")));
+    // Hash bao phủ dữ liệu snapshot và toàn bộ nội dung nghiệp vụ chính của hợp đồng.
+    // Sau khi hoàn tất, UpdateAsync bị chặn nên hash này đại diện cho bản hợp đồng bất biến.
+    private static string ContractHash(Contract contract)
+    {
+        var payload = string.Join("|",
+            contract.Id,
+            contract.ContractNumber,
+            contract.BusinessType,
+            contract.AdminId,
+            contract.CompanyProfileId,
+            contract.DriverId,
+            contract.CustomerId,
+            contract.VehicleId,
+            contract.AreaCode,
+            contract.StartTime?.ToString("O"),
+            contract.EndTime?.ToString("O"),
+            contract.PickupLocation,
+            contract.DropoffLocation,
+            contract.RouteDescription,
+            contract.TotalKilometers,
+            contract.ContractValue,
+            contract.PaymentMethod,
+            contract.PaymentTime,
+            contract.Note,
+            contract.ActualPassengerCount,
+            contract.ContractDataJson,
+            contract.Status,
+            contract.CompletedAt?.ToString("O"));
 
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(payload)));
+    }
+
+    private static string? DetectImageExtension(byte[] bytes)
+    {
+        if (bytes.Length >= 8 &&
+            bytes[0] == 0x89 &&
+            bytes[1] == 0x50 &&
+            bytes[2] == 0x4E &&
+            bytes[3] == 0x47 &&
+            bytes[4] == 0x0D &&
+            bytes[5] == 0x0A &&
+            bytes[6] == 0x1A &&
+            bytes[7] == 0x0A)
+            return ".png";
+
+        if (bytes.Length >= 3 &&
+            bytes[0] == 0xFF &&
+            bytes[1] == 0xD8 &&
+            bytes[2] == 0xFF)
+            return ".jpg";
+
+        return null;
+    }
+
+    // Lấy tên người ký mặc định từ dữ liệu snapshot của hợp đồng. Nếu không có snapshot, trả về chuỗi rỗng.
     private static string DefaultSignerName(HTX586CONTRACT.Domain.Contracts.Contract contract, SignatureParty role) => role switch
     {
         SignatureParty.RepresentativeOffice => contract.CompanyRepresentativeSnapshot,
@@ -460,6 +526,7 @@ public sealed class ContractDocumentService(
         _ => contract.DriverNameSnapshot
     };
 
+    // Lấy tên vai trò ký để hiển thị trong thông báo lỗi hoặc nhật ký. Ví dụ: SignatureParty.Customer -> "KHÁCH HÀNG (NGƯỜI THUÊ XE)"
     private static string RoleName(SignatureParty role) => role switch
     {
         SignatureParty.RepresentativeOffice => "VĂN PHÒNG ĐẠI DIỆN",
@@ -468,11 +535,11 @@ public sealed class ContractDocumentService(
         _ => "TÀI XẾ CHẠY"
     };
 
+    // Lấy tiêu đề hợp đồng theo loại kinh doanh.
     private static string BusinessTitle(ContractBusinessType type) => type switch
     {
-        ContractBusinessType.Cargo => "HỢP ĐỒNG VẬN CHUYỂN HÀNG HÓA",
-        ContractBusinessType.LongDistance => "HỢP ĐỒNG VẬN CHUYỂN ĐƯỜNG DÀI",
-        _ => "HỢP ĐỒNG TÀI XẾ"
+        ContractBusinessType.Cargo => "HỢP ĐỒNG VẬN CHUYỂN HÀNG HÓA BẰNG XE Ô TÔ",
+        _ => "HỢP ĐỒNG VẬN CHUYỂN HÀNH KHÁCH"
     };
 
     private static string FormatDate(DateTime? value) => value?.ToString("dd/MM/yyyy HH:mm") ?? "—";

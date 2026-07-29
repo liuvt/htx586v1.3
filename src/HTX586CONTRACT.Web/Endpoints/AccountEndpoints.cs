@@ -1,4 +1,5 @@
-﻿using HTX586CONTRACT.Domain.Identity;
+using HTX586CONTRACT.Domain.Common;
+using HTX586CONTRACT.Domain.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -10,6 +11,7 @@ public static class AccountEndpoints
     public static void MapAccountEndpoints(
         this WebApplication app)
     {
+        // Chuyển hướng đăng nhập/đăng xuất sang POST để tránh bị CSRF. Các form login/logout sẽ có token chống CSRF.
         app.MapPost(
                 "/account/login/submit",
                 LoginAsync)
@@ -28,6 +30,7 @@ public static class AccountEndpoints
         SignInManager<ApplicationUser> signInManager,
         UserManager<ApplicationUser> userManager)
     {
+        // Lấy dữ liệu form đăng nhập từ request body. Không dùng [FromForm] vì muốn đọc trực tiếp từ HttpContext.Request.
         var form =
             await httpContext.Request.ReadFormAsync(
                 httpContext.RequestAborted);
@@ -66,31 +69,38 @@ public static class AccountEndpoints
         var normalizedUserName =
             userManager.NormalizeName(loginName);
 
-        var normalizedEmail =
-            userManager.NormalizeEmail(loginName);
+        var hasValidPhone =
+            VietnamPhoneNumber.TryNormalize(loginName, out var normalizedPhone);
 
         /*
-         * Không dùng:
-         * - FindByNameAsync()
-         * - FindByEmailAsync()
+         * Chỉ cho phép đăng nhập bằng tên đăng nhập hoặc số điện thoại.
+         * Không dùng email và mã nhân viên làm thông tin đăng nhập.
          *
-         * Vì các hàm trên sử dụng SingleOrDefaultAsync().
-         * Nếu database có dữ liệu trùng, ứng dụng sẽ phát sinh:
-         * Sequence contains more than one element.
+         * Không dùng FindByNameAsync() vì cần phát hiện trường hợp dữ liệu
+         * số điện thoại/tên đăng nhập bị trùng để tránh đăng nhập nhầm tài khoản.
          */
-        var matchedUsers =
+        var loginCandidates =
             await userManager.Users
                 .AsNoTracking()
+                .Include(x => x.CompanyProfile)
+                .Include(x => x.AdminAccount)
                 .Where(x =>
-                    x.NormalizedUserName == normalizedUserName ||
-                    x.NormalizedEmail == normalizedEmail ||
-                    x.PhoneNumber == loginName ||
-                    x.EmployeeCode == loginName)
+                    !x.IsDeleted &&
+                    (x.NormalizedUserName == normalizedUserName ||
+                     (hasValidPhone && x.PhoneNumber != null)))
                 .OrderByDescending(x => x.IsActive)
                 .ThenBy(x => x.CreatedAt)
-                .Take(2)
                 .ToListAsync(
                     httpContext.RequestAborted);
+
+        var matchedUsers = loginCandidates
+            .Where(x =>
+                x.NormalizedUserName == normalizedUserName ||
+                (hasValidPhone &&
+                 VietnamPhoneNumber.TryNormalize(x.PhoneNumber, out var storedPhone) &&
+                 storedPhone == normalizedPhone))
+            .Take(2)
+            .ToList();
 
         if (matchedUsers.Count == 0)
         {
@@ -121,8 +131,10 @@ public static class AccountEndpoints
          */
         var user =
             await userManager.Users
+                .Include(x => x.CompanyProfile)
+                .Include(x => x.AdminAccount)
                 .FirstOrDefaultAsync(
-                    x => x.Id == matchedUser.Id,
+                    x => x.Id == matchedUser.Id && !x.IsDeleted,
                     httpContext.RequestAborted);
 
         if (user is null)
@@ -132,11 +144,19 @@ public static class AccountEndpoints
                 returnUrl);
         }
 
-        if (!user.IsActive)
+        if (user.IsDeleted || !user.IsActive)
         {
-            return RedirectToLogin(
-                "inactive",
-                returnUrl);
+            var status = user.RegistrationStatus?.Trim().ToLowerInvariant();
+            return RedirectToLogin(status == "pending" ? "pending" : status == "rejected" ? "rejected" : "inactive", returnUrl);
+        }
+
+        // Dữ liệu nguồn phải nhất quán: một tài khoản có role Driver chỉ được
+        // đăng nhập khi yêu cầu đăng ký đã ở trạng thái Approved.
+        if (await userManager.IsInRoleAsync(user, "Driver") &&
+            !string.Equals(user.RegistrationStatus, "Approved", StringComparison.OrdinalIgnoreCase))
+        {
+            var status = user.RegistrationStatus?.Trim().ToLowerInvariant();
+            return RedirectToLogin(status == "pending" ? "pending" : "rejected", returnUrl);
         }
 
         var result =
@@ -182,12 +202,16 @@ public static class AccountEndpoints
         var roles =
             await userManager.GetRolesAsync(user);
 
-        if (roles.Contains(
-                "Owner",
-                StringComparer.OrdinalIgnoreCase) ||
-            roles.Contains(
-                "Admin",
-                StringComparer.OrdinalIgnoreCase))
+        var isAdmin = roles.Contains("Admin", StringComparer.OrdinalIgnoreCase);
+        var isDriver = roles.Contains("Driver", StringComparer.OrdinalIgnoreCase);
+        if (isDriver &&
+            (user.AdminAccount is null || user.AdminAccount.IsDeleted || !user.AdminAccount.IsActive))
+        {
+            await signInManager.SignOutAsync();
+            return RedirectToLogin("inactive", returnUrl);
+        }
+
+        if (isAdmin)
         {
             return Results.Redirect(
                 "/admin/dashboard");

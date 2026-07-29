@@ -1,0 +1,95 @@
+@implements IDisposable
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject MasterSignatureService MasterSignatureService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+@if (_visible)
+{
+    <div class="first-signature-overlay">
+        <MudPaper Class="pa-6 first-signature-card" Elevation="16">
+            <MudText Typo="Typo.h5" Align="Align.Center">Tạo chữ ký tài xế lần đầu</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Class="mb-4">
+                Ký và lưu tạm để xem lại. Chữ ký chỉ được lưu thật khi bấm “Xác nhận và lưu chữ ký”.
+            </MudText>
+            @if (!string.IsNullOrWhiteSpace(_signatureDataUrl))
+            {
+                <MudAlert Severity="Severity.Success" Dense="true" Class="mb-3">
+                    Chữ ký đã được lưu tạm để xem lại. Có thể xóa và ký lại trước khi xác nhận.
+                </MudAlert>
+            }
+            <SignaturePad ExistingSignatureUrl="@_signatureDataUrl"
+                          SignerName="@_user?.FullName"
+                          ConfirmationButtonText="Lưu chữ ký tạm"
+                          SavedStatusText="Đã lưu tạm"
+                          AllowRemoveSavedSignature="true"
+                          OnSavedSignatureRemoved="RemovePendingSignature"
+                          OnSignatureSaved="CaptureSignature" />
+            <MudButton FullWidth="true" Color="Color.Primary" Variant="Variant.Filled" Class="mt-4"
+                       Disabled="@(_saving || string.IsNullOrWhiteSpace(_signatureDataUrl))" OnClick="SaveAsync">
+                @(_saving ? "Đang lưu..." : "Xác nhận và lưu chữ ký")
+            </MudButton>
+            <form method="post" action="/account/logout/submit" class="mt-2">
+                <MudButton ButtonType="ButtonType.Submit" FullWidth="true" Variant="Variant.Text">Đăng xuất</MudButton>
+            </form>
+        </MudPaper>
+    </div>
+}
+<style>
+.first-signature-overlay{position:fixed;inset:0;z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(15,23,42,.72);backdrop-filter:blur(5px)}
+.first-signature-card{width:min(100%,560px);max-height:calc(100vh - 32px);overflow:auto;border-radius:16px}
+</style>
+@code {
+    private ApplicationUser? _user;
+    private bool _visible;
+    private bool _saving;
+    private string? _signatureDataUrl;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+        await CheckAsync();
+    }
+    private async void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        try { await InvokeAsync(CheckAsync); } catch { }
+    }
+    private Task CaptureSignature(string data)
+    {
+        _signatureDataUrl = data;
+        Snackbar.Add("Đã lưu chữ ký tạm. Hãy xem lại trước khi xác nhận.", Severity.Success);
+        return Task.CompletedTask;
+    }
+
+    private Task RemovePendingSignature()
+    {
+        _signatureDataUrl = null;
+        Snackbar.Add("Đã xóa chữ ký tạm. Vui lòng ký lại.", Severity.Info);
+        return Task.CompletedTask;
+    }
+    private async Task CheckAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated != true) { _visible = false; return; }
+        _user = await UserManager.GetUserAsync(state.User);
+        if (_user is null || !_user.IsActive || _user.MustChangePassword) { _visible = false; return; }
+        var roles = await UserManager.GetRolesAsync(_user);
+        _visible = roles.Contains("Driver", StringComparer.OrdinalIgnoreCase) && _user.DriverSignedAt is null;
+        await InvokeAsync(StateHasChanged);
+    }
+    private async Task SaveAsync()
+    {
+        if (_saving || _user is null || string.IsNullOrWhiteSpace(_signatureDataUrl)) return;
+        try
+        {
+            _saving = true;
+            await MasterSignatureService.SaveDriverInitialSignatureAsync(_user.Id, _signatureDataUrl);
+            _visible = false;
+            Snackbar.Add("Đã lưu chữ ký tài xế lần đầu.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _saving = false; }
+    }
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}

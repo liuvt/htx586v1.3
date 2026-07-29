@@ -1,4 +1,3 @@
-```razor
 @page "/"
 @attribute [Authorize]
 
@@ -97,8 +96,7 @@
                 return;
             }
 
-            // Ưu tiên Owner/Admin nếu tài khoản có nhiều role.
-            if (user.IsInRole("Owner") || user.IsInRole("Admin"))
+            if (user.IsInRole("Admin"))
             {
                 NavigateOnce(
                     "/admin/dashboard");
@@ -116,7 +114,7 @@
 
             _redirecting = false;
             _errorMessage =
-                "Tài khoản chưa được cấp quyền Owner, Admin hoặc Driver.";
+                "Tài khoản chưa được cấp quyền Admin hoặc Driver.";
 
             StateHasChanged();
         }
@@ -152,4 +150,3 @@
             forceLoad: true);
     }
 }
-```

@@ -1,0 +1,208 @@
+is_global = true
+build_property.MudDebugAnalyzer = 
+build_property.MudAllowedAttributePattern = 
+build_property.MudAllowedAttributeList = 
+build_property.TargetFramework = net9.0
+build_property.TargetFramework = net9.0
+build_property.TargetPlatformMinVersion = 
+build_property.TargetPlatformMinVersion = 
+build_property.UsingMicrosoftNETSdkWeb = true
+build_property.UsingMicrosoftNETSdkWeb = true
+build_property.ProjectTypeGuids = 
+build_property.ProjectTypeGuids = 
+build_property.InvariantGlobalization = 
+build_property.InvariantGlobalization = 
+build_property.PlatformNeutralAssembly = 
+build_property.PlatformNeutralAssembly = 
+build_property.EnforceExtendedAnalyzerRules = 
+build_property.EnforceExtendedAnalyzerRules = 
+build_property._SupportedPlatformList = Linux,macOS,Windows
+build_property._SupportedPlatformList = Linux,macOS,Windows
+build_property.RootNamespace = HTX586CONTRACT.Web
+build_property.RootNamespace = HTX586CONTRACT.Web
+build_property.ProjectDir = D:\HTX 586\htx586v1.3\src\htx586contract.web\
+build_property.EnableComHosting = 
+build_property.EnableGeneratedComInterfaceComImportInterop = 
+build_property.RazorLangVersion = 9.0
+build_property.SupportLocalizedComponentNames = 
+build_property.GenerateRazorMetadataSourceChecksumAttributes = 
+build_property.MSBuildProjectDirectory = D:\HTX 586\htx586v1.3\src\htx586contract.web
+build_property._RazorSourceGeneratorDebug = 
+build_property.EffectiveAnalysisLevelStyle = 9.0
+build_property.EnableCodeStyleSeverity = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/App.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xBcHAucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Layout/AuthLayout.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcQXV0aExheW91dC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Layout/MainLayout.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcTWFpbkxheW91dC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Layout/MobileBottomNav.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcTW9iaWxlQm90dG9tTmF2LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Layout/NavMenu.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcTmF2TWVudS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Layout/UserMenu.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMYXlvdXRcVXNlck1lbnUucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Account/DriverRegister.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBY2NvdW50XERyaXZlclJlZ2lzdGVyLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Account/Login.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBY2NvdW50XExvZ2luLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Admin/CompanyProfile.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBZG1pblxDb21wYW55UHJvZmlsZS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Admin/ContractRecords/Edit.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBZG1pblxDb250cmFjdFJlY29yZHNcRWRpdC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Admin/ContractRecords/Index.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBZG1pblxDb250cmFjdFJlY29yZHNcSW5kZXgucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Admin/Dashboard.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBZG1pblxEYXNoYm9hcmQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Admin/DriverAccounts/Detail.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBZG1pblxEcml2ZXJBY2NvdW50c1xEZXRhaWwucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Admin/DriverAccounts/Edit.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBZG1pblxEcml2ZXJBY2NvdW50c1xFZGl0LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Admin/DriverAccounts/Index.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBZG1pblxEcml2ZXJBY2NvdW50c1xJbmRleC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Admin/DriverAccounts/RegistrationDetail.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBZG1pblxEcml2ZXJBY2NvdW50c1xSZWdpc3RyYXRpb25EZXRhaWwucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Admin/DriverAccounts/Registrations.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBZG1pblxEcml2ZXJBY2NvdW50c1xSZWdpc3RyYXRpb25zLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Admin/Vehicles/Create.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBZG1pblxWZWhpY2xlc1xDcmVhdGUucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Admin/Vehicles/Detail.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBZG1pblxWZWhpY2xlc1xEZXRhaWwucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Admin/Vehicles/Edit.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBZG1pblxWZWhpY2xlc1xFZGl0LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Admin/Vehicles/Index.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xBZG1pblxWZWhpY2xlc1xJbmRleC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Driver/Accounts/Index.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xEcml2ZXJcQWNjb3VudHNcSW5kZXgucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Driver/Contracts/Create.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xEcml2ZXJcQ29udHJhY3RzXENyZWF0ZS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Driver/Contracts/Detail.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xEcml2ZXJcQ29udHJhY3RzXERldGFpbC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Driver/Contracts/Index.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xEcml2ZXJcQ29udHJhY3RzXEluZGV4LnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Driver/Dashboard.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xEcml2ZXJcRGFzaGJvYXJkLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Errors/ErrorsPage.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xFcnJvcnNcRXJyb3JzUGFnZS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Pages/Home.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQYWdlc1xIb21lLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Routes.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xSb3V0ZXMucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Shared/ActiveAccountGuard.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcQWN0aXZlQWNjb3VudEd1YXJkLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Shared/CompanyInfoItem.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcQ29tcGFueUluZm9JdGVtLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Shared/ContractHistoryView.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcQ29udHJhY3RIaXN0b3J5Vmlldy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Shared/ContractStatusChip.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcQ29udHJhY3RTdGF0dXNDaGlwLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Shared/DocumentImage.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcRG9jdW1lbnRJbWFnZS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Shared/FirstLoginSignatureOverlay.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcRmlyc3RMb2dpblNpZ25hdHVyZU92ZXJsYXkucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Shared/ForcePasswordChangeOverlay.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcRm9yY2VQYXNzd29yZENoYW5nZU92ZXJsYXkucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Shared/InfoListItem.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcSW5mb0xpc3RJdGVtLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Shared/PageHeader.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcUGFnZUhlYWRlci5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Shared/RedirectToLogin.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcUmVkaXJlY3RUb0xvZ2luLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Shared/RedirectToRequiredPage.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcUmVkaXJlY3RUb1JlcXVpcmVkUGFnZS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Shared/SignaturePad.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcU2lnbmF0dXJlUGFkLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Shared/StatCard.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcU3RhdENhcmQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/Shared/VehicleForm.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTaGFyZWRcVmVoaWNsZUZvcm0ucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[D:/HTX 586/htx586v1.3/src/htx586contract.web/Components/_Imports.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xfSW1wb3J0cy5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 

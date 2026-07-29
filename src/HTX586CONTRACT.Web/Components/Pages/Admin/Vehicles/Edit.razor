@@ -1,0 +1,105 @@
+@page "/admin/vehicles/{Id:guid}/edit"
+@attribute [Authorize(Roles = "Admin")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Cập nhật xe</PageTitle>
+<PageHeader Title="Cập nhật xe" Subtitle="Có thể chuyển xe sang công ty khác bằng cách chọn tài khoản Admin nhận xe." />
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_notFound)
+{
+    <MudAlert Severity="Severity.Warning">Không tìm thấy xe thuộc công ty của bạn.</MudAlert>
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-4">
+        <MudSelect T="string" @bind-Value="_targetAdminId" Label="Công ty / Admin quản lý xe" Required="true" Variant="Variant.Outlined">
+            @foreach (var admin in _admins)
+            {
+                <MudSelectItem Value="@admin.Id">@admin.DisplayName</MudSelectItem>
+            }
+        </MudSelect>
+        @if (_targetAdminId != _currentAdminId)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">
+                Sau khi lưu, xe sẽ chuyển sang công ty được chọn và không còn xuất hiện trong danh mục của bạn.
+            </MudAlert>
+        }
+    </MudPaper>
+    <VehicleForm Model="_model" Saving="_saving" SubmitText="Lưu thay đổi" OnSubmit="SaveAsync" BackUrl="/admin/vehicles" />
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private string _currentAdminId = string.Empty;
+    private string _targetAdminId = string.Empty;
+    private bool _loading = true;
+    private bool _saving;
+    private bool _notFound;
+    private VehicleFormModel _model = new();
+    private List<AdminOption> _admins = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _notFound = false;
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _currentAdminId = state.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var vehicle = await db.Vehicles.AsNoTracking().FirstOrDefaultAsync(x => x.Id == Id && x.AdminId == _currentAdminId);
+        if (vehicle is null) { _notFound = true; _loading = false; return; }
+        _model = VehicleFormModel.FromEntity(vehicle);
+        _targetAdminId = vehicle.AdminId ?? _currentAdminId;
+        _admins = await (from user in db.Users.AsNoTracking()
+                         join ur in db.UserRoles.AsNoTracking() on user.Id equals ur.UserId
+                         join role in db.Roles.AsNoTracking() on ur.RoleId equals role.Id
+                         where role.Name == "Admin" && user.IsActive && !user.IsDeleted
+                         orderby user.CompanyName
+                         select new AdminOption(user.Id,
+                             string.IsNullOrWhiteSpace(user.CompanyBranchName)
+                                 ? (user.CompanyName ?? user.FullName)
+                                 : (user.CompanyName ?? user.FullName) + " - " + user.CompanyBranchName)).ToListAsync();
+        _loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!_model.IsValid(out var error)) { Snackbar.Add(error, Severity.Warning); return; }
+        try
+        {
+            _saving = true;
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var vehicle = await db.Vehicles.FirstOrDefaultAsync(x => x.Id == Id && x.AdminId == _currentAdminId)
+                ?? throw new KeyNotFoundException("Không tìm thấy xe thuộc công ty của bạn.");
+            var targetAdmin = await (from user in db.Users.AsNoTracking()
+                                     join userRole in db.UserRoles.AsNoTracking() on user.Id equals userRole.UserId
+                                     join role in db.Roles.AsNoTracking() on userRole.RoleId equals role.Id
+                                     where user.Id == _targetAdminId && role.Name == "Admin" && user.IsActive && !user.IsDeleted
+                                     select user).FirstOrDefaultAsync()
+                ?? throw new InvalidOperationException("Tài khoản nhận xe không phải Admin hợp lệ.");
+            var plate = _model.PlateNumber.Trim().ToUpperInvariant().Replace(" ", string.Empty);
+            if (await db.Vehicles.IgnoreQueryFilters().AnyAsync(x => x.Id != Id && x.PlateNumber == plate))
+                throw new InvalidOperationException("Biển số xe đã tồn tại.");
+            _model.ApplyTo(vehicle);
+            vehicle.PlateNumber = plate;
+            vehicle.AdminId = targetAdmin.Id;
+            vehicle.CompanyProfileId = targetAdmin.CompanyProfileId;
+            vehicle.AssignedDriverId = null;
+            vehicle.UpdatedBy = _currentAdminId;
+            vehicle.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            Snackbar.Add(_targetAdminId == _currentAdminId ? "Đã cập nhật xe." : "Đã chuyển xe sang công ty mới.", Severity.Success);
+            Navigation.NavigateTo("/admin/vehicles");
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _saving = false; }
+    }
+
+    private sealed record AdminOption(string Id, string DisplayName);
+}

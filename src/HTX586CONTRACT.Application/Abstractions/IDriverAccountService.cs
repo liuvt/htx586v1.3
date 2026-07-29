@@ -1,12 +1,15 @@
-﻿using HTX586CONTRACT.Application.Admins.DriverAccounts;
+using HTX586CONTRACT.Application.Admins.DriverAccounts;
 
 namespace HTX586CONTRACT.Application.Abstractions;
 
 public interface IDriverAccountService
 {
-    Task<string> CreateAsync(
-        CreateDriverAccountRequest request,
-        CancellationToken cancellationToken = default);
+    Task<string> SubmitRegistrationAsync(SelfRegisterDriverRequest request, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<DriverRegistrationRequestDto>> GetPendingRegistrationsAsync(string adminId, CancellationToken cancellationToken = default);
+    Task<int> GetUnseenPendingRegistrationCountAsync(string adminId, CancellationToken cancellationToken = default);
+    Task<DriverRegistrationRequestDto?> GetRegistrationDetailAsync(string userId, string adminId, CancellationToken cancellationToken = default);
+    Task MarkRegistrationViewedAsync(string userId, string viewerUserId, CancellationToken cancellationToken = default);
+    Task ReviewRegistrationAsync(string userId, bool approve, string? note, string reviewerUserId, CancellationToken cancellationToken = default);
 
     Task UpdateAsync(
         string userId,
@@ -21,28 +24,9 @@ public interface IDriverAccountService
         DriverAccountFilter filter,
         CancellationToken cancellationToken = default);
 
-    Task SetActiveAsync(
-        string userId,
-        bool isActive,
-        CancellationToken cancellationToken = default);
-
     Task ResetPasswordAsync(
         string userId,
         string newPassword,
+        string adminId,
         CancellationToken cancellationToken = default);
-
-    Task DeleteAsync(
-        string userId,
-        CancellationToken cancellationToken = default);
-
-
-    /// <summary>
-    /// Admin yêu cầu người dùng đổi mật khẩu khi đăng nhập lần tiếp theo
-    /// </summary>
-    /// <param name="userId"></param>
-    /// <param name="cancellationToken"></param>
-    /// <returns></returns>
-    Task RequirePasswordChangeAsync(
-    string userId,
-    CancellationToken cancellationToken = default);
 }

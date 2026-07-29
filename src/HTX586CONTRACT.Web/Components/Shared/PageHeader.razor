@@ -1,40 +1,24 @@
 <div class="page-header">
-
-    <div>
-        <MudText Typo="Typo.h5"
-                 Class="page-header-title">
-
-            @Title
-
-        </MudText>
-
+    <div class="page-header-copy">
+        <div class="page-header-kicker">
+            <span></span>
+            HTX586 WORKSPACE
+        </div>
+        <MudText Typo="Typo.h4" Class="page-header-title">@Title</MudText>
         @if (!string.IsNullOrWhiteSpace(Subtitle))
         {
-            <MudText Typo="Typo.body2"
-                     Color="Color.Secondary">
-
-                @Subtitle
-
-            </MudText>
+            <MudText Typo="Typo.body1" Class="page-header-subtitle">@Subtitle</MudText>
         }
     </div>
 
     @if (ChildContent is not null)
     {
-        <div class="page-header-actions">
-            @ChildContent
-        </div>
+        <div class="page-header-actions">@ChildContent</div>
     }
-
 </div>
 
 @code {
-    [Parameter]
-    public string Title { get; set; } = string.Empty;
-
-    [Parameter]
-    public string? Subtitle { get; set; }
-
-    [Parameter]
-    public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
 }

@@ -10,15 +10,19 @@ namespace HTX586CONTRACT.Domain.Contracts;
 
 public class Contract : BaseEntity
 {
+    // Số thứ tự hợp đồng theo từng tài xế: count toàn bộ hợp đồng lịch sử + 1.
     public string ContractNumber { get; set; } = string.Empty;
     public ContractBusinessType BusinessType { get; set; }
     public Guid ContractTypeId { get; set; }
     public Guid ContractTemplateId { get; set; }
 
-    // Bốn nguồn dữ liệu chính của hợp đồng.
-    public Guid CompanyProfileId { get; set; }
+    // Luồng mới chỉ phụ thuộc Admin và Driver. Toàn bộ dữ liệu còn lại là snapshot.
+    public string? AdminId { get; set; }
     public string DriverId { get; set; } = string.Empty;
-    public Guid CustomerId { get; set; }
+
+    // Khóa danh mục cũ chỉ giữ để đọc dữ liệu lịch sử; hợp đồng mới để null.
+    public Guid? CompanyProfileId { get; set; }
+    public Guid? CustomerId { get; set; }
     public Guid? VehicleId { get; set; }
 
     public ContractStatus Status { get; set; }
@@ -40,7 +44,6 @@ public class Contract : BaseEntity
     public string? PaymentTime { get; set; }
     public string? Note { get; set; }
 
-    // Snapshot dùng để PDF đã ký không thay đổi khi danh mục bị cập nhật.
     public string CompanyNameSnapshot { get; set; } = string.Empty;
     public string CompanyTaxCodeSnapshot { get; set; } = string.Empty;
     public string CompanyAddressSnapshot { get; set; } = string.Empty;
@@ -61,6 +64,7 @@ public class Contract : BaseEntity
     public string? VehicleOwnerNameSnapshot { get; set; }
     public string? VehicleOwnerCitizenIdSnapshot { get; set; }
 
+    // JSON snapshot chứa toàn bộ công ty, tài xế, xe/chủ xe, khách hàng và hành khách.
     public string ContractContentSnapshot { get; set; } = string.Empty;
     public string ContractDataJson { get; set; } = "{}";
     public string? ContractHash { get; set; }
@@ -71,10 +75,11 @@ public class Contract : BaseEntity
     public DateTime? CancelledAt { get; set; }
     public string? CancelReason { get; set; }
 
-    public CompanyProfile CompanyProfile { get; set; } = null!;
+    public ApplicationUser? AdminAccount { get; set; }
+    public CompanyProfile? CompanyProfile { get; set; }
     public ContractType ContractType { get; set; } = null!;
     public ContractTemplate ContractTemplate { get; set; } = null!;
-    public Customer Customer { get; set; } = null!;
+    public Customer? Customer { get; set; }
     public Vehicle? Vehicle { get; set; }
     public ApplicationUser Driver { get; set; } = null!;
     public ICollection<ContractSignature> Signatures { get; set; } = [];

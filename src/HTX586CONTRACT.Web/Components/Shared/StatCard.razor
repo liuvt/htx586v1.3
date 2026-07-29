@@ -1,50 +1,40 @@
-<MudPaper Class="dashboard-card pa-4"
-          Outlined="true">
-
-    <MudStack Row="true"
-              AlignItems="AlignItems.Center"
-              Justify="Justify.SpaceBetween">
-
-        <div>
-            <MudText Typo="Typo.caption"
-                     Color="Color.Secondary">
-
-                @Title
-
-            </MudText>
-
-            <MudText Typo="Typo.h4"
-                     Class="mt-1">
-
-                @Value
-
-            </MudText>
-        </div>
-
-        <MudAvatar Color="@Color"
-                   Variant="Variant.Filled"
-                   Size="Size.Medium">
-
+<MudPaper Class="@($"stat-card stat-card--{ColorClass}")" Elevation="0">
+    <div class="stat-card-glow"></div>
+    <div class="stat-card-head">
+        <div class="stat-card-icon">
             <MudIcon Icon="@Icon" />
-
-        </MudAvatar>
-
-    </MudStack>
-
+        </div>
+        @if (!string.IsNullOrWhiteSpace(Badge))
+        {
+            <span class="stat-card-badge">@Badge</span>
+        }
+    </div>
+    <div class="stat-card-body">
+        <MudText Typo="Typo.caption" Class="stat-card-label">@Title</MudText>
+        <MudText Typo="Typo.h4" Class="stat-card-value">@Value</MudText>
+        @if (!string.IsNullOrWhiteSpace(Hint))
+        {
+            <MudText Typo="Typo.caption" Class="stat-card-hint">@Hint</MudText>
+        }
+    </div>
+    <div class="stat-card-line"></div>
 </MudPaper>
 
 @code {
-    [Parameter]
-    public string Title { get; set; } = string.Empty;
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public string Value { get; set; } = "0";
+    [Parameter] public string Icon { get; set; } = Icons.Material.Filled.Info;
+    [Parameter] public Color Color { get; set; } = Color.Primary;
+    [Parameter] public string? Hint { get; set; }
+    [Parameter] public string? Badge { get; set; }
 
-    [Parameter]
-    public string Value { get; set; } = "0";
-
-    [Parameter]
-    public string Icon { get; set; }
-        = Icons.Material.Filled.Info;
-
-    [Parameter]
-    public Color Color { get; set; }
-        = Color.Primary;
+    private string ColorClass => Color switch
+    {
+        Color.Success => "success",
+        Color.Warning => "warning",
+        Color.Error => "error",
+        Color.Info => "info",
+        Color.Secondary => "secondary",
+        _ => "primary"
+    };
 }

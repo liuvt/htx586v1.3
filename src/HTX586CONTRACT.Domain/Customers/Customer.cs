@@ -16,9 +16,11 @@ public class Customer : BaseEntity
     public DateTime? DateOfBirth { get; set; }
     public string? Address { get; set; }
     public string? Email { get; set; }
+    // Tên thuộc tính/cột được giữ để tương thích dữ liệu cũ; giá trị là ID tài khoản đã tạo khách hàng (Owner/Admin/Driver).
     public string CreatedByDriverId { get; set; } = string.Empty;
     public DateTime? LastUsedAt { get; set; }
     public int ContractCount { get; set; }
+    // Navigation tới tài khoản người tạo, không còn giới hạn riêng cho vai trò Driver.
     public ApplicationUser CreatedByDriver { get; set; } = null!;
     public ICollection<Contract> Contracts { get; set; } = [];
 }

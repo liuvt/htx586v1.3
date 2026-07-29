@@ -1,0 +1,59 @@
+@page "/admin/driver-registrations"
+@attribute [Authorize(Roles = "Admin")]
+@inject IDriverAccountService DriverAccountService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Yêu cầu đăng ký tài xế</PageTitle>
+<PageHeader Title="Yêu cầu đăng ký tài xế" Subtitle="Mở hồ sơ để xem đầy đủ thông tin trước khi xét duyệt." />
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_items.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">Không có yêu cầu đang chờ duyệt.</MudAlert>
+}
+else
+{
+    <MudTable Items="_items" Hover="true" RowsPerPage="20" Breakpoint="Breakpoint.Sm">
+        <HeaderContent>
+            <MudTh>Trạng thái</MudTh>
+            <MudTh>Thời gian</MudTh>
+            <MudTh>Tài xế</MudTh>
+            <MudTh>Đơn vị</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Trạng thái">
+                <MudChip T="string" Size="Size.Small" Color="@(context.IsViewed ? Color.Default : Color.Warning)">
+                    @(context.IsViewed ? "Đã xem" : "Mới")
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Thời gian">@context.RequestedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
+            <MudTd DataLabel="Tài xế"><b>@context.FullName</b><br /><span class="text-secondary">@context.UserName · @context.PhoneNumber</span></MudTd>
+            <MudTd DataLabel="Đơn vị">@context.CompanyName</MudTd>
+            <MudTd DataLabel="Thao tác">
+                <MudButton Href="@($"/admin/driver-registrations/{context.UserId}")" Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Visibility">
+                    Xem hồ sơ
+                </MudButton>
+            </MudTd>
+        </RowTemplate>
+        <PagerContent>
+            <MudTablePager PageSizeOptions="_pageSizeOptions" />
+        </PagerContent>
+    </MudTable>
+}
+
+@code {
+    private static readonly int[] _pageSizeOptions = [10, 20, 50, 100];
+    private bool _loading = true;
+    private IReadOnlyList<DriverRegistrationRequestDto> _items = [];
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var adminId = state.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        _items = await DriverAccountService.GetPendingRegistrationsAsync(adminId);
+        _loading = false;
+    }
+}

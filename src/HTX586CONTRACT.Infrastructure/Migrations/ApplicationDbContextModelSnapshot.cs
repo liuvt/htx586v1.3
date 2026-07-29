@@ -57,11 +57,21 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<string>("Email")
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
                     b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
                     b.Property<string>("PhoneNumber")
@@ -110,12 +120,18 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CompanyName");
+                    b.HasIndex("CompanyName")
+                        .HasDatabaseName("IX_CompanyProfiles_CompanyName");
 
-                    b.HasIndex("IsActive");
+                    b.HasIndex("IsActive")
+                        .HasDatabaseName("IX_CompanyProfiles_IsActive");
+
+                    b.HasIndex("IsDeleted")
+                        .HasDatabaseName("IX_CompanyProfiles_IsDeleted");
 
                     b.HasIndex("TaxCode")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("UX_CompanyProfiles_TaxCode");
 
                     b.ToTable("CompanyProfiles", (string)null);
                 });
@@ -129,6 +145,10 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                     b.Property<int?>("ActualPassengerCount")
                         .HasColumnType("int");
 
+                    b.Property<string>("AdminId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<string>("AreaCode")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -138,16 +158,19 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("CancelReason")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<DateTime?>("CancelledAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("CargoName")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
 
                     b.Property<string>("CargoUnit")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<decimal?>("CargoWeight")
                         .HasPrecision(18, 2)
@@ -163,7 +186,7 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
 
-                    b.Property<Guid>("CompanyProfileId")
+                    b.Property<Guid?>("CompanyProfileId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("CompanyRepresentativePositionSnapshot")
@@ -192,7 +215,8 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ContractHash")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("ContractNumber")
                         .IsRequired()
@@ -223,7 +247,7 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
-                    b.Property<Guid>("CustomerId")
+                    b.Property<Guid?>("CustomerId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<string>("CustomerNameSnapshot")
@@ -260,7 +284,8 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("DropoffLocation")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<DateTime?>("EndTime")
                         .HasColumnType("datetime2");
@@ -269,28 +294,35 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .HasColumnType("bit");
 
                     b.Property<string>("Note")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<string>("PaymentMethod")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("PaymentTime")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<string>("PdfFileUrl")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<DateTime?>("PdfGeneratedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<string>("PdfSha256")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
 
                     b.Property<string>("PickupLocation")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
 
                     b.Property<string>("RouteDescription")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
 
                     b.Property<byte[]>("RowVersion")
                         .IsConcurrencyToken()
@@ -299,10 +331,12 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .HasColumnType("rowversion");
 
                     b.Property<string>("SecondDriverLicenseClass")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("SecondDriverName")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
 
                     b.Property<DateTime?>("StartTime")
                         .HasColumnType("datetime2");
@@ -341,20 +375,29 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("ContractNumber")
-                        .IsUnique();
-
                     b.HasIndex("ContractTemplateId");
 
                     b.HasIndex("ContractTypeId");
 
                     b.HasIndex("CustomerId");
 
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_Contracts_Status");
+
                     b.HasIndex("VehicleId");
 
-                    b.HasIndex("CompanyProfileId", "CreatedAt");
+                    b.HasIndex("AdminId", "CreatedAt")
+                        .HasDatabaseName("IX_Contracts_Admin_CreatedAt");
 
-                    b.HasIndex("DriverId", "CreatedAt");
+                    b.HasIndex("CompanyProfileId", "CreatedAt")
+                        .HasDatabaseName("IX_Contracts_CompanyProfile_CreatedAt");
+
+                    b.HasIndex("DriverId", "ContractNumber")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Contracts_Driver_ContractNumber");
+
+                    b.HasIndex("DriverId", "CreatedAt")
+                        .HasDatabaseName("IX_Contracts_Driver_CreatedAt");
 
                     b.ToTable("Contracts", (string)null);
                 });
@@ -453,6 +496,13 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<string>("DeviceId")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
@@ -460,6 +510,9 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                     b.Property<string>("IpAddress")
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
 
                     b.Property<string>("NewDataJson")
                         .HasColumnType("nvarchar(max)");
@@ -476,6 +529,9 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .HasColumnType("nvarchar(200)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("IsDeleted")
+                        .HasDatabaseName("IX_ContractAuditLogs_IsDeleted");
 
                     b.HasIndex("ContractId", "CreatedAt")
                         .IsDescending(false, true)
@@ -542,7 +598,9 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ContractId", "SortOrder")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("UX_ContractPassengers_Contract_SortOrder")
+                        .HasFilter("[IsDeleted] = 0");
 
                     b.ToTable("ContractPassengers", (string)null);
                 });
@@ -812,32 +870,100 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("Address")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("AdminId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
 
                     b.Property<string>("AreaCode")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("AvatarUrl")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("CitizenId")
                         .HasMaxLength(30)
                         .HasColumnType("nvarchar(30)");
 
                     b.Property<string>("CitizenIdBackUrl")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("CitizenIdFrontUrl")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<DateTime?>("CitizenIdIssuedDate")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("date");
 
                     b.Property<string>("CitizenIdIssuedPlace")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("CompanyAddress")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("CompanyBranchName")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("CompanyBusinessLicenseNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CompanyEmail")
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<string>("CompanyName")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("CompanyPhoneNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<Guid?>("CompanyProfileId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CompanyRepresentativeCitizenId")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<DateTime?>("CompanyRepresentativeCitizenIdIssuedDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("CompanyRepresentativeCitizenIdIssuedPlace")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.Property<string>("CompanyRepresentativeName")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("CompanyRepresentativePosition")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CompanySignatureFileUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("CompanySignatureHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime?>("CompanySignedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CompanyTaxCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
@@ -849,20 +975,30 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                     b.Property<DateTime?>("DateOfBirth")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<string>("DriverLicenseBackUrl")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<string>("DriverLicenseClass")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<DateTime?>("DriverLicenseExpiryDate")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("date");
 
                     b.Property<string>("DriverLicenseFrontUrl")
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
 
                     b.Property<DateTime?>("DriverLicenseIssuedDate")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("date");
 
                     b.Property<string>("DriverLicenseNumber")
                         .HasMaxLength(50)
@@ -875,6 +1011,12 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                     b.Property<string>("DriverSignatureHash")
                         .HasMaxLength(128)
                         .HasColumnType("nvarchar(128)");
+
+                    b.Property<DateTime?>("DriverSignatureInactiveAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("DriverSignatureIsActive")
+                        .HasColumnType("bit");
 
                     b.Property<DateTime?>("DriverSignedAt")
                         .HasColumnType("datetime2");
@@ -896,6 +1038,9 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .HasColumnType("nvarchar(200)");
 
                     b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
                     b.Property<bool>("LockoutEnabled")
@@ -924,6 +1069,32 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                     b.Property<bool>("PhoneNumberConfirmed")
                         .HasColumnType("bit");
 
+                    b.Property<DateTime?>("RegistrationRequestedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RegistrationReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("RegistrationReviewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RegistrationReviewedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("RegistrationStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime?>("RegistrationViewedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("RegistrationViewedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("nvarchar(max)");
 
@@ -939,14 +1110,26 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AdminId")
+                        .HasDatabaseName("IX_AspNetUsers_AdminId");
+
                     b.HasIndex("CitizenId")
+                        .HasDatabaseName("IX_AspNetUsers_CitizenId")
                         .HasFilter("[CitizenId] IS NOT NULL");
 
-                    b.HasIndex("CompanyProfileId");
+                    b.HasIndex("CompanyProfileId")
+                        .HasDatabaseName("IX_AspNetUsers_CompanyProfileId");
 
                     b.HasIndex("EmployeeCode")
                         .IsUnique()
+                        .HasDatabaseName("UX_AspNetUsers_EmployeeCode")
                         .HasFilter("[EmployeeCode] IS NOT NULL");
+
+                    b.HasIndex("IsActive")
+                        .HasDatabaseName("IX_AspNetUsers_IsActive");
+
+                    b.HasIndex("IsDeleted")
+                        .HasDatabaseName("IX_AspNetUsers_IsDeleted");
 
                     b.HasIndex("NormalizedEmail")
                         .HasDatabaseName("EmailIndex");
@@ -957,6 +1140,8 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .HasFilter("[NormalizedUserName] IS NOT NULL");
 
                     b.ToTable("AspNetUsers", (string)null);
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("HTX586CONTRACT.Domain.Signatures.ContractSignature", b =>
@@ -1097,6 +1282,14 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("AdminId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<string>("AssignedDriverId")
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
                     b.Property<string>("Brand")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -1108,6 +1301,9 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                     b.Property<string>("Color")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
+
+                    b.Property<Guid?>("CompanyProfileId")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -1200,12 +1396,25 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("IsActive");
+                    b.HasIndex("AdminId")
+                        .HasDatabaseName("IX_Vehicles_AdminId");
+
+                    b.HasIndex("AssignedDriverId")
+                        .HasDatabaseName("IX_Vehicles_AssignedDriverId");
+
+                    b.HasIndex("CompanyProfileId")
+                        .HasDatabaseName("IX_Vehicles_CompanyProfileId");
+
+                    b.HasIndex("IsActive")
+                        .HasDatabaseName("IX_Vehicles_IsActive");
 
                     b.HasIndex("PlateNumber")
-                        .IsUnique();
+                        .IsUnique()
+                        .HasDatabaseName("UX_Vehicles_PlateNumber");
 
                     b.ToTable("Vehicles", (string)null);
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
@@ -1320,6 +1529,8 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                     b.HasIndex("RoleId");
 
                     b.ToTable("AspNetUserRoles", (string)null);
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<string>", b =>
@@ -1343,11 +1554,15 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
 
             modelBuilder.Entity("HTX586CONTRACT.Domain.Contracts.Contract", b =>
                 {
+                    b.HasOne("HTX586CONTRACT.Domain.Identity.ApplicationUser", "AdminAccount")
+                        .WithMany("AdminContracts")
+                        .HasForeignKey("AdminId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("HTX586CONTRACT.Domain.Companies.CompanyProfile", "CompanyProfile")
                         .WithMany("Contracts")
                         .HasForeignKey("CompanyProfileId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("HTX586CONTRACT.Domain.Contracts.ContractTemplate", "ContractTemplate")
                         .WithMany("Contracts")
@@ -1364,8 +1579,7 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                     b.HasOne("HTX586CONTRACT.Domain.Customers.Customer", "Customer")
                         .WithMany("Contracts")
                         .HasForeignKey("CustomerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("HTX586CONTRACT.Domain.Identity.ApplicationUser", "Driver")
                         .WithMany("Contracts")
@@ -1377,6 +1591,8 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .WithMany("Contracts")
                         .HasForeignKey("VehicleId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("AdminAccount");
 
                     b.Navigation("CompanyProfile");
 
@@ -1418,7 +1634,7 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                     b.HasOne("HTX586CONTRACT.Domain.Contracts.Contract", "Contract")
                         .WithMany("Passengers")
                         .HasForeignKey("ContractId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Contract");
@@ -1448,10 +1664,17 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
 
             modelBuilder.Entity("HTX586CONTRACT.Domain.Identity.ApplicationUser", b =>
                 {
+                    b.HasOne("HTX586CONTRACT.Domain.Identity.ApplicationUser", "AdminAccount")
+                        .WithMany("ManagedDrivers")
+                        .HasForeignKey("AdminId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("HTX586CONTRACT.Domain.Companies.CompanyProfile", "CompanyProfile")
-                        .WithMany("Drivers")
+                        .WithMany("Users")
                         .HasForeignKey("CompanyProfileId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("AdminAccount");
 
                     b.Navigation("CompanyProfile");
                 });
@@ -1465,6 +1688,30 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Contract");
+                });
+
+            modelBuilder.Entity("HTX586CONTRACT.Domain.Vehicles.Vehicle", b =>
+                {
+                    b.HasOne("HTX586CONTRACT.Domain.Identity.ApplicationUser", "AdminAccount")
+                        .WithMany()
+                        .HasForeignKey("AdminId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HTX586CONTRACT.Domain.Identity.ApplicationUser", "AssignedDriver")
+                        .WithMany()
+                        .HasForeignKey("AssignedDriverId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HTX586CONTRACT.Domain.Companies.CompanyProfile", "CompanyProfile")
+                        .WithMany("Vehicles")
+                        .HasForeignKey("CompanyProfileId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("AdminAccount");
+
+                    b.Navigation("AssignedDriver");
+
+                    b.Navigation("CompanyProfile");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -1522,7 +1769,9 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                 {
                     b.Navigation("Contracts");
 
-                    b.Navigation("Drivers");
+                    b.Navigation("Users");
+
+                    b.Navigation("Vehicles");
                 });
 
             modelBuilder.Entity("HTX586CONTRACT.Domain.Contracts.Contract", b =>
@@ -1555,9 +1804,13 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
 
             modelBuilder.Entity("HTX586CONTRACT.Domain.Identity.ApplicationUser", b =>
                 {
+                    b.Navigation("AdminContracts");
+
                     b.Navigation("Contracts");
 
                     b.Navigation("CreatedCustomers");
+
+                    b.Navigation("ManagedDrivers");
                 });
 
             modelBuilder.Entity("HTX586CONTRACT.Domain.Vehicles.Vehicle", b =>

@@ -1,30 +1,77 @@
-<MudNavMenu Class="pt-2">
+@inject DriverRegistrationNotificationState RegistrationNotificationState
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@implements IDisposable
+
+<MudNavMenu Class="enterprise-nav">
     <AuthorizeView Roles="Driver" Context="driverAuth">
         <Authorized>
-            <MudText Typo="Typo.overline" Class="px-4 pt-3">TÀI XẾ</MudText>
-            <MudNavLink Href="/driver/dashboard" Icon="@Icons.Material.Filled.Dashboard">Tổng quan</MudNavLink>
-            <MudNavLink Href="/driver/account" Icon="@Icons.Material.Filled.Person">Thông tin cá nhân</MudNavLink>
-            <MudNavLink Href="/account/change-password" Icon="@Icons.Material.Filled.Password">Đổi mật khẩu</MudNavLink>
-            <MudNavLink Href="/driver/contracts/create" Icon="@Icons.Material.Filled.NoteAdd">Tạo hợp đồng</MudNavLink>
-            <MudNavLink Href="/driver/contracts" Icon="@Icons.Material.Filled.Description">Hợp đồng cá nhân</MudNavLink>
-            <MudNavLink Href="/driver/customers" Icon="@Icons.Material.Filled.Groups">Khách hàng</MudNavLink>
+            <div class="nav-section-label">Tài xế</div>
+            <MudNavLink Href="/driver/dashboard" Icon="@Icons.Material.Filled.SpaceDashboard" Match="NavLinkMatch.All">
+                Tổng quan
+            </MudNavLink>
+            <MudNavLink Href="/driver/contracts" Icon="@Icons.Material.Filled.Article">
+                Hợp đồng của tôi
+            </MudNavLink>
+            <MudNavLink Href="/driver/contracts/create" Icon="@Icons.Material.Filled.PostAdd">
+                Tạo hợp đồng mới
+            </MudNavLink>
+            <MudNavLink Href="/driver/account" Icon="@Icons.Material.Filled.AccountCircle">
+                Hồ sơ cá nhân
+            </MudNavLink>
         </Authorized>
     </AuthorizeView>
 
-    <AuthorizeView Roles="Owner,Admin" Context="adminAuth">
+    <AuthorizeView Roles="Admin" Context="adminAuth">
         <Authorized>
-            <MudText Typo="Typo.overline" Class="px-4 pt-3">QUẢN TRỊ</MudText>
-            <MudNavLink Href="/admin/dashboard" Icon="@Icons.Material.Filled.Dashboard">Dashboard</MudNavLink>
-            <AuthorizeView Roles="Owner" Context="ownerAuth">
-                <Authorized>
-                    <MudNavLink Href="/admin/accounts" Icon="@Icons.Material.Filled.AdminPanelSettings">Tài khoản</MudNavLink>
-                </Authorized>
-            </AuthorizeView>
-            <MudNavLink Href="/admin/companies" Icon="@Icons.Material.Filled.Business">Công ty / Văn phòng</MudNavLink>
-            <MudNavLink Href="/admin/driver-accounts" Icon="@Icons.Material.Filled.ManageAccounts">Tài xế</MudNavLink>
-            <MudNavLink Href="/admin/customers" Icon="@Icons.Material.Filled.Groups">Khách hàng</MudNavLink>
-            <MudNavLink Href="/admin/vehicles" Icon="@Icons.Material.Filled.DirectionsCar">Xe & chủ sở hữu</MudNavLink>
-            <MudNavLink Href="/admin/contracts" Icon="@Icons.Material.Filled.Description">Hợp đồng</MudNavLink>
+            <div class="nav-section-label">Quản trị công ty</div>
+            <MudNavLink Href="/admin/dashboard" Icon="@Icons.Material.Filled.SpaceDashboard" Match="NavLinkMatch.All">
+                Tổng quan
+            </MudNavLink>
+            <MudNavLink Href="/admin/company-profile" Icon="@Icons.Material.Filled.Apartment">
+                Thông tin công ty
+            </MudNavLink>
+            <MudNavLink Href="/admin/vehicles" Icon="@Icons.Material.Filled.DirectionsCarFilled">
+                Xe &amp; chủ sở hữu
+            </MudNavLink>
+            <MudNavLink Href="/admin/driver-accounts" Icon="@Icons.Material.Filled.Badge">
+                Tài xế
+            </MudNavLink>
+            <MudNavLink Href="/admin/driver-registrations" Icon="@Icons.Material.Filled.PersonAddAlt1">
+                <span class="nav-link-content">
+                    <span>Yêu cầu đăng ký</span>
+                    @if (RegistrationNotificationState.UnseenCount > 0)
+                    {
+                        <span class="nav-count nav-count-warning">@RegistrationNotificationState.UnseenCount</span>
+                    }
+                </span>
+            </MudNavLink>
+            <MudNavLink Href="/admin/contracts" Icon="@Icons.Material.Filled.Description">
+                Hợp đồng
+            </MudNavLink>
         </Authorized>
     </AuthorizeView>
 </MudNavMenu>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        RegistrationNotificationState.Changed += OnNotificationChanged;
+        try
+        {
+            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            if (auth.User.IsInRole("Admin"))
+            {
+                var adminId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+                await RegistrationNotificationState.RefreshAsync(adminId);
+            }
+        }
+        catch
+        {
+            // Navigation vẫn sử dụng được khi database tạm thời chưa sẵn sàng.
+        }
+    }
+
+    private void OnNotificationChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => RegistrationNotificationState.Changed -= OnNotificationChanged;
+}

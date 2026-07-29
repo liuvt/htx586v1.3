@@ -1,46 +1,69 @@
 using MudBlazor;
+
 namespace HTX586CONTRACT.Web.Themes;
+
 public static class AppMudTheme
 {
     public static MudTheme Create() => new()
     {
         PaletteLight = new PaletteLight
         {
-            Primary = "#006C5B",
-            PrimaryDarken = "#004D40",
-            Secondary = "#00A884",
-            Success = "#2E7D32",
-            Warning = "#ED6C02",
-            Error = "#D32F2F",
-            Info = "#0288D1",
-            Background = "#F4F7F6",
+            Primary = "#0B6B5D",
+            PrimaryDarken = "#064D44",
+            PrimaryLighten = "#D8F2EC",
+            Secondary = "#2563EB",
+            SecondaryDarken = "#1D4ED8",
+            Success = "#16845B",
+            Warning = "#D97706",
+            Error = "#DC4C4C",
+            Info = "#2563EB",
+            Background = "#F4F7F9",
             Surface = "#FFFFFF",
-            AppbarBackground = "#006C5B",
-            AppbarText = "#FFFFFF",
+            AppbarBackground = "rgba(255,255,255,.92)",
+            AppbarText = "#17211F",
             DrawerBackground = "#FFFFFF",
-            DrawerText = "#253330",
-            TextPrimary = "#172B28",
-            TextSecondary = "#60706D",
-            Divider = "#E2E9E7"
+            DrawerText = "#344440",
+            TextPrimary = "#17211F",
+            TextSecondary = "#697975",
+            Divider = "#E7ECEB"
         },
         LayoutProperties = new LayoutProperties
         {
-            DefaultBorderRadius = "10px",
-            DrawerWidthLeft = "270px",
-            AppbarHeight = "64px"
+            DefaultBorderRadius = "14px",
+            DrawerWidthLeft = "292px",
+            AppbarHeight = "72px"
         },
         Typography = new Typography
         {
             Default = new DefaultTypography
             {
-                FontFamily = ["Inter", "Roboto", "Arial", "sans-serif"],
-                FontSize = "0.95rem",
-                LineHeight = "1.5"
+                FontFamily = ["Manrope", "Inter", "Roboto", "Arial", "sans-serif"],
+                FontSize = ".92rem",
+                LineHeight = "1.55",
+                FontWeight = "450"
+            },
+            H4 = new H4Typography
+            {
+                FontFamily = ["Manrope", "Inter", "sans-serif"],
+                FontWeight = "750",
+                FontSize = "1.8rem",
+                LineHeight = "1.2"
+            },
+            H5 = new H5Typography
+            {
+                FontFamily = ["Manrope", "Inter", "sans-serif"],
+                FontWeight = "720"
+            },
+            H6 = new H6Typography
+            {
+                FontFamily = ["Manrope", "Inter", "sans-serif"],
+                FontWeight = "700"
             },
             Button = new ButtonTypography
             {
                 TextTransform = "none",
-                FontWeight = "600"
+                FontWeight = "700",
+                LetterSpacing = "0"
             }
         }
     };

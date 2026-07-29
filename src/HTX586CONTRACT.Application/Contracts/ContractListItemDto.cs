@@ -10,6 +10,7 @@ public sealed class ContractListItemDto
     public string CompanyName { get; set; } = string.Empty;
     public string CustomerName { get; set; } = string.Empty;
     public string DriverName { get; set; } = string.Empty;
+    public Guid? VehicleId { get; set; }
     public string? VehiclePlate { get; set; }
     public DateTime? StartTime { get; set; }
     public decimal? ContractValue { get; set; }

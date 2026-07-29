@@ -18,9 +18,6 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\..\database\20260626_ver6.sql" Link="database\20260626_ver6.sql" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-  </ItemGroup>
-  <ItemGroup>
     <Folder Include="Migrations\" />
   </ItemGroup>
 </Project>

@@ -1,10 +1,13 @@
 using HTX586CONTRACT.Domain.Common;
+using HTX586CONTRACT.Domain.Companies;
 using HTX586CONTRACT.Domain.Contracts;
+using HTX586CONTRACT.Domain.Identity;
 
 namespace HTX586CONTRACT.Domain.Vehicles;
 
 /// <summary>
-/// Xe và thông tin chủ sở hữu xe. Vehicle không phụ thuộc CompanyProfile.
+/// Danh mục xe của một Admin/công ty. Hợp đồng mới không phụ thuộc danh mục này;
+/// tài xế nhập snapshot xe và chủ xe trực tiếp trên từng hợp đồng.
 /// </summary>
 public class Vehicle : BaseEntity
 {
@@ -25,8 +28,19 @@ public class Vehicle : BaseEntity
     public string? OwnerAddress { get; set; }
     public string? OwnerPhoneNumber { get; set; }
 
-    // Chữ ký cố định của chủ sở hữu xe.
-    // Contract tự lấy chữ ký này theo VehicleId tại thời điểm xuất PDF.
+    // Luồng mới: xe thuộc trực tiếp Admin. Có thể chuyển công ty bằng cách đổi AdminId.
+    public string? AdminId { get; set; }
+    public ApplicationUser? AdminAccount { get; set; }
+
+    // Quan hệ cũ giữ để tương thích dữ liệu đã có.
+    public Guid? CompanyProfileId { get; set; }
+    public CompanyProfile? CompanyProfile { get; set; }
+
+    // Không còn ràng buộc xe với tài xế trong luồng tạo hợp đồng mới.
+    public string? AssignedDriverId { get; set; }
+    public ApplicationUser? AssignedDriver { get; set; }
+
+    // Chữ ký danh mục cũ; hợp đồng mới dùng chữ ký chủ xe ký tay theo từng hợp đồng.
     public string? OwnerSignatureFileUrl { get; set; }
     public string? OwnerSignatureHash { get; set; }
     public DateTime? OwnerSignedAt { get; set; }

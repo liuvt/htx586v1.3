@@ -2,7 +2,8 @@ namespace HTX586CONTRACT.Application.Admins.DriverAccounts;
 
 public sealed class UpdateDriverAccountRequest
 {
-    public Guid CompanyProfileId { get; set; }
+    public string AdminId { get; set; } = string.Empty;
+    public Guid? CompanyProfileId { get; set; } // chỉ giữ để tương thích dữ liệu cũ
     public string FullName { get; set; } = string.Empty;
     public string? EmployeeCode { get; set; }
     public string? PhoneNumber { get; set; }

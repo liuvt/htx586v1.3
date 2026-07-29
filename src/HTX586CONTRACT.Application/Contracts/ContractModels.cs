@@ -8,6 +8,9 @@ public sealed class ContractFilter
     public ContractStatus? Status { get; set; }
     public ContractBusinessType? BusinessType { get; set; }
     public string? DriverId { get; set; }
+    public string? AdminId { get; set; }
+    // Legacy filter, giữ để các trang báo cáo cũ vẫn biên dịch.
+    public Guid? CompanyProfileId { get; set; }
     public DateTime? FromDate { get; set; }
     public DateTime? ToDate { get; set; }
 }
@@ -37,26 +40,59 @@ public sealed class ContractDetailDto
     public ContractBusinessType BusinessType { get; set; }
     public Guid ContractTypeId { get; set; }
     public ContractStatus Status { get; set; }
-    public Guid CompanyProfileId { get; set; }
+
+    public string? AdminId { get; set; }
+    public Guid? CompanyProfileId { get; set; }
     public string CompanyName { get; set; } = string.Empty;
+    public string? CompanyTaxCode { get; set; }
+    public string? CompanyAddress { get; set; }
+    public string? CompanyPhone { get; set; }
+    public string? CompanyRepresentativeName { get; set; }
+    public string? CompanyRepresentativePosition { get; set; }
+    public string? CompanyRepresentativeSignatureFileUrl { get; set; }
+    public DateTime? CompanyRepresentativeSignedAt { get; set; }
+
     public string DriverId { get; set; } = string.Empty;
     public string DriverName { get; set; } = string.Empty;
+    public string? DriverPhone { get; set; }
+    public string? DriverCitizenId { get; set; }
+    public string? DriverLicenseNumber { get; set; }
     public string? DriverLicenseClass { get; set; }
-    public Guid CustomerId { get; set; }
+    public string? DriverSignatureFileUrl { get; set; }
+    public DateTime? DriverSignedAt { get; set; }
+
+    public Guid? CustomerId { get; set; }
     public string CustomerName { get; set; } = string.Empty;
     public string CustomerPhone { get; set; } = string.Empty;
     public string? CustomerCitizenId { get; set; }
+    public DateTime? CustomerCitizenIdIssuedDate { get; set; }
+    public string? CustomerCitizenIdIssuedPlace { get; set; }
     public string? CustomerAddress { get; set; }
+    public string? CustomerEmail { get; set; }
+    public string? CustomerOrganizationName { get; set; }
+    public string? CustomerTaxCode { get; set; }
+
     public string AreaCode { get; set; } = string.Empty;
     public Guid? VehicleId { get; set; }
     public string? VehiclePlate { get; set; }
     public string? VehicleCode { get; set; }
     public string? VehicleBrand { get; set; }
+    public string? VehicleModel { get; set; }
+    public string? VehicleType { get; set; }
     public int? SeatCount { get; set; }
+    public string? VehicleColor { get; set; }
+    public string? ChassisNumber { get; set; }
+    public string? EngineNumber { get; set; }
     public int? ActualPassengerCount { get; set; }
     public string? OwnerName { get; set; }
     public string? OwnerCitizenId { get; set; }
     public DateTime? OwnerCitizenIdIssuedDate { get; set; }
+    public string? OwnerCitizenIdIssuedPlace { get; set; }
+    public string? OwnerAddress { get; set; }
+    public string? OwnerPhoneNumber { get; set; }
+    public string? VehicleOwnerSignatureFileUrl { get; set; }
+    public DateTime? VehicleOwnerSignedAt { get; set; }
+
     public string? CargoName { get; set; }
     public decimal? CargoWeight { get; set; }
     public string? CargoUnit { get; set; }
@@ -74,6 +110,11 @@ public sealed class ContractDetailDto
     public string? Note { get; set; }
     public string? PdfFileUrl { get; set; }
     public DateTime CreatedAt { get; set; }
+    public string? CreatedByUserId { get; set; }
+    public string CreatedByName { get; set; } = "Hệ thống";
+    public string? AssignedByUserId { get; set; }
+    public string? AssignedByName { get; set; }
+    public DateTime? AssignedAt { get; set; }
     public List<ContractPassengerDto> Passengers { get; set; } = [];
     public List<ContractSignatureDto> Signatures { get; set; } = [];
 }
@@ -82,24 +123,43 @@ public sealed class SaveContractRequest
 {
     public Guid? Id { get; set; }
     public string? ContractNumber { get; set; }
-    public ContractBusinessType BusinessType { get; set; } = ContractBusinessType.Driver;
+    public ContractBusinessType BusinessType { get; set; } = ContractBusinessType.Passenger;
     public Guid? ContractTypeId { get; set; }
+
+    public string? AdminId { get; set; }
+    public Guid? CompanyProfileId { get; set; }
     public string DriverId { get; set; } = string.Empty;
+
     public Guid? CustomerId { get; set; }
     public string CustomerName { get; set; } = string.Empty;
     public string CustomerPhone { get; set; } = string.Empty;
     public string? CustomerCitizenId { get; set; }
+    public DateTime? CustomerCitizenIdIssuedDate { get; set; }
+    public string? CustomerCitizenIdIssuedPlace { get; set; }
     public string? CustomerAddress { get; set; }
+    public string? CustomerEmail { get; set; }
+    public string? CustomerOrganizationName { get; set; }
+    public string? CustomerTaxCode { get; set; }
+
     public string AreaCode { get; set; } = string.Empty;
     public Guid? VehicleId { get; set; }
     public string? VehiclePlate { get; set; }
     public string? VehicleCode { get; set; }
     public string? VehicleBrand { get; set; }
+    public string? VehicleModel { get; set; }
+    public string? VehicleType { get; set; }
     public int? SeatCount { get; set; }
+    public string? VehicleColor { get; set; }
+    public string? ChassisNumber { get; set; }
+    public string? EngineNumber { get; set; }
     public int? ActualPassengerCount { get; set; }
     public string? OwnerName { get; set; }
     public string? OwnerCitizenId { get; set; }
     public DateTime? OwnerCitizenIdIssuedDate { get; set; }
+    public string? OwnerCitizenIdIssuedPlace { get; set; }
+    public string? OwnerAddress { get; set; }
+    public string? OwnerPhoneNumber { get; set; }
+
     public string? CargoName { get; set; }
     public decimal? CargoWeight { get; set; }
     public string? CargoUnit { get; set; }

@@ -1,0 +1,39 @@
+@page "/driver/contracts/detail/{Id:guid}"
+@attribute [Authorize(Roles = "Driver")]
+@inject IContractService ContractService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Chi tiết hợp đồng</PageTitle>
+<PageHeader Title="Chi tiết hợp đồng" Subtitle="Dữ liệu snapshot của hợp đồng." />
+
+@if (_loading) { <MudProgressLinear Indeterminate="true" /> }
+else if (_detail is null)
+{
+    <MudAlert Severity="Severity.Warning">Không tìm thấy hợp đồng của bạn.</MudAlert>
+    <MudButton Href="/driver/contracts" Variant="Variant.Text" Class="mt-3">Quay lại</MudButton>
+}
+else
+{
+    @if (!IsLocked(_detail.Status))
+    {
+        <MudStack Row="true" Justify="Justify.FlexEnd" Class="mb-3">
+            <MudButton Href="@($"/driver/contracts/{Id}")" Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Edit">Tiếp tục chỉnh sửa / ký</MudButton>
+        </MudStack>
+    }
+    <ContractHistoryView Detail="_detail" BackUrl="/driver/contracts" />
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private ContractDetailDto? _detail;
+    private bool _loading = true;
+    protected override async Task OnParametersSetAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var driverId = state.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        var detail = await ContractService.GetByIdAsync(Id);
+        _detail = detail is not null && detail.DriverId == driverId ? detail : null;
+        _loading = false;
+    }
+    private static bool IsLocked(ContractStatus status) => status is ContractStatus.Completed or ContractStatus.Cancelled or ContractStatus.Expired or ContractStatus.Invalidated;
+}
