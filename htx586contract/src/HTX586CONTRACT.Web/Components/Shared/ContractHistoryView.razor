@@ -1,0 +1,221 @@
+@inject IContractDocumentService DocumentService
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<MudStack Spacing="3">
+    @if (IsFinalized)
+    {
+        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">
+            Hợp đồng đã đủ 4 chữ ký, tạo PDF chính thức thành công và bị khóa. Dữ liệu bên dưới là snapshot tại thời điểm chốt hợp đồng.
+        </MudAlert>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+            Hợp đồng đang chờ xác nhận từ khách hàng. Tài xế vẫn có thể chỉnh sửa hoặc ký lại; chỉ khóa sau khi đủ 4 chữ ký và tạo PDF thành công.
+        </MudAlert>
+    }
+
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudStack Row="true" AlignItems="AlignItems.Center">
+            <div>
+                <MudText Typo="Typo.h5">@Detail.ContractNumber</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">
+                    @Detail.CompanyName · @BusinessName(Detail.BusinessType)
+                </MudText>
+            </div>
+            <MudSpacer />
+            <ContractStatusChip Status="Detail.Status" ChipSize="Size.Medium" />
+        </MudStack>
+    </MudPaper>
+
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-3">1. Thông tin hợp đồng</MudText>
+        <MudGrid>
+            <MudItem xs="12" md="4"><InfoListItem Label="Số hợp đồng" Value="@Detail.ContractNumber" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Loại hợp đồng" Value="@BusinessName(Detail.BusinessType)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Trạng thái" Value="@StatusName(Detail.Status)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Công ty/Văn phòng" Value="@Detail.CompanyName" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Tài xế" Value="@Detail.DriverName" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Khu vực" Value="@Detail.AreaCode" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Người tạo" Value="@Detail.CreatedByName" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Người phát xuống" Value="@(Detail.AssignedByName ?? "Tài xế tự tạo")" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Ngày tạo" Value="@FormatDateTime(Detail.CreatedAt)" /></MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-3">2. Phương tiện và chủ sở hữu</MudText>
+        <MudGrid>
+            <MudItem xs="12" md="3"><InfoListItem Label="Biển kiểm soát" Value="@(Detail.VehiclePlate ?? "-")" /></MudItem>
+            <MudItem xs="12" md="3"><InfoListItem Label="Mã xe" Value="@(Detail.VehicleCode ?? "-")" /></MudItem>
+            <MudItem xs="12" md="3"><InfoListItem Label="Hãng/Loại xe" Value="@(Detail.VehicleBrand ?? "-")" /></MudItem>
+            <MudItem xs="12" md="3"><InfoListItem Label="Số chỗ" Value="@FormatNumber(Detail.SeatCount)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Chủ sở hữu" Value="@(Detail.OwnerName ?? "-")" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="CCCD chủ sở hữu" Value="@(Detail.OwnerCitizenId ?? "-")" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Ngày cấp CCCD" Value="@FormatDate(Detail.OwnerCitizenIdIssuedDate)" /></MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-3">3. Khách hàng/người thuê</MudText>
+        <MudGrid>
+            <MudItem xs="12" md="4"><InfoListItem Label="Khách hàng/người thuê" Value="@Detail.CustomerName" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Số điện thoại" Value="@Detail.CustomerPhone" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="CCCD/MST" Value="@(Detail.CustomerCitizenId ?? "-")" /></MudItem>
+            <MudItem xs="12"><InfoListItem Label="Địa chỉ" Value="@(Detail.CustomerAddress ?? "-")" /></MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-3">4. Nội dung hợp đồng</MudText>
+        <MudGrid>
+            <MudItem xs="12" md="3"><InfoListItem Label="Bắt đầu" Value="@FormatDateTime(Detail.StartTime)" /></MudItem>
+            <MudItem xs="12" md="3"><InfoListItem Label="Kết thúc" Value="@FormatDateTime(Detail.EndTime)" /></MudItem>
+            <MudItem xs="12" md="3"><InfoListItem Label="Tổng km" Value="@FormatDecimal(Detail.TotalKilometers)" /></MudItem>
+            <MudItem xs="12" md="3"><InfoListItem Label="Giá trị hợp đồng" Value="@FormatMoney(Detail.ContractValue)" /></MudItem>
+            <MudItem xs="12" md="6"><InfoListItem Label="Điểm đi" Value="@(Detail.PickupLocation ?? "-")" /></MudItem>
+            <MudItem xs="12" md="6"><InfoListItem Label="Điểm đến" Value="@(Detail.DropoffLocation ?? "-")" /></MudItem>
+            <MudItem xs="12"><InfoListItem Label="Lộ trình chi tiết" Value="@(Detail.RouteDescription ?? "-")" /></MudItem>
+            <MudItem xs="12" md="6"><InfoListItem Label="Hình thức thanh toán" Value="@(Detail.PaymentMethod ?? "-")" /></MudItem>
+            <MudItem xs="12" md="6"><InfoListItem Label="Thời gian thanh toán" Value="@(Detail.PaymentTime ?? "-")" /></MudItem>
+            <MudItem xs="12"><InfoListItem Label="Ghi chú" Value="@(Detail.Note ?? "-")" /></MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+            <MudText Typo="Typo.h6">5. Danh sách hành khách</MudText>
+            <MudSpacer />
+            <MudChip T="string" Variant="Variant.Outlined">Số lượng: @FormatNumber(Detail.ActualPassengerCount)</MudChip>
+        </MudStack>
+        <MudTable T="ContractPassengerDto" Items="Detail.Passengers" Dense="true" Hover="true">
+            <HeaderContent>
+                <MudTh>STT</MudTh>
+                <MudTh>Họ tên</MudTh>
+                <MudTh>Năm sinh</MudTh>
+                <MudTh>Ghi chú</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="STT">@context.SortOrder</MudTd>
+                <MudTd DataLabel="Họ tên">@context.FullName</MudTd>
+                <MudTd DataLabel="Năm sinh">@context.BirthYear</MudTd>
+                <MudTd DataLabel="Ghi chú">@context.Note</MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText>Không có hành khách bổ sung.</MudText></NoRecordsContent>
+        </MudTable>
+    </MudPaper>
+
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-3">6. Chữ ký theo hợp đồng</MudText>
+        <MudGrid>
+            <MudItem xs="12" md="3">
+                <MudText Typo="Typo.subtitle1">Văn phòng đại diện</MudText>
+                <SignaturePad Disabled="true"
+                              ExistingSignatureUrl="@Detail.CompanyRepresentativeSignatureFileUrl"
+                              SignerName="@(Detail.CompanyRepresentativeName ?? "Đại diện văn phòng")"
+                              SignedAt="@Detail.CompanyRepresentativeSignedAt" />
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudText Typo="Typo.subtitle1">Chủ sở hữu xe</MudText>
+                <SignaturePad Disabled="true"
+                              ExistingSignatureUrl="@Detail.VehicleOwnerSignatureFileUrl"
+                              SignerName="@(Detail.OwnerName ?? "Chủ sở hữu xe")"
+                              SignedAt="@Detail.VehicleOwnerSignedAt" />
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudText Typo="Typo.subtitle1">Tài xế</MudText>
+                <SignaturePad Disabled="true"
+                              ExistingSignatureUrl="@Detail.DriverSignatureFileUrl"
+                              SignerName="@Detail.DriverName"
+                              SignedAt="@Detail.DriverSignedAt" />
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudText Typo="Typo.subtitle1">Khách hàng</MudText>
+                <SignaturePad Disabled="true"
+                              ExistingSignatureUrl="@(CustomerSignature?.SignatureFileUrl)"
+                              SignerName="@(CustomerSignature?.SignerName ?? Detail.CustomerName)"
+                              SignedAt="@(CustomerSignature?.ServerSignedAt)" />
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    <MudStack Row="true" Justify="Justify.FlexEnd">
+        <MudButton Href="@BackUrl" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack">
+            Quay lại
+        </MudButton>
+        @if (IsFinalized)
+        {
+            <MudButton Color="Color.Error"
+                       Variant="Variant.Filled"
+                       StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                       OnClick="OpenPdfAsync">
+                Mở PDF chính thức
+            </MudButton>
+        }
+    </MudStack>
+</MudStack>
+
+@code {
+    [Parameter, EditorRequired] public ContractDetailDto Detail { get; set; } = null!;
+    [Parameter, EditorRequired] public string BackUrl { get; set; } = "/";
+
+    private bool IsFinalized => Detail.IsFinalized;
+
+    private ContractSignatureDto? CustomerSignature
+        => Detail.Signatures.FirstOrDefault(x => x.Party == SignatureParty.Customer);
+
+    private async Task OpenPdfAsync()
+    {
+        try
+        {
+            var url = await DocumentService.GeneratePdfAsync(Detail.Id);
+            Navigation.NavigateTo(url, forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private static string BusinessName(ContractBusinessType type) => type switch
+    {
+        ContractBusinessType.Passenger => "Hợp đồng vận chuyển hành khách",
+        ContractBusinessType.Cargo => "Hợp đồng vận chuyển hàng hóa bằng xe ô tô",
+        _ => type.ToString()
+    };
+
+    private static string StatusName(ContractStatus status) => status switch
+    {
+        ContractStatus.Draft => "Chờ xác nhận từ khách hàng",
+        ContractStatus.WaitingCustomerSignature => "Chờ xác nhận từ khách hàng",
+        ContractStatus.CustomerSigned => "Khách đã ký",
+        ContractStatus.WaitingDriverConfirmation => "Chờ tài xế xác nhận",
+        ContractStatus.Completed => "Hoàn tất",
+        ContractStatus.Cancelled => "Đã hủy",
+        ContractStatus.Expired => "Hết hạn",
+        ContractStatus.Invalidated => "Vô hiệu hóa",
+        _ => status.ToString()
+    };
+
+    private static DateTime VietnamTime(DateTime value)
+        => value.Kind == DateTimeKind.Utc ? value.AddHours(7) : value;
+
+    private static string FormatDateTime(DateTime value)
+        => VietnamTime(value).ToString("dd/MM/yyyy HH:mm");
+
+    private static string FormatDateTime(DateTime? value)
+        => value.HasValue ? FormatDateTime(value.Value) : "-";
+
+    private static string FormatDate(DateTime? value)
+        => value?.ToString("dd/MM/yyyy") ?? "-";
+
+    private static string FormatNumber(int? value)
+        => value?.ToString("N0") ?? "-";
+
+    private static string FormatDecimal(decimal? value)
+        => value?.ToString("N1") ?? "-";
+
+    private static string FormatMoney(decimal? value)
+        => value.HasValue ? $"{value.Value:N0} VNĐ" : "-";
+}

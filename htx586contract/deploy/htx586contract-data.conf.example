@@ -1,0 +1,6 @@
+# Đặt file này tại /etc/systemd/system/htx586contract.service.d/data.conf
+# Yêu cầu WorkingDirectory=/var/www/htx586contract
+[Service]
+Environment="DataStorage__RootPath=../htx586contract_data"
+Environment="FileStorage__UploadRootPath=upload"
+Environment="FileStorage__PublicRequestPath=/uploads"

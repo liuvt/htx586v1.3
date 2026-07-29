@@ -1,0 +1,189 @@
+@page "/admin/company-profile"
+@attribute [Authorize(Roles = "Admin")]
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject MasterSignatureService MasterSignatureService
+@inject ISnackbar Snackbar
+
+<PageTitle>Thông tin công ty</PageTitle>
+<PageHeader Title="Thông tin công ty" Subtitle="Thông tin cố định theo tài khoản Admin và được chụp vào hợp đồng khi tài xế tạo mới." />
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (string.IsNullOrWhiteSpace(_adminId))
+{
+    <MudAlert Severity="Severity.Error">Không xác định được tài khoản Admin.</MudAlert>
+}
+else
+{
+    @if (string.IsNullOrWhiteSpace(_model.SignatureFileUrl))
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-4">
+            Công ty chưa có chữ ký cố định. Tài xế vẫn có thể lưu hợp đồng nhưng chưa thể bấm Hoàn thành.
+        </MudAlert>
+    }
+
+    <MudGrid>
+        <MudItem xs="12" md="7">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Thông tin pháp lý và liên hệ</MudText>
+                <MudGrid>
+                    <MudItem xs="12"><MudTextField @bind-Value="_model.CompanyName" Label="Tên công ty" Required="true" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12"><MudTextField @bind-Value="_model.BranchName" Label="Tên chi nhánh / văn phòng (nếu có)" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12" sm="6"><MudTextField @bind-Value="_model.TaxCode" Label="Mã số thuế" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12" sm="6"><MudTextField @bind-Value="_model.BusinessLicenseNumber" Label="Số giấy phép kinh doanh" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12"><MudTextField @bind-Value="_model.Address" Label="Địa chỉ" Required="true" Lines="2" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12" sm="6"><MudTextField @bind-Value="_model.PhoneNumber" Label="Điện thoại công ty" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12" sm="6"><MudTextField @bind-Value="_model.Email" Label="Email công ty" Variant="Variant.Outlined" /></MudItem>
+                </MudGrid>
+
+                <MudDivider Class="my-4" />
+                <MudText Typo="Typo.h6" Class="mb-3">Người đại diện</MudText>
+                <MudGrid>
+                    <MudItem xs="12" sm="7"><MudTextField @bind-Value="_model.RepresentativeName" Label="Họ tên người đại diện" Required="true" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12" sm="5"><MudTextField @bind-Value="_model.RepresentativePosition" Label="Chức vụ" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12" sm="6"><MudTextField @bind-Value="_model.RepresentativeCitizenId" Label="Số CCCD" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12" sm="6"><MudDatePicker @bind-Date="_model.RepresentativeCitizenIdIssuedDate" Label="Ngày cấp CCCD" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12"><MudTextField @bind-Value="_model.RepresentativeCitizenIdIssuedPlace" Label="Nơi cấp CCCD" Variant="Variant.Outlined" /></MudItem>
+                </MudGrid>
+
+                <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-4">
+                    <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Save" Disabled="@_saving" OnClick="SaveAsync">
+                        @(_saving ? "Đang lưu..." : "Lưu thông tin công ty")
+                    </MudButton>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="5">
+            <MudPaper Outlined="true" Class="pa-4">
+                <MudText Typo="Typo.h6">Chữ ký cố định của công ty</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                    Chữ ký này tự động được chụp vào hợp đồng mới. Hợp đồng cũ không thay đổi khi ký lại tại đây.
+                </MudText>
+                <SignaturePad SignerName="@_model.RepresentativeName"
+                              ExistingSignatureUrl="@_model.SignatureFileUrl"
+                              ConfirmationButtonText="Lưu chữ ký công ty"
+                              SavedStatusText="Đã có chữ ký công ty"
+                              OnSignatureSaved="SaveSignatureAsync" />
+                @if (_model.SignedAt.HasValue)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                        Cập nhật: @_model.SignedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                    </MudText>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _saving;
+    private string _adminId = string.Empty;
+    private CompanyFormModel _model = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _adminId = state.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(_adminId))
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(x => x.Id == _adminId && !x.IsDeleted);
+            if (user is not null) _model = CompanyFormModel.FromUser(user);
+        }
+        _loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_model.CompanyName) || string.IsNullOrWhiteSpace(_model.Address) || string.IsNullOrWhiteSpace(_model.RepresentativeName))
+        {
+            Snackbar.Add("Vui lòng nhập tên công ty, địa chỉ và người đại diện.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            _saving = true;
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var user = await db.Users.FirstOrDefaultAsync(x => x.Id == _adminId && !x.IsDeleted)
+                ?? throw new KeyNotFoundException("Không tìm thấy tài khoản Admin.");
+            _model.ApplyTo(user);
+            user.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            Snackbar.Add("Đã lưu thông tin công ty.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _saving = false; }
+    }
+
+    private async Task SaveSignatureAsync(string dataUrl)
+    {
+        try
+        {
+            var url = await MasterSignatureService.SaveAdminCompanySignatureAsync(_adminId, dataUrl);
+            _model.SignatureFileUrl = url;
+            _model.SignedAt = DateTime.UtcNow;
+            Snackbar.Add("Đã lưu chữ ký cố định của công ty.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+    }
+
+    private sealed class CompanyFormModel
+    {
+        public string? CompanyName { get; set; }
+        public string? BranchName { get; set; }
+        public string? TaxCode { get; set; }
+        public string? BusinessLicenseNumber { get; set; }
+        public string? Address { get; set; }
+        public string? PhoneNumber { get; set; }
+        public string? Email { get; set; }
+        public string? RepresentativeName { get; set; }
+        public string? RepresentativePosition { get; set; }
+        public string? RepresentativeCitizenId { get; set; }
+        public DateTime? RepresentativeCitizenIdIssuedDate { get; set; }
+        public string? RepresentativeCitizenIdIssuedPlace { get; set; }
+        public string? SignatureFileUrl { get; set; }
+        public DateTime? SignedAt { get; set; }
+
+        public static CompanyFormModel FromUser(ApplicationUser user) => new()
+        {
+            CompanyName = user.CompanyName,
+            BranchName = user.CompanyBranchName,
+            TaxCode = user.CompanyTaxCode,
+            BusinessLicenseNumber = user.CompanyBusinessLicenseNumber,
+            Address = user.CompanyAddress,
+            PhoneNumber = user.CompanyPhoneNumber,
+            Email = user.CompanyEmail,
+            RepresentativeName = user.CompanyRepresentativeName,
+            RepresentativePosition = user.CompanyRepresentativePosition,
+            RepresentativeCitizenId = user.CompanyRepresentativeCitizenId,
+            RepresentativeCitizenIdIssuedDate = user.CompanyRepresentativeCitizenIdIssuedDate,
+            RepresentativeCitizenIdIssuedPlace = user.CompanyRepresentativeCitizenIdIssuedPlace,
+            SignatureFileUrl = user.CompanySignatureFileUrl,
+            SignedAt = user.CompanySignedAt
+        };
+
+        public void ApplyTo(ApplicationUser user)
+        {
+            user.CompanyName = N(CompanyName);
+            user.CompanyBranchName = N(BranchName);
+            user.CompanyTaxCode = N(TaxCode);
+            user.CompanyBusinessLicenseNumber = N(BusinessLicenseNumber);
+            user.CompanyAddress = N(Address);
+            user.CompanyPhoneNumber = N(PhoneNumber);
+            user.CompanyEmail = N(Email);
+            user.CompanyRepresentativeName = N(RepresentativeName);
+            user.CompanyRepresentativePosition = N(RepresentativePosition);
+            user.CompanyRepresentativeCitizenId = N(RepresentativeCitizenId);
+            user.CompanyRepresentativeCitizenIdIssuedDate = RepresentativeCitizenIdIssuedDate;
+            user.CompanyRepresentativeCitizenIdIssuedPlace = N(RepresentativeCitizenIdIssuedPlace);
+        }
+
+        private static string? N(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+}
