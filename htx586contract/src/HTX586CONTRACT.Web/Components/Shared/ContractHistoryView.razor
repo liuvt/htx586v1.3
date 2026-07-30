@@ -1,6 +1,4 @@
-@inject IContractDocumentService DocumentService
 @inject NavigationManager Navigation
-@inject ISnackbar Snackbar
 
 <MudStack Spacing="3">
     @if (IsFinalized)
@@ -21,7 +19,7 @@
             <div>
                 <MudText Typo="Typo.h5">@Detail.ContractNumber</MudText>
                 <MudText Typo="Typo.body2" Color="Color.Secondary">
-                    @Detail.CompanyName · @BusinessName(Detail.BusinessType)
+                    @Detail.CompanyName · Hợp đồng vận chuyển hành khách
                 </MudText>
             </div>
             <MudSpacer />
@@ -33,13 +31,14 @@
         <MudText Typo="Typo.h6" Class="mb-3">1. Thông tin hợp đồng</MudText>
         <MudGrid>
             <MudItem xs="12" md="4"><InfoListItem Label="Số hợp đồng" Value="@Detail.ContractNumber" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Loại hợp đồng" Value="@BusinessName(Detail.BusinessType)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Loại hợp đồng" Value="Hợp đồng vận chuyển hành khách" /></MudItem>
             <MudItem xs="12" md="4"><InfoListItem Label="Trạng thái" Value="@StatusName(Detail.Status)" /></MudItem>
             <MudItem xs="12" md="4"><InfoListItem Label="Công ty/Văn phòng" Value="@Detail.CompanyName" /></MudItem>
             <MudItem xs="12" md="4"><InfoListItem Label="Tài xế" Value="@Detail.DriverName" /></MudItem>
             <MudItem xs="12" md="4"><InfoListItem Label="Khu vực" Value="@Detail.AreaCode" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Tài xế thứ hai" Value="@(Detail.SecondDriverName ?? "-")" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Hạng GPLX tài xế thứ hai" Value="@(Detail.SecondDriverLicenseClass ?? "-")" /></MudItem>
             <MudItem xs="12" md="4"><InfoListItem Label="Người tạo" Value="@Detail.CreatedByName" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Người phát xuống" Value="@(Detail.AssignedByName ?? "Tài xế tự tạo")" /></MudItem>
             <MudItem xs="12" md="4"><InfoListItem Label="Ngày tạo" Value="@FormatDateTime(Detail.CreatedAt)" /></MudItem>
         </MudGrid>
     </MudPaper>
@@ -149,7 +148,7 @@
             <MudButton Color="Color.Error"
                        Variant="Variant.Filled"
                        StartIcon="@Icons.Material.Filled.PictureAsPdf"
-                       OnClick="OpenPdfAsync">
+                       OnClick="OpenPdf">
                 Mở PDF chính thức
             </MudButton>
         }
@@ -165,36 +164,16 @@
     private ContractSignatureDto? CustomerSignature
         => Detail.Signatures.FirstOrDefault(x => x.Party == SignatureParty.Customer);
 
-    private async Task OpenPdfAsync()
+    private void OpenPdf()
     {
-        try
-        {
-            var url = await DocumentService.GeneratePdfAsync(Detail.Id);
-            Navigation.NavigateTo(url, forceLoad: true);
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add(ex.Message, Severity.Error);
-        }
+        if (!string.IsNullOrWhiteSpace(Detail.PdfFileUrl))
+            Navigation.NavigateTo(Detail.PdfFileUrl, forceLoad: true);
     }
-
-    private static string BusinessName(ContractBusinessType type) => type switch
-    {
-        ContractBusinessType.Passenger => "Hợp đồng vận chuyển hành khách",
-        ContractBusinessType.Cargo => "Hợp đồng vận chuyển hàng hóa bằng xe ô tô",
-        _ => type.ToString()
-    };
 
     private static string StatusName(ContractStatus status) => status switch
     {
-        ContractStatus.Draft => "Chờ xác nhận từ khách hàng",
         ContractStatus.WaitingCustomerSignature => "Chờ xác nhận từ khách hàng",
-        ContractStatus.CustomerSigned => "Khách đã ký",
-        ContractStatus.WaitingDriverConfirmation => "Chờ tài xế xác nhận",
         ContractStatus.Completed => "Hoàn tất",
-        ContractStatus.Cancelled => "Đã hủy",
-        ContractStatus.Expired => "Hết hạn",
-        ContractStatus.Invalidated => "Vô hiệu hóa",
         _ => status.ToString()
     };
 

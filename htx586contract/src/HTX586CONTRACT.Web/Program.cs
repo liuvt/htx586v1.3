@@ -1,21 +1,18 @@
 using HTX586CONTRACT.Application.Abstractions;
 using HTX586CONTRACT.Application.Common;
 using HTX586CONTRACT.Domain.Identity;
-using HTX586CONTRACT.Infrastructure.Identity;
 using HTX586CONTRACT.Infrastructure.Persistence;
 using HTX586CONTRACT.Infrastructure.Services;
 using HTX586CONTRACT.Web.Components;
 using HTX586CONTRACT.Web.Endpoints;
 using HTX586CONTRACT.Web.Services;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.HttpOverrides;
-using MudBlazor.Services;
 using Microsoft.AspNetCore.DataProtection;
-
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
-using Microsoft.Extensions.Options;
+using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,140 +21,101 @@ builder.Services
     .AddInteractiveServerComponents()
     .AddHubOptions(options =>
     {
-        // Chữ ký canvas được truyền từ trình duyệt về Blazor Server qua SignalR.
-        // Giữ giới hạn dự phòng cho dữ liệu ảnh đã nén và các thiết bị DPI cao.
         options.MaximumReceiveMessageSize = 256 * 1024;
     });
 
 builder.Services.AddMudServices();
-builder.Services.Configure<DataStorageOptions>(
-    builder.Configuration.GetSection(DataStorageOptions.SectionName));
-builder.Services.Configure<FileStorageOptions>(
-    builder.Configuration.GetSection(FileStorageOptions.SectionName));
 
 var connectionString = builder.Configuration.GetConnectionString("Default");
-
-// Tương thích ngược với cấu hình cũ nếu server đang dùng key Vps.
-// Các bản deploy IIS/VPS mới nên cấu hình ConnectionStrings:Default.
 if (string.IsNullOrWhiteSpace(connectionString))
-    connectionString = builder.Configuration.GetConnectionString("Vps");
-
-if (string.IsNullOrWhiteSpace(connectionString))
+{
     throw new InvalidOperationException(
-        "Không tìm thấy connection string. Hãy cấu hình ConnectionStrings:Default bằng appsettings.Production.json, user-secrets hoặc biến môi trường ConnectionStrings__Default.");
+        "Chưa cấu hình ConnectionStrings:Default. Hãy dùng appsettings.json, user-secrets hoặc biến môi trường ConnectionStrings__Default.");
+}
 
-var forwardedHeadersEnabled = builder.Configuration.GetValue<bool>("ForwardedHeaders:Enabled");
-if (forwardedHeadersEnabled)
+var useForwardedHeaders = !builder.Environment.IsDevelopment();
+if (useForwardedHeaders)
 {
     builder.Services.Configure<ForwardedHeadersOptions>(options =>
     {
-        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-
-        // Dùng cho VPS chạy sau reverse proxy như Nginx/Cloudflare/IIS ARR.
-        // Nếu cần siết bảo mật, hãy cấu hình KnownProxies/KnownNetworks cụ thể cho hạ tầng của bạn.
+        options.ForwardedHeaders =
+            ForwardedHeaders.XForwardedFor |
+            ForwardedHeaders.XForwardedProto;
         options.KnownNetworks.Clear();
         options.KnownProxies.Clear();
     });
 }
 
-builder.Services.AddDbContextFactory<ApplicationDbContext>(
-    options =>
+builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
+    options.UseSqlServer(connectionString));
+
+builder.Services
+    .AddIdentity<ApplicationUser, IdentityRole>(options =>
     {
-        options.UseSqlServer(connectionString);
-    });
+        options.Password.RequiredLength = 6;
+        options.Password.RequireDigit = true;
+        options.Password.RequireUppercase = false;
+        options.Password.RequireLowercase = false;
+        options.Password.RequireNonAlphanumeric = false;
+        options.Lockout.MaxFailedAccessAttempts = 5;
+    })
+    .AddEntityFrameworkStores<ApplicationDbContext>()
+    .AddDefaultTokenProviders();
 
-builder.Services.AddIdentity<ApplicationUser, IdentityRole>(o =>
-{
-    o.Password.RequiredLength = 6;
-    o.Password.RequireDigit = true;
-    o.Password.RequireUppercase = false;
-    o.Password.RequireLowercase = false;
-    o.Password.RequireNonAlphanumeric = false;
-    o.Lockout.MaxFailedAccessAttempts = 5;
-})
-    .AddEntityFrameworkStores<ApplicationDbContext>().AddDefaultTokenProviders();
-
-// Tài khoản đã bị ẩn/khóa sẽ mất hiệu lực cookie nhanh chóng sau khi SecurityStamp thay đổi.
 builder.Services.Configure<SecurityStampValidatorOptions>(options =>
     options.ValidationInterval = TimeSpan.FromMinutes(1));
 
-#region Cấu hình cookie authentication 
-var cookieSecurePolicy = builder.Environment.IsDevelopment()
-    ? CookieSecurePolicy.SameAsRequest
-    : CookieSecurePolicy.Always;
-
-var configuredCookieSecurePolicy = builder.Configuration["Authentication:CookieSecurePolicy"];
-if (Enum.TryParse<CookieSecurePolicy>(configuredCookieSecurePolicy, ignoreCase: true, out var parsedCookieSecurePolicy))
+builder.Services.ConfigureApplicationCookie(options =>
 {
-    cookieSecurePolicy = parsedCookieSecurePolicy;
-}
-builder.Services.ConfigureApplicationCookie(o =>
-{
-    o.Cookie.Name = "HTX586CONTRACT.Auth";
-    o.Cookie.HttpOnly = true;
-    o.Cookie.SecurePolicy = cookieSecurePolicy;
-    o.Cookie.SameSite = SameSiteMode.Lax;
-    o.LoginPath = "/account/login";
-    o.AccessDeniedPath = "/account/access-denied";
-    o.ExpireTimeSpan = TimeSpan.FromHours(12);
-    o.SlidingExpiration = true;
+    options.Cookie.Name = "HTX586CONTRACT.Auth";
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+        ? CookieSecurePolicy.SameAsRequest
+        : CookieSecurePolicy.Always;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+    options.LoginPath = "/account/login";
+    options.AccessDeniedPath = "/account/access-denied";
+    options.ExpireTimeSpan = TimeSpan.FromHours(12);
+    options.SlidingExpiration = true;
 });
-#endregion
 
 builder.Services
     .AddAuthorizationBuilder()
+    .SetDefaultPolicy(new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build())
+    .AddPolicy("PasswordChangeAllowed", policy =>
+        policy.RequireAuthenticatedUser());
 
-    // Quyền truy cập route chỉ kiểm tra đăng nhập/phân quyền.
-    // Việc bắt buộc đổi mật khẩu được khóa bằng overlay toàn cục trong MainLayout.
-    .SetDefaultPolicy(
-        new AuthorizationPolicyBuilder()
-            .RequireAuthenticatedUser()
-            .Build())
-
-    // Page đổi mật khẩu chỉ cần đăng nhập.
-    .AddPolicy(
-        "PasswordChangeAllowed",
-        policy =>
-        {
-            policy.RequireAuthenticatedUser();
-        });
-builder.Services.AddAuthorization();
 builder.Services.AddCascadingAuthenticationState();
-
-#region Đăng ký các dịch vụ ứng dụng
-builder.Services.AddScoped< IAuthorizationHandler, PasswordChangedHandler>();
-builder.Services.AddScoped<IDriverAccountService,DriverAccountService>();
+builder.Services.AddScoped<IDriverAccountService, DriverAccountService>();
 builder.Services.AddScoped<IContractService, ContractService>();
 builder.Services.AddSingleton<IUploadFileStorage, LocalUploadFileStorage>();
 builder.Services.AddSingleton<PdfContractTemplateRenderer>();
 builder.Services.AddScoped<MasterSignatureService>();
 builder.Services.AddScoped<DriverRegistrationNotificationState>();
 builder.Services.AddScoped<IContractDocumentService, ContractDocumentService>();
-#endregion
 
-#region Dữ liệu runtime nằm ngoài source/publish.
-var configuredDataRootPath = builder.Configuration[$"{DataStorageOptions.SectionName}:RootPath"];
 var dataRootPath = StoragePathResolver.ResolveDataRootPath(
-    builder.Environment.ContentRootPath,
-    configuredDataRootPath);
-Directory.CreateDirectory(dataRootPath);
+    builder.Environment.ContentRootPath);
+var dataProtectionKeysPath = StoragePathResolver.ResolveDataProtectionKeysPath(
+    builder.Environment.ContentRootPath);
 
-// Data Protection keys phải tồn tại qua nhiều lần deploy để cookie và antiforgery token không bị mất hiệu lực.
-var dataProtectionKeysPath = Path.Combine(dataRootPath, "dataprotection-keys");
+Directory.CreateDirectory(dataRootPath);
 Directory.CreateDirectory(dataProtectionKeysPath);
+
 builder.Services
     .AddDataProtection()
     .SetApplicationName("HTX586CONTRACT")
     .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath));
-#endregion
 
 var app = builder.Build();
 
 app.Logger.LogInformation(
-    "HTX586CONTRACT DataRoot đang sử dụng: {DataRootPath}",
+    "HTX586CONTRACT DataRoot: {DataRootPath}",
     dataRootPath);
 
-if (forwardedHeadersEnabled)
+if (useForwardedHeaders)
 {
     app.UseForwardedHeaders();
 }
@@ -168,19 +126,14 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-// Giữ người dùng trong giao diện HTX586 khi truy cập URL không tồn tại
-// hoặc endpoint trả về lỗi truy cập. Chỉ chuyển hướng request HTML để
-// không làm thay đổi phản hồi của file tĩnh, SignalR và endpoint dữ liệu.
-app.UseStatusCodePages(async statusCodeContext =>
+app.UseStatusCodePages(async context =>
 {
-    var httpContext = statusCodeContext.HttpContext;
-    var request = httpContext.Request;
-    var response = httpContext.Response;
+    var request = context.HttpContext.Request;
+    var response = context.HttpContext.Response;
     var statusCode = response.StatusCode;
 
     if (statusCode is not (401 or 403 or 404 or 408 or 500 or 503) ||
-        (!HttpMethods.IsGet(request.Method) &&
-         !HttpMethods.IsHead(request.Method)) ||
+        (!HttpMethods.IsGet(request.Method) && !HttpMethods.IsHead(request.Method)) ||
         request.Path.StartsWithSegments("/error") ||
         request.Path.StartsWithSegments("/account/access-denied"))
     {
@@ -190,79 +143,61 @@ app.UseStatusCodePages(async statusCodeContext =>
     var acceptsHtml =
         request.Headers.Accept.Count == 0 ||
         request.Headers.Accept.Any(value =>
-            value?.Contains(
-                "text/html",
-                StringComparison.OrdinalIgnoreCase) == true);
+            value?.Contains("text/html", StringComparison.OrdinalIgnoreCase) == true);
 
     if (!acceptsHtml)
+    {
         return;
+    }
 
     var originalUrl = string.Concat(
         request.PathBase.Value,
         request.Path.Value,
         request.QueryString.Value);
 
-    var errorUrl =
-        $"/error/{statusCode}?ReturnUrl={Uri.EscapeDataString(originalUrl)}";
-
-    response.Redirect(errorUrl);
+    response.Redirect(
+        $"/error/{statusCode}?ReturnUrl={Uri.EscapeDataString(originalUrl)}");
 
     await Task.CompletedTask;
 });
 
 app.UseHttpsRedirection();
-
 app.UseStaticFiles();
 
-var fileStorageOptions = app.Services.GetRequiredService<IOptions<FileStorageOptions>>().Value;
-if (fileStorageOptions.ServeUploadsAsStaticFiles)
+var uploadRootPath = StoragePathResolver.ResolveUploadRootPath(
+    app.Environment.ContentRootPath);
+Directory.CreateDirectory(uploadRootPath);
+app.UseStaticFiles(new StaticFileOptions
 {
-    var dataStorageOptions = app.Services.GetRequiredService<IOptions<DataStorageOptions>>().Value;
-    var uploadRootPath = UploadPathResolver.ResolveUploadRootPath(
-        app.Environment.ContentRootPath,
-        dataStorageOptions.RootPath,
-        fileStorageOptions.UploadRootPath);
-    Directory.CreateDirectory(uploadRootPath);
-
-    app.UseStaticFiles(new StaticFileOptions
-    {
-        FileProvider = new PhysicalFileProvider(uploadRootPath),
-        RequestPath = UploadPathResolver.NormalizeRequestPath(fileStorageOptions.PublicRequestPath)
-    });
-}
+    FileProvider = new PhysicalFileProvider(uploadRootPath),
+    RequestPath = StoragePathResolver.PublicUploadPath
+});
 
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
-
 app.MapStaticAssets();
 
 app.MapGet(
-    "/account/logout",
-    async (
-        SignInManager<ApplicationUser> signInManager,
-        string? returnUrl) =>
-    {
-        await signInManager.SignOutAsync();
-
-        var safeReturnUrl =
-            string.IsNullOrWhiteSpace(returnUrl)
-                ? "/account/login"
-                : returnUrl;
-
-        // Không cho redirect ra ngoài website.
-        if (!safeReturnUrl.StartsWith('/'))
+        "/account/logout",
+        async (SignInManager<ApplicationUser> signInManager, string? returnUrl) =>
         {
-            safeReturnUrl = "/account/login";
-        }
+            await signInManager.SignOutAsync();
 
-        return Results.Redirect(safeReturnUrl);
-    })
+            var safeReturnUrl = !string.IsNullOrWhiteSpace(returnUrl) &&
+                                returnUrl.StartsWith('/') &&
+                                !returnUrl.StartsWith("//") &&
+                                !returnUrl.StartsWith("/\\")
+                ? returnUrl
+                : "/account/login";
+
+            return Results.Redirect(safeReturnUrl);
+        })
     .RequireAuthorization("PasswordChangeAllowed");
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.MapAccountEndpoints();
-await DatabaseSeeder.SeedAsync(app.Services);
+await DatabaseSeeder.InitializeAsync(app.Services);
 app.Run();

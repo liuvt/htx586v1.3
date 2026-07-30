@@ -102,9 +102,6 @@ else
             x.PdfSha256 != null && x.PdfSha256 != "" &&
             x.PdfGeneratedAt.HasValue);
         _processing = await contracts.CountAsync(x =>
-            x.Status != ContractStatus.Cancelled &&
-            x.Status != ContractStatus.Expired &&
-            x.Status != ContractStatus.Invalidated &&
             !(x.Status == ContractStatus.Completed &&
               x.PdfFileUrl != null && x.PdfFileUrl != "" &&
               x.PdfSha256 != null && x.PdfSha256 != "" &&

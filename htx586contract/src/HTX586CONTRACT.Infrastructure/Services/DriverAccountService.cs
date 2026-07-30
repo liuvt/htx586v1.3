@@ -1,28 +1,21 @@
 using System.Linq.Expressions;
-using System.Security.Cryptography;
 using HTX586CONTRACT.Application.Abstractions;
 using HTX586CONTRACT.Application.Admins.DriverAccounts;
-using HTX586CONTRACT.Application.Common;
 using HTX586CONTRACT.Domain.Common;
 using HTX586CONTRACT.Domain.Identity;
 using HTX586CONTRACT.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Options;
 
 namespace HTX586CONTRACT.Infrastructure.Services;
 
 /// <summary>
-/// Tài xế thuộc trực tiếp một Admin. CompanyProfileId chỉ được ghi kèm để tương
-/// thích dữ liệu cũ và không còn là khóa nghiệp vụ của luồng mới.
+/// Tài xế thuộc trực tiếp một Admin. Mỗi Admin đại diện cho một công ty.
 /// </summary>
 public sealed class DriverAccountService(
     UserManager<ApplicationUser> userManager,
     IDbContextFactory<ApplicationDbContext> factory,
-    IHostEnvironment environment,
-    IOptions<DataStorageOptions> dataStorageOptions,
-    IOptions<FileStorageOptions> fileStorageOptions) : IDriverAccountService
+    IUploadFileStorage storage) : IDriverAccountService
 {
     public async Task<string> SubmitRegistrationAsync(SelfRegisterDriverRequest request, CancellationToken ct = default)
     {
@@ -39,7 +32,6 @@ public sealed class DriverAccountService(
             FullName = request.FullName.Trim(),
             PhoneNumber = phoneNumber,
             AdminId = admin.Id,
-            CompanyProfileId = admin.CompanyProfileId,
             DateOfBirth = request.DateOfBirth,
             AreaCode = N(request.AreaCode),
             Address = N(request.Address),
@@ -58,25 +50,32 @@ public sealed class DriverAccountService(
         };
 
         Ensure(await userManager.CreateAsync(user, request.Password));
+        StoredUploadFile? stored = null;
         try
         {
             Ensure(await userManager.AddToRoleAsync(user, "Driver"));
-            var stored = await SaveRegistrationSignatureAsync(user.Id, request.SignatureDataUrl, ct);
-            user.DriverSignatureFileUrl = stored.Url;
-            user.DriverSignatureHash = stored.Hash;
+            stored = await storage.SaveImageDataUrlAsync(
+                ["master-signatures", "drivers", user.Id],
+                "driver",
+                request.SignatureDataUrl,
+                ct);
+
+            user.DriverSignatureFileUrl = stored.RelativeUrl;
+            user.DriverSignatureHash = stored.Sha256Hash;
             user.DriverSignedAt = stored.SavedAt;
-            user.DriverSignatureIsActive = true;
-            user.DriverSignatureInactiveAt = null;
             Ensure(await userManager.UpdateAsync(user));
             return user.Id;
         }
         catch
         {
+            if (stored is not null)
+                storage.DeleteIfExists(stored.RelativeUrl);
+
             user.IsDeleted = true;
             user.DeletedAt = DateTime.UtcNow;
-            user.DeletedBy = "SELF_REGISTRATION_ROLLBACK";
+            user.DeletedBy = "REGISTRATION_FAILED";
             user.IsActive = false;
-            Ensure(await userManager.UpdateAsync(user));
+            await userManager.UpdateAsync(user);
             throw;
         }
     }
@@ -156,11 +155,12 @@ public sealed class DriverAccountService(
         var user = await userManager.FindByIdAsync(id) ?? throw new KeyNotFoundException("Không tìm thấy tài xế.");
         EnsureNotDeleted(user, "Không tìm thấy tài xế.");
         await EnsureDriverRoleAsync(user);
+        if (!string.Equals(user.AdminId, admin.Id, StringComparison.Ordinal))
+            throw new UnauthorizedAccessException("Tài xế không thuộc công ty của bạn.");
         await EnsureLoginIdentifiersAvailableAsync(user.UserName ?? string.Empty, phoneNumber, user.Id, ct);
 
         var wasActive = user.IsActive;
         user.AdminId = admin.Id;
-        user.CompanyProfileId = admin.CompanyProfileId;
         user.FullName = request.FullName.Trim();
         user.EmployeeCode = N(request.EmployeeCode);
         user.PhoneNumber = phoneNumber;
@@ -199,7 +199,6 @@ public sealed class DriverAccountService(
                 PhoneNumber = x.PhoneNumber,
                 Email = x.Email,
                 AdminId = x.AdminId,
-                CompanyProfileId = x.CompanyProfileId,
                 CompanyName = x.AdminAccount == null ? null :
                     (string.IsNullOrWhiteSpace(x.AdminAccount.CompanyBranchName)
                         ? x.AdminAccount.CompanyName
@@ -216,8 +215,6 @@ public sealed class DriverAccountService(
                 DriverLicenseExpiryDate = x.DriverLicenseExpiryDate,
                 DriverSignatureFileUrl = x.DriverSignatureFileUrl,
                 DriverSignedAt = x.DriverSignedAt,
-                DriverSignatureIsActive = x.DriverSignatureIsActive,
-                DriverSignatureInactiveAt = x.DriverSignatureInactiveAt,
                 IsActive = x.IsActive,
                 MustChangePassword = x.MustChangePassword,
                 CreatedAt = x.CreatedAt,
@@ -230,7 +227,6 @@ public sealed class DriverAccountService(
         await using var db = await factory.CreateDbContextAsync(ct);
         var query = DriverRoleQuery(db);
         if (!string.IsNullOrWhiteSpace(filter.AdminId)) query = query.Where(x => x.AdminId == filter.AdminId);
-        if (filter.CompanyProfileId.HasValue) query = query.Where(x => x.CompanyProfileId == filter.CompanyProfileId.Value);
         if (!string.IsNullOrWhiteSpace(filter.Keyword))
         {
             var keyword = filter.Keyword.Trim();
@@ -268,8 +264,6 @@ public sealed class DriverAccountService(
             DriverLicenseNumber = x.DriverLicenseNumber,
             DriverLicenseClass = x.DriverLicenseClass,
             DriverSignatureFileUrl = x.DriverSignatureFileUrl,
-            DriverSignatureIsActive = x.DriverSignatureIsActive,
-            DriverSignatureInactiveAt = x.DriverSignatureInactiveAt,
             IsActive = x.IsActive,
             MustChangePassword = x.MustChangePassword,
             CreatedAt = x.CreatedAt,
@@ -340,14 +334,6 @@ public sealed class DriverAccountService(
             user.DeletedAt = now;
             user.DeletedBy = source;
         }
-        if (!user.IsActive)
-        {
-            await db.Vehicles.Where(x => x.AssignedDriverId == id)
-                .ExecuteUpdateAsync(setters => setters
-                    .SetProperty(x => x.AssignedDriverId, (string?)null)
-                    .SetProperty(x => x.UpdatedAt, now)
-                    .SetProperty(x => x.UpdatedBy, source), ct);
-        }
         await db.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
     }
@@ -379,7 +365,6 @@ public sealed class DriverAccountService(
         FullName = x.FullName,
         PhoneNumber = x.PhoneNumber,
         AdminId = x.AdminId,
-        CompanyProfileId = x.CompanyProfileId,
         CompanyName = x.AdminAccount == null ? null :
             (string.IsNullOrWhiteSpace(x.AdminAccount.CompanyBranchName)
                 ? x.AdminAccount.CompanyName
@@ -408,46 +393,6 @@ public sealed class DriverAccountService(
             x.Id != excludedUserId &&
             (x.NormalizedUserName == normalizedName || x.NormalizedUserName == normalizedPhoneAsName || x.PhoneNumber == phoneNumber), ct);
         if (conflict) throw new InvalidOperationException("Tên đăng nhập hoặc số điện thoại đang được sử dụng.");
-    }
-
-    private async Task<(string Url, string Hash, DateTime SavedAt)> SaveRegistrationSignatureAsync(string userId, string dataUrl, CancellationToken ct)
-    {
-        var comma = dataUrl.IndexOf(',');
-        if (comma < 0) throw new InvalidOperationException("Dữ liệu chữ ký không hợp lệ.");
-        byte[] bytes;
-        try { bytes = Convert.FromBase64String(dataUrl[(comma + 1)..]); }
-        catch (FormatException) { throw new InvalidOperationException("Dữ liệu chữ ký không đúng định dạng Base64."); }
-        if (bytes.Length == 0 || bytes.Length > 2 * 1024 * 1024)
-            throw new InvalidOperationException("Dung lượng chữ ký không hợp lệ hoặc vượt quá 2 MB.");
-
-        var extension = DetectSignatureExtension(bytes)
-            ?? throw new InvalidOperationException("Chữ ký phải là ảnh PNG hoặc JPG hợp lệ.");
-
-        var root = StoragePathResolver.ResolvePathUnderDataRoot(
-            environment.ContentRootPath,
-            dataStorageOptions.Value.RootPath,
-            fileStorageOptions.Value.UploadRootPath,
-            new FileStorageOptions().UploadRootPath);
-        var folder = Path.Combine(root, "master-signatures", "drivers", userId);
-        Directory.CreateDirectory(folder);
-        var fileName = $"driver-{Guid.NewGuid():N}.{extension}";
-        await File.WriteAllBytesAsync(Path.Combine(folder, fileName), bytes, ct);
-        var requestPath = "/" + (fileStorageOptions.Value.PublicRequestPath ?? "/uploads").Trim('/');
-        return ($"{requestPath}/master-signatures/drivers/{userId}/{fileName}", Convert.ToHexString(SHA256.HashData(bytes)), DateTime.UtcNow);
-    }
-
-
-    private static string? DetectSignatureExtension(byte[] bytes)
-    {
-        if (bytes.Length >= 8 &&
-            bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47 &&
-            bytes[4] == 0x0D && bytes[5] == 0x0A && bytes[6] == 0x1A && bytes[7] == 0x0A)
-            return "png";
-
-        if (bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF)
-            return "jpg";
-
-        return null;
     }
 
     private static async Task<bool> IsInRoleAsync(ApplicationDbContext db, string userId, string roleName, CancellationToken ct) =>

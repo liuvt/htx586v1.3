@@ -3,7 +3,6 @@ namespace HTX586CONTRACT.Application.Admins.DriverAccounts;
 public sealed class SelfRegisterDriverRequest
 {
     public string AdminId { get; set; } = string.Empty;
-    public Guid? CompanyProfileId { get; set; } // chỉ giữ để tương thích dữ liệu cũ
     public string UserName { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;

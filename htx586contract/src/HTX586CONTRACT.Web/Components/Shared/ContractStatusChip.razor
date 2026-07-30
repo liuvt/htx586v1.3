@@ -13,28 +13,11 @@
     [Parameter]
     public Size ChipSize { get; set; } = MudBlazor.Size.Small;
 
-    private Color StatusColor => Status switch
-    {
-        ContractStatus.Completed => Color.Success,
-        ContractStatus.Draft => Color.Primary,
-        ContractStatus.WaitingCustomerSignature => Color.Warning,
-        ContractStatus.CustomerSigned => Color.Info,
-        ContractStatus.WaitingDriverConfirmation => Color.Secondary,
-        ContractStatus.Cancelled or ContractStatus.Invalidated => Color.Error,
-        ContractStatus.Expired => Color.Default,
-        _ => Color.Default
-    };
+    private Color StatusColor => Status == ContractStatus.Completed
+        ? Color.Success
+        : Color.Warning;
 
-    private string StatusText => Status switch
-    {
-        ContractStatus.Draft => "Chờ xác nhận từ khách hàng",
-        ContractStatus.WaitingCustomerSignature => "Chờ xác nhận từ khách hàng",
-        ContractStatus.CustomerSigned => "Khách đã ký",
-        ContractStatus.WaitingDriverConfirmation => "Chờ tài xế xác nhận",
-        ContractStatus.Completed => "Hoàn tất",
-        ContractStatus.Cancelled => "Đã hủy",
-        ContractStatus.Expired => "Hết hạn",
-        ContractStatus.Invalidated => "Vô hiệu",
-        _ => "Đang xử lý"
-    };
+    private string StatusText => Status == ContractStatus.Completed
+        ? "Hoàn tất"
+        : "Chờ xác nhận từ khách hàng";
 }

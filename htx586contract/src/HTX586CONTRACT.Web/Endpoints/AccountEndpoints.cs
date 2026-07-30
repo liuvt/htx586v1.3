@@ -2,7 +2,6 @@ using HTX586CONTRACT.Domain.Common;
 using HTX586CONTRACT.Domain.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using System;
 
 namespace HTX586CONTRACT.Web.Endpoints;
 
@@ -82,7 +81,6 @@ public static class AccountEndpoints
         var loginCandidates =
             await userManager.Users
                 .AsNoTracking()
-                .Include(x => x.CompanyProfile)
                 .Include(x => x.AdminAccount)
                 .Where(x =>
                     !x.IsDeleted &&
@@ -131,7 +129,6 @@ public static class AccountEndpoints
          */
         var user =
             await userManager.Users
-                .Include(x => x.CompanyProfile)
                 .Include(x => x.AdminAccount)
                 .FirstOrDefaultAsync(
                     x => x.Id == matchedUser.Id && !x.IsDeleted,

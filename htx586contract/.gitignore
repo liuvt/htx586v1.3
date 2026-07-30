@@ -1,17 +1,6 @@
-# Build output
 **/bin/
 **/obj/
 publish/
-
-# Runtime data must never be committed or packaged with source
-htx586contract_data/
-**/htx586contract_data/
-
-# Local configuration
+.vs/
 *.user
 *.suo
-.vs/
-
-# Runtime data must stay beside the source folder, never inside it.
-htx586contract_data/
-**/htx586contract_data/

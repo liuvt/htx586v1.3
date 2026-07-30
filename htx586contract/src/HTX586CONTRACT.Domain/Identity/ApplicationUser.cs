@@ -1,7 +1,5 @@
 using HTX586CONTRACT.Domain.Common;
-using HTX586CONTRACT.Domain.Companies;
 using HTX586CONTRACT.Domain.Contracts;
-using HTX586CONTRACT.Domain.Customers;
 using Microsoft.AspNetCore.Identity;
 
 namespace HTX586CONTRACT.Domain.Identity;
@@ -11,16 +9,12 @@ public class ApplicationUser : IdentityUser, ISoftDeletable
     public string FullName { get; set; } = string.Empty;
     public string? EmployeeCode { get; set; }
 
-    // Quan hệ cũ chỉ giữ để đọc/chuyển đổi dữ liệu lịch sử. Luồng mới dùng AdminId.
-    public Guid? CompanyProfileId { get; set; }
-    public CompanyProfile? CompanyProfile { get; set; }
-
-    // Driver thuộc trực tiếp một tài khoản Admin. Mỗi Admin đại diện cho một công ty.
+    // Mỗi Driver thuộc trực tiếp một Admin. Mỗi Admin đại diện cho một công ty.
     public string? AdminId { get; set; }
     public ApplicationUser? AdminAccount { get; set; }
     public ICollection<ApplicationUser> ManagedDrivers { get; set; } = [];
 
-    // Thông tin công ty được lưu trực tiếp trên tài khoản Admin.
+    // Hồ sơ công ty lưu trực tiếp trên tài khoản Admin.
     public string? CompanyName { get; set; }
     public string? CompanyBranchName { get; set; }
     public string? CompanyTaxCode { get; set; }
@@ -37,29 +31,22 @@ public class ApplicationUser : IdentityUser, ISoftDeletable
     public string? CompanySignatureHash { get; set; }
     public DateTime? CompanySignedAt { get; set; }
 
+    // Hồ sơ cá nhân tài xế.
     public string? CitizenId { get; set; }
     public DateTime? CitizenIdIssuedDate { get; set; }
     public string? CitizenIdIssuedPlace { get; set; }
     public DateTime? DateOfBirth { get; set; }
     public string? Address { get; set; }
     public string? AreaCode { get; set; }
-    public string? AvatarUrl { get; set; }
-    public string? CitizenIdFrontUrl { get; set; }
-    public string? CitizenIdBackUrl { get; set; }
     public string? DriverLicenseNumber { get; set; }
     public string? DriverLicenseClass { get; set; }
     public DateTime? DriverLicenseIssuedDate { get; set; }
     public DateTime? DriverLicenseExpiryDate { get; set; }
-    public string? DriverLicenseFrontUrl { get; set; }
-    public string? DriverLicenseBackUrl { get; set; }
-
-    // Chữ ký cố định của tài xế.
     public string? DriverSignatureFileUrl { get; set; }
     public string? DriverSignatureHash { get; set; }
     public DateTime? DriverSignedAt { get; set; }
-    public bool DriverSignatureIsActive { get; set; }
-    public DateTime? DriverSignatureInactiveAt { get; set; }
 
+    // Quy trình đăng ký Driver.
     public string RegistrationStatus { get; set; } = "Approved";
     public DateTime? RegistrationRequestedAt { get; set; }
     public DateTime? RegistrationViewedAt { get; set; }
@@ -72,14 +59,10 @@ public class ApplicationUser : IdentityUser, ISoftDeletable
     public bool MustChangePassword { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
-
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAt { get; set; }
     public string? DeletedBy { get; set; }
 
-    // Hợp đồng do tài xế tạo.
     public ICollection<Contract> Contracts { get; set; } = [];
-    // Hợp đồng mang thông tin công ty của Admin.
     public ICollection<Contract> AdminContracts { get; set; } = [];
-    public ICollection<Customer> CreatedCustomers { get; set; } = [];
 }

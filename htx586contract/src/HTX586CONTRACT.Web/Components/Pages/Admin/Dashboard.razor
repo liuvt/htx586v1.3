@@ -15,7 +15,7 @@ else
     @if (string.IsNullOrWhiteSpace(_companyName) || !_hasCompanySignature)
     {
         <MudAlert Severity="Severity.Warning" Class="mb-4">
-            Thông tin hoặc chữ ký công ty chưa đầy đủ. <MudLink Href="/admin/company-profile">Cập nhật ngay</MudLink> để tài xế có thể hoàn thành hợp đồng.
+            Thông tin hoặc chữ ký công ty chưa đầy đủ. <MudLink Href="/admin/company-info">Cập nhật ngay</MudLink> để tài xế có thể hoàn thành hợp đồng.
         </MudAlert>
     }
 
@@ -38,7 +38,7 @@ else
     </MudGrid>
 
     <MudGrid Class="mt-2">
-        <MudItem xs="12" md="4"><MudButton Href="/admin/company-profile" FullWidth="true" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Apartment">Thông tin công ty</MudButton></MudItem>
+        <MudItem xs="12" md="4"><MudButton Href="/admin/company-info" FullWidth="true" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Apartment">Thông tin công ty</MudButton></MudItem>
         <MudItem xs="12" md="4"><MudButton Href="/admin/driver-registrations" FullWidth="true" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PersonAddAlt1">Duyệt tài xế</MudButton></MudItem>
         <MudItem xs="12" md="4"><MudButton Href="/admin/contracts" FullWidth="true" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Description">Xem hợp đồng</MudButton></MudItem>
     </MudGrid>

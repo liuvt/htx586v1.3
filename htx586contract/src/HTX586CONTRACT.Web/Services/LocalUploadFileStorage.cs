@@ -1,50 +1,23 @@
 using System.Security.Cryptography;
+using HTX586CONTRACT.Application.Abstractions;
 using HTX586CONTRACT.Application.Common;
-using Microsoft.Extensions.Options;
 
 namespace HTX586CONTRACT.Web.Services;
 
-public sealed record StoredUploadFile(string RelativeUrl, string Sha256Hash, DateTime SavedAt);
-
-public interface IUploadFileStorage
-{
-    Task<StoredUploadFile> SavePngDataUrlAsync(
-        IReadOnlyList<string> folderSegments,
-        string prefix,
-        string dataUrl,
-        CancellationToken ct = default);
-
-    string GetPhysicalDirectory(IReadOnlyList<string> folderSegments);
-
-    string BuildRelativeUrl(IReadOnlyList<string> folderSegments, string fileName);
-
-    string? ToPhysicalPath(string? relativeUrl);
-
-    bool FileExists(string? relativeUrl);
-
-    string GetUploadRootPath();
-}
-
 /// <summary>
-/// Lưu file upload vào thư mục cấu hình riêng, không phụ thuộc wwwroot.
-/// URL public mặc định vẫn là /uploads/... để tương thích dữ liệu đã lưu trong database.
+/// Lưu file upload trong thư mục htx586contract_data/upload nằm cùng cấp source.
 /// </summary>
 public sealed class LocalUploadFileStorage(
-    IWebHostEnvironment environment,
-    IOptions<DataStorageOptions> dataStorageOptions,
-    IOptions<FileStorageOptions> options) : IUploadFileStorage
+    IWebHostEnvironment environment) : IUploadFileStorage
 {
     private const int MaxSignatureBytes = 2 * 1024 * 1024;
 
-    private string UploadRootPath => UploadPathResolver.ResolveUploadRootPath(
-        environment.ContentRootPath,
-        dataStorageOptions.Value.RootPath,
-        options.Value.UploadRootPath);
+    private string UploadRootPath => StoragePathResolver.ResolveUploadRootPath(
+        environment.ContentRootPath);
 
-    private string PublicRequestPath => UploadPathResolver.NormalizeRequestPath(
-        options.Value.PublicRequestPath);
+    private const string PublicRequestPath = StoragePathResolver.PublicUploadPath;
 
-    public async Task<StoredUploadFile> SavePngDataUrlAsync(
+    public async Task<StoredUploadFile> SaveImageDataUrlAsync(
         IReadOnlyList<string> folderSegments,
         string prefix,
         string dataUrl,
@@ -71,8 +44,16 @@ public sealed class LocalUploadFileStorage(
         var physicalPath = Path.Combine(physicalDirectory, fileName);
         var tempPath = Path.Combine(physicalDirectory, $".{fileName}.uploading");
 
-        await File.WriteAllBytesAsync(tempPath, bytes, ct);
-        File.Move(tempPath, physicalPath, overwrite: true);
+        try
+        {
+            await File.WriteAllBytesAsync(tempPath, bytes, ct);
+            File.Move(tempPath, physicalPath, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+                File.Delete(tempPath);
+        }
 
         var relativeUrl = BuildRelativeUrl(safeFolderSegments, fileName);
         return new StoredUploadFile(
@@ -120,14 +101,9 @@ public sealed class LocalUploadFileStorage(
         {
             relativePath = url[(publicRequestPath.Length + 1)..];
         }
-        else if (url.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase))
-        {
-            // Tương thích các URL cũ đã lưu trong database trước khi tách UploadRootPath.
-            relativePath = url["/uploads/".Length..];
-        }
         else
         {
-            relativePath = url.TrimStart('/');
+            return null;
         }
 
         var physicalPath = Path.GetFullPath(Path.Combine(
@@ -144,11 +120,23 @@ public sealed class LocalUploadFileStorage(
         return path is not null && File.Exists(path);
     }
 
-    public string GetUploadRootPath()
+    public void DeleteIfExists(string? relativeUrl)
     {
-        var path = UploadRootPath;
-        Directory.CreateDirectory(path);
-        return path;
+        var path = ToPhysicalPath(relativeUrl);
+        if (path is null || !File.Exists(path)) return;
+
+        try
+        {
+            File.Delete(path);
+        }
+        catch (IOException)
+        {
+            // File đang được sử dụng; lần ghi đè tiếp theo sẽ tạo file mới.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Không làm hỏng nghiệp vụ nếu hệ điều hành từ chối xóa file cũ.
+        }
     }
 
     private void EnsureInsideUploadRoot(string fullPath)
@@ -157,8 +145,15 @@ public sealed class LocalUploadFileStorage(
             + Path.DirectorySeparatorChar;
         var target = Path.GetFullPath(fullPath);
 
-        if (!target.StartsWith(root, StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(target.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), root.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+        if (!target.StartsWith(root, comparison) &&
+            !string.Equals(
+                target.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                comparison))
         {
             throw new InvalidOperationException("Đường dẫn file upload không hợp lệ.");
         }
@@ -166,37 +161,40 @@ public sealed class LocalUploadFileStorage(
 
     private static (byte[] Bytes, string Extension) DecodeDataUrl(string dataUrl)
     {
+        if (string.IsNullOrWhiteSpace(dataUrl) ||
+            !dataUrl.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Chữ ký phải là dữ liệu ảnh PNG hoặc JPG.");
+        }
+
         var comma = dataUrl.IndexOf(',');
         if (comma < 0)
             throw new InvalidOperationException("Dữ liệu chữ ký không hợp lệ.");
 
-        var header = dataUrl[..comma];
-        string extension;
-        if (header.Contains("image/png", StringComparison.OrdinalIgnoreCase))
-        {
-            extension = "png";
-        }
-        else if (header.Contains("image/jpeg", StringComparison.OrdinalIgnoreCase) || header.Contains("image/jpg", StringComparison.OrdinalIgnoreCase))
-        {
-            extension = "jpg";
-        }
-        else if (header.Contains("image/", StringComparison.OrdinalIgnoreCase))
-        {
-            extension = "png";
-        }
-        else
-        {
-            throw new InvalidOperationException("Chữ ký phải là dữ liệu ảnh.");
-        }
-
+        byte[] bytes;
         try
         {
-            return (Convert.FromBase64String(dataUrl[(comma + 1)..]), extension);
+            bytes = Convert.FromBase64String(dataUrl[(comma + 1)..]);
         }
         catch (FormatException)
         {
             throw new InvalidOperationException("Dữ liệu chữ ký không đúng định dạng Base64.");
         }
+
+        if (bytes.Length >= 8 &&
+            bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47 &&
+            bytes[4] == 0x0D && bytes[5] == 0x0A && bytes[6] == 0x1A && bytes[7] == 0x0A)
+        {
+            return (bytes, "png");
+        }
+
+        if (bytes.Length >= 3 &&
+            bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF)
+        {
+            return (bytes, "jpg");
+        }
+
+        throw new InvalidOperationException("Chữ ký phải là ảnh PNG hoặc JPG hợp lệ.");
     }
 
     private static string SafeSegment(string value)

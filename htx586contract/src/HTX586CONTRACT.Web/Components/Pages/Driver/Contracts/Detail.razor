@@ -35,7 +35,5 @@ else
         _detail = detail is not null && detail.DriverId == driverId ? detail : null;
         _loading = false;
     }
-    private static bool IsLocked(ContractDetailDto detail) =>
-        detail.IsFinalized ||
-        detail.Status is ContractStatus.Cancelled or ContractStatus.Expired or ContractStatus.Invalidated;
+    private static bool IsLocked(ContractDetailDto detail) => detail.IsFinalized;
 }

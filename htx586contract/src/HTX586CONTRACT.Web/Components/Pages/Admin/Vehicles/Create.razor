@@ -39,7 +39,6 @@
             var vehicle = _model.ToEntity();
             vehicle.PlateNumber = plate;
             vehicle.AdminId = admin.Id;
-            vehicle.CompanyProfileId = admin.CompanyProfileId;
             vehicle.CreatedBy = _adminId;
             db.Vehicles.Add(vehicle);
             await db.SaveChangesAsync();

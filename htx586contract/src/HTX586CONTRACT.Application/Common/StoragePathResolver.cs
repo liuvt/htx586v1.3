@@ -1,54 +1,47 @@
 namespace HTX586CONTRACT.Application.Common;
 
-/// <summary>
-/// Chuẩn hóa các đường dẫn dữ liệu runtime để mọi lớp dùng chung một DataRoot.
-/// </summary>
 public static class StoragePathResolver
 {
-    public static string ResolveDataRootPath(string contentRootPath, string? configuredPath)
+    public const string SourceDirectoryName = "htx586contract";
+    public const string DataDirectoryName = "htx586contract_data";
+    public const string UploadDirectoryName = "upload";
+    public const string DataProtectionDirectoryName = "dataprotection-keys";
+    public const string PublicUploadPath = "/upload";
+
+    public static string ResolveDataRootPath(string contentRootPath)
     {
         if (string.IsNullOrWhiteSpace(contentRootPath))
             throw new ArgumentException("ContentRootPath không hợp lệ.", nameof(contentRootPath));
 
-        var normalizedContentRoot = Path.GetFullPath(contentRootPath);
-        var path = string.IsNullOrWhiteSpace(configuredPath)
-            ? new DataStorageOptions().RootPath
-            : configuredPath.Trim();
+        var sourceRoot = FindSourceRoot(Path.GetFullPath(contentRootPath));
+        var parent = Directory.GetParent(sourceRoot)?.FullName
+            ?? throw new InvalidOperationException("Không xác định được thư mục cha của source.");
 
-        var resolved = Path.IsPathRooted(path)
-            ? path
-            : Path.Combine(normalizedContentRoot, path);
-
-        var dataRoot = Path.GetFullPath(resolved);
-        if (IsSameOrChildPath(dataRoot, normalizedContentRoot))
-        {
-            throw new InvalidOperationException(
-                $"DataStorage:RootPath phải nằm ngoài thư mục source/publish. " +
-                $"ContentRoot='{normalizedContentRoot}', DataRoot='{dataRoot}'.");
-        }
+        var dataRoot = Path.GetFullPath(Path.Combine(parent, DataDirectoryName));
+        if (IsSameOrChildPath(dataRoot, sourceRoot))
+            throw new InvalidOperationException("Thư mục dữ liệu phải nằm ngoài source/publish.");
 
         return dataRoot;
     }
 
-    public static string ResolvePathUnderDataRoot(
-        string contentRootPath,
-        string? configuredDataRootPath,
-        string? configuredChildPath,
-        string defaultChildPath)
+    public static string ResolveUploadRootPath(string contentRootPath)
+        => Path.Combine(ResolveDataRootPath(contentRootPath), UploadDirectoryName);
+
+    public static string ResolveDataProtectionKeysPath(string contentRootPath)
+        => Path.Combine(ResolveDataRootPath(contentRootPath), DataProtectionDirectoryName);
+
+    private static string FindSourceRoot(string contentRoot)
     {
-        var dataRootPath = ResolveDataRootPath(contentRootPath, configuredDataRootPath);
-        var childPath = string.IsNullOrWhiteSpace(configuredChildPath)
-            ? defaultChildPath
-            : configuredChildPath.Trim();
+        var directory = new DirectoryInfo(contentRoot);
+        while (directory is not null)
+        {
+            if (directory.Name.Equals(SourceDirectoryName, StringComparison.OrdinalIgnoreCase))
+                return directory.FullName;
+            directory = directory.Parent;
+        }
 
-        if (Path.IsPathRooted(childPath))
-            return Path.GetFullPath(childPath);
-
-        var resolved = Path.GetFullPath(Path.Combine(dataRootPath, childPath));
-        if (!IsSameOrChildPath(resolved, dataRootPath))
-            throw new InvalidOperationException("Đường dẫn dữ liệu con không được phép thoát khỏi DataStorage:RootPath.");
-
-        return resolved;
+        throw new InvalidOperationException(
+            $"Source phải nằm trong thư mục có tên '{SourceDirectoryName}' để xác định thư mục dữ liệu cùng cấp.");
     }
 
     private static bool IsSameOrChildPath(string candidatePath, string parentPath)
@@ -56,13 +49,12 @@ public static class StoragePathResolver
         var comparison = OperatingSystem.IsWindows()
             ? StringComparison.OrdinalIgnoreCase
             : StringComparison.Ordinal;
-
         var candidate = Path.GetFullPath(candidatePath)
             .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         var parent = Path.GetFullPath(parentPath)
             .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
-        return string.Equals(candidate, parent, comparison) ||
+        return candidate.Equals(parent, comparison) ||
                candidate.StartsWith(parent + Path.DirectorySeparatorChar, comparison);
     }
 }

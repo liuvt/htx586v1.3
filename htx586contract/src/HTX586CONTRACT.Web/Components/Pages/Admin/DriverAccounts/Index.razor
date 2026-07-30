@@ -28,7 +28,7 @@ else
             <MudTd DataLabel="Điện thoại">@(context.PhoneNumber ?? "—")</MudTd>
             <MudTd DataLabel="GPLX">@(context.DriverLicenseNumber ?? "—") @(context.DriverLicenseClass)</MudTd>
             <MudTd DataLabel="Chữ ký">
-                <MudChip T="string" Size="Size.Small" Color="@(context.DriverSignatureIsActive ? Color.Success : Color.Warning)">@context.DriverSignatureStatusText</MudChip>
+                <MudChip T="string" Size="Size.Small" Color="@(context.HasDriverSignature ? Color.Success : Color.Warning)">@context.DriverSignatureStatusText</MudChip>
             </MudTd>
             <MudTd DataLabel="Trạng thái"><MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">@(context.IsActive ? "Hoạt động" : "Đã khóa")</MudChip></MudTd>
             <MudTd DataLabel="Thao tác">

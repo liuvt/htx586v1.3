@@ -89,8 +89,6 @@ else
             _model.ApplyTo(vehicle);
             vehicle.PlateNumber = plate;
             vehicle.AdminId = targetAdmin.Id;
-            vehicle.CompanyProfileId = targetAdmin.CompanyProfileId;
-            vehicle.AssignedDriverId = null;
             vehicle.UpdatedBy = _currentAdminId;
             vehicle.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();

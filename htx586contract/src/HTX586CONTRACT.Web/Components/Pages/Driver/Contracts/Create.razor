@@ -7,9 +7,8 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
-@inject IDialogService Dialog
 
-<PageTitle>@(Id.HasValue ? $"Hợp đồng {_model.ContractNumber}" : "Tạo hợp đồng")</PageTitle>
+<PageTitle>@(Id.HasValue ? $"Hợp đồng {_detail?.ContractNumber}" : "Tạo hợp đồng")</PageTitle>
 <PageHeader Title="@(Id.HasValue ? "Hợp đồng vận chuyển" : "Tạo hợp đồng mới")"
             Subtitle="Công ty và tài xế lấy tự động; xe, chủ xe, khách hàng và nội dung hợp đồng nhập trực tiếp." />
 
@@ -31,19 +30,17 @@ else
     {
         <MudPaper Class="pa-3 mb-4" Outlined="true">
             <MudStack Row="true" AlignItems="AlignItems.Center">
-                <MudText Typo="Typo.h6">Hợp đồng số @_model.ContractNumber</MudText>
+                <MudText Typo="Typo.h6">Hợp đồng số @_detail?.ContractNumber</MudText>
                 <MudSpacer />
-                <ContractStatusChip Status="_model.Status" ChipSize="Size.Medium" />
+                <ContractStatusChip Status="@(_detail?.Status ?? ContractStatus.WaitingCustomerSignature)" ChipSize="Size.Medium" />
             </MudStack>
         </MudPaper>
     }
 
     @if (IsLocked)
     {
-        <MudAlert Severity="@(_model.Status == ContractStatus.Completed ? Severity.Success : Severity.Error)" Class="mb-4">
-            @(_model.Status == ContractStatus.Completed
-                ? "Hợp đồng đã đủ 4 chữ ký, tạo PDF thành công và khóa toàn bộ dữ liệu."
-                : "Hợp đồng đã hủy hoặc không còn hiệu lực.")
+        <MudAlert Severity="Severity.Success" Class="mb-4">
+            Hợp đồng đã đủ 4 chữ ký, tạo PDF thành công và khóa toàn bộ dữ liệu.
         </MudAlert>
     }
 
@@ -111,6 +108,9 @@ else
         <MudPaper Class="pa-4 mb-4" Elevation="1">
             <MudText Typo="Typo.h6" Class="mb-3">4. Nội dung hợp đồng</MudText>
             <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6" md="3"><MudTextField @bind-Value="_model.AreaCode" Label="Khu vực" Disabled="IsLocked" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" sm="6" md="6"><MudTextField @bind-Value="_model.SecondDriverName" Label="Tài xế thứ hai (nếu có)" Disabled="IsLocked" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" sm="6" md="3"><MudTextField @bind-Value="_model.SecondDriverLicenseClass" Label="Hạng GPLX tài xế thứ hai" Disabled="IsLocked" Variant="Variant.Outlined" /></MudItem>
                 <MudItem xs="12" sm="6" md="3"><MudDatePicker @bind-Date="_startDate" Label="Ngày bắt đầu" DateFormat="dd/MM/yyyy" Editable="true" Clearable="true" Disabled="IsLocked" Variant="Variant.Outlined" /></MudItem>
                 <MudItem xs="12" sm="6" md="3"><MudTimePicker @bind-Time="_startTime" Label="Giờ bắt đầu" Editable="true" Clearable="true" Disabled="IsLocked" Variant="Variant.Outlined" /></MudItem>
                 <MudItem xs="12" sm="6" md="3"><MudDatePicker @bind-Date="_endDate" Label="Ngày kết thúc" DateFormat="dd/MM/yyyy" Editable="true" Clearable="true" Disabled="IsLocked" Variant="Variant.Outlined" /></MudItem>
@@ -150,10 +150,6 @@ else
         <MudStack Row="true" Class="mb-4">
             <MudButton Variant="Variant.Outlined" OnClick="@(() => Navigation.NavigateTo("/driver/contracts"))">Quay lại</MudButton>
             <MudSpacer />
-            @if (Id.HasValue && !IsLocked)
-            {
-                <MudButton Color="Color.Error" Variant="Variant.Outlined" Disabled="_cancelling" OnClick="CancelAsync">Hủy hợp đồng</MudButton>
-            }
             @if (!IsLocked)
             {
                 <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_saving" OnClick="SaveAsync">@(_saving ? "Đang lưu..." : "Lưu hợp đồng")</MudButton>
@@ -211,9 +207,9 @@ else
                 </MudButton>
             </MudStack>
         }
-        else if (_model.Status == ContractStatus.Completed)
+        else if (_detail?.Status == ContractStatus.Completed)
         {
-            <MudButton Class="mt-4" Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.PictureAsPdf" OnClick="OpenPdfAsync">Mở PDF</MudButton>
+            <MudButton Class="mt-4" Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.PictureAsPdf" OnClick="OpenPdf">Mở PDF</MudButton>
         }
     </MudPaper>
 }
@@ -227,7 +223,6 @@ else
     private bool _saving;
     private bool _savingSignature;
     private bool _completing;
-    private bool _cancelling;
     private string _userId = string.Empty;
     private ApplicationUser? _driver;
     private ApplicationUser? _admin;
@@ -249,24 +244,12 @@ else
             await using var db = await Factory.CreateDbContextAsync();
             _driver = await db.Users.AsNoTracking()
                 .Include(x => x.AdminAccount)
-                .Include(x => x.CompanyProfile)
                 .FirstOrDefaultAsync(x => x.Id == _userId);
             _admin = _driver?.AdminAccount;
-
-            if (_admin is null && _driver?.CompanyProfileId is Guid legacyCompanyId)
-            {
-                _admin = await (from user in db.Users.AsNoTracking()
-                                join userRole in db.UserRoles.AsNoTracking() on user.Id equals userRole.UserId
-                                join role in db.Roles.AsNoTracking() on userRole.RoleId equals role.Id
-                                where user.CompanyProfileId == legacyCompanyId && role.Name == "Admin" && user.IsActive && !user.IsDeleted
-                                select user).FirstOrDefaultAsync();
-            }
 
             if (!Id.HasValue)
             {
                 _model = NewModel();
-                _model.DriverId = _userId;
-                _model.AdminId = _admin?.Id;
                 _model.AreaCode = _driver?.AreaCode ?? string.Empty;
                 _signatures = [];
                 _detail = null;
@@ -298,8 +281,6 @@ else
 
     private static SaveContractRequest NewModel() => new()
     {
-        BusinessType = ContractBusinessType.Passenger,
-Status = ContractStatus.WaitingCustomerSignature,
         Passengers = []
     };
 
@@ -307,12 +288,6 @@ Status = ContractStatus.WaitingCustomerSignature,
     {
         _model = new SaveContractRequest
         {
-            Id = d.Id,
-            ContractNumber = d.ContractNumber,
-            BusinessType = d.BusinessType,
-            ContractTypeId = d.ContractTypeId,
-            AdminId = d.AdminId,
-            DriverId = d.DriverId,
             CustomerName = d.CustomerName,
             CustomerPhone = d.CustomerPhone,
             CustomerCitizenId = d.CustomerCitizenId,
@@ -323,6 +298,8 @@ Status = ContractStatus.WaitingCustomerSignature,
             CustomerOrganizationName = d.CustomerOrganizationName,
             CustomerTaxCode = d.CustomerTaxCode,
             AreaCode = d.AreaCode,
+            SecondDriverName = d.SecondDriverName,
+            SecondDriverLicenseClass = d.SecondDriverLicenseClass,
             VehiclePlate = d.VehiclePlate,
             VehicleCode = d.VehicleCode,
             VehicleBrand = d.VehicleBrand,
@@ -348,8 +325,7 @@ Status = ContractStatus.WaitingCustomerSignature,
             PaymentMethod = d.PaymentMethod,
             PaymentTime = d.PaymentTime,
             Note = d.Note,
-            Status = d.Status,
-            Passengers = d.Passengers.Select(x => new ContractPassengerDto { Id = x.Id, SortOrder = x.SortOrder, FullName = x.FullName, BirthYear = x.BirthYear, Note = x.Note }).ToList()
+            Passengers = d.Passengers.Select(x => new ContractPassengerDto { SortOrder = x.SortOrder, FullName = x.FullName, BirthYear = x.BirthYear, Note = x.Note }).ToList()
         };
         _signatures = d.Signatures;
         _startDate = d.StartTime?.Date;
@@ -362,8 +338,6 @@ Status = ContractStatus.WaitingCustomerSignature,
 
     private async Task<bool> SaveCurrentAsync(bool navigateAfterCreate)
     {
-        // Chặn hai sự kiện lưu chạy đồng thời (double tap/click hoặc callback chữ ký).
-        // Đây là nguyên nhân phổ biến làm hai request cùng cập nhật một hợp đồng.
         if (_saving || IsLocked) return false;
         if (_form is not null)
         {
@@ -372,8 +346,6 @@ Status = ContractStatus.WaitingCustomerSignature,
         }
 
         ApplyDateTimes();
-        _model.DriverId = _userId;
-        _model.AdminId ??= _admin?.Id;
         _saving = true;
         try
         {
@@ -401,13 +373,13 @@ Status = ContractStatus.WaitingCustomerSignature,
         finally { _saving = false; }
     }
 
-    private async Task SaveOwnerSignatureAsync(string data) =>
-        await SaveSignatureAsync(SignatureParty.VehicleOwner, _model.OwnerName ?? string.Empty, data);
+    private Task SaveOwnerSignatureAsync(string data)
+        => SaveSignatureAsync(SignatureParty.VehicleOwner, data);
 
-    private async Task SaveCustomerSignatureAsync(string data) =>
-        await SaveSignatureAsync(SignatureParty.Customer, _model.CustomerName, data);
+    private Task SaveCustomerSignatureAsync(string data)
+        => SaveSignatureAsync(SignatureParty.Customer, data);
 
-    private async Task SaveSignatureAsync(SignatureParty party, string signerName, string data)
+    private async Task SaveSignatureAsync(SignatureParty party, string data)
     {
         if (!Id.HasValue) throw new InvalidOperationException("Hãy lưu hợp đồng trước khi ký.");
         if (_savingSignature) throw new InvalidOperationException("Đang lưu chữ ký.");
@@ -419,7 +391,7 @@ Status = ContractStatus.WaitingCustomerSignature,
         _savingSignature = true;
         try
         {
-            await DocumentService.SaveSignatureAsync(Id.Value, _userId, party.ToString(), signerName, data);
+            await DocumentService.SaveSignatureAsync(Id.Value, _userId, party, data);
             Snackbar.Add($"Đã lưu chữ ký {PartyName(party)}. Có thể ký lại trước khi hoàn thành.", Severity.Success);
             await ReloadAsync();
         }
@@ -437,45 +409,16 @@ Status = ContractStatus.WaitingCustomerSignature,
         try
         {
             if (!await SaveCurrentAsync(false)) return;
-            try
-            {
-                await DocumentService.GeneratePdfAsync(Id.Value);
-            }
-            catch (Exception ex)
-            {
-                Snackbar.Add($"Chưa thể hoàn thành vì tạo PDF thất bại. Hợp đồng vẫn có thể chỉnh sửa: {ex.Message}", Severity.Error);
-                await ReloadAsync();
-                return;
-            }
-
-            var result = await ContractService.CompleteAsync(Id.Value, _userId);
-            Snackbar.Add(result.Message, result.Succeeded ? Severity.Success : Severity.Error);
+            await DocumentService.CompleteAsync(Id.Value, _userId);
+            Snackbar.Add("Đã tạo PDF, hoàn thành và khóa hợp đồng.", Severity.Success);
             await ReloadAsync();
         }
         catch (Exception ex)
         {
-            Snackbar.Add($"Không thể hoàn thành hợp đồng: {ex.Message}", Severity.Error);
+            Snackbar.Add($"Không thể hoàn thành hợp đồng. Hợp đồng vẫn có thể chỉnh sửa: {ex.Message}", Severity.Error);
+            await ReloadAsync();
         }
         finally { _completing = false; }
-    }
-
-    private async Task CancelAsync()
-    {
-        if (!Id.HasValue || _cancelling) return;
-        var confirm = await Dialog.ShowMessageBoxAsync("Hủy hợp đồng", "Xác nhận hủy hợp đồng này?", yesText: "Hủy", cancelText: "Không");
-        if (confirm != true) return;
-        _cancelling = true;
-        try
-        {
-            var result = await ContractService.CancelByDriverAsync(Id.Value, _userId, "Tài xế hủy hợp đồng.");
-            Snackbar.Add(result.Message, result.Succeeded ? Severity.Success : Severity.Error);
-            if (result.Succeeded) await ReloadAsync();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add($"Không thể hủy hợp đồng: {ex.Message}", Severity.Error);
-        }
-        finally { _cancelling = false; }
     }
 
     private async Task ReloadAsync()
@@ -490,15 +433,10 @@ Status = ContractStatus.WaitingCustomerSignature,
         }
     }
 
-    private async Task OpenPdfAsync()
+    private void OpenPdf()
     {
-        if (!Id.HasValue) return;
-        try
-        {
-            var url = await DocumentService.GeneratePdfAsync(Id.Value);
-            Navigation.NavigateTo(url, true);
-        }
-        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        if (!string.IsNullOrWhiteSpace(_detail?.PdfFileUrl))
+            Navigation.NavigateTo(_detail.PdfFileUrl, forceLoad: true);
     }
 
     private void ApplyDateTimes()
@@ -522,9 +460,7 @@ Status = ContractStatus.WaitingCustomerSignature,
     private DateTime? SignatureTime(SignatureParty party) => GetSignature(party)?.ServerSignedAt;
     private bool HasSignature(SignatureParty party) => GetSignature(party) is not null;
 
-    private bool IsLocked =>
-        (_detail?.IsFinalized ?? false) ||
-        _model.Status is ContractStatus.Cancelled or ContractStatus.Expired or ContractStatus.Invalidated;
+    private bool IsLocked => _detail?.IsFinalized ?? false;
     private bool HasAllSignatures =>
         !string.IsNullOrWhiteSpace(FixedCompanySignature) &&
         !string.IsNullOrWhiteSpace(FixedDriverSignature) &&

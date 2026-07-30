@@ -68,10 +68,7 @@ else
     private static readonly ContractStatus[] _visibleStatuses =
     [
         ContractStatus.WaitingCustomerSignature,
-        ContractStatus.Completed,
-        ContractStatus.Cancelled,
-        ContractStatus.Expired,
-        ContractStatus.Invalidated
+        ContractStatus.Completed
     ];
     private string _adminId = string.Empty;
     private string? _search;
@@ -107,12 +104,8 @@ else
 
     private static string StatusName(ContractStatus status) => status switch
     {
-        ContractStatus.Draft => "Chờ xác nhận từ khách hàng",
         ContractStatus.WaitingCustomerSignature => "Chờ xác nhận từ khách hàng",
         ContractStatus.Completed => "Hoàn thành",
-        ContractStatus.Cancelled => "Đã hủy",
-        ContractStatus.Expired => "Hết hạn",
-        ContractStatus.Invalidated => "Vô hiệu",
         _ => status.ToString()
     };
 }

@@ -14,9 +14,8 @@ public sealed class DriverAccountDto
     public string? DriverLicenseNumber { get; set; }
     public string? DriverLicenseClass { get; set; }
     public string? DriverSignatureFileUrl { get; set; }
-    public bool DriverSignatureIsActive { get; set; }
-    public string DriverSignatureStatusText => DriverSignatureIsActive ? "Đang sử dụng" : "Chưa có chữ ký";
-    public DateTime? DriverSignatureInactiveAt { get; set; }
+    public bool HasDriverSignature => !string.IsNullOrWhiteSpace(DriverSignatureFileUrl);
+    public string DriverSignatureStatusText => HasDriverSignature ? "Đã có chữ ký" : "Chưa có chữ ký";
     public bool IsActive { get; set; }
     public bool MustChangePassword { get; set; }
     public DateTime CreatedAt { get; set; }
