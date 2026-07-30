@@ -26,11 +26,12 @@ builder.Services
 
 builder.Services.AddMudServices();
 
-var connectionString = builder.Configuration.GetConnectionString("Default");
+//Default Vps
+var connectionString = builder.Configuration.GetConnectionString("Vps");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
     throw new InvalidOperationException(
-        "Chưa cấu hình ConnectionStrings:Default. Hãy dùng appsettings.json, user-secrets hoặc biến môi trường ConnectionStrings__Default.");
+        "Chưa cấu hình ConnectionStrings:Vps. Hãy dùng appsettings.json, user-secrets hoặc biến môi trường ConnectionStrings__Vps.");
 }
 
 var useForwardedHeaders = !builder.Environment.IsDevelopment();
@@ -69,12 +70,12 @@ builder.Services.ConfigureApplicationCookie(options =>
 {
     options.Cookie.Name = "HTX586CONTRACT.Auth";
     options.Cookie.HttpOnly = true;
-    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
-        ? CookieSecurePolicy.SameAsRequest
-        : CookieSecurePolicy.Always;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
     options.Cookie.SameSite = SameSiteMode.Lax;
+
     options.LoginPath = "/account/login";
     options.AccessDeniedPath = "/account/access-denied";
+
     options.ExpireTimeSpan = TimeSpan.FromHours(12);
     options.SlidingExpiration = true;
 });
