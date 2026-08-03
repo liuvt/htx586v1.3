@@ -1,0 +1,272 @@
+@page "/owner/account"
+@attribute [Authorize(Roles = "Owner")]
+
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IServiceScopeFactory ScopeFactory
+@inject ISnackbar Snackbar
+
+<PageTitle>Tài khoản Owner</PageTitle>
+<PageHeader Title="Tài Khoản Owner" Subtitle="Quản lý thông tin và cài đặt hệ thống Hợp đồng HTX586." />
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (_model is null)
+{
+    <MudAlert Severity="Severity.Error">Không tìm thấy tài khoản Owner.</MudAlert>
+}
+else
+{
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">
+            Tài khoản Owner (hay Tài khoản Chủ sở hữu) là tài khoản có quyền hạn cao nhất trong một hệ thống, nền tảng, hoặc doanh nghiệp.
+        </MudAlert>
+
+        <MudGrid>
+            <MudItem xs="12" md="4">
+                <MudTextField Value="@_model.UserName" Label="Tên đăng nhập" Disabled="true" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudTextField T="string"
+                    Value="@OwnerRoleName"
+                    Label="Quyền"
+                    Disabled="true"
+                    Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudSwitch T="bool" @bind-Value="_model.IsActive" Color="Color.Success" Label="Tài khoản hoạt động" Disabled="true" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_model.FullName" Label="Họ và tên" Required="true" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_model.EmployeeCode" Label="Mã nhân viên" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_model.PhoneNumber" Label="Số điện thoại" Required="true" HelperText="@VietnamPhoneNumber.ValidationMessage" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_model.Email" Label="Email" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudSwitch T="bool" @bind-Value="_model.MustChangePassword" Color="Color.Warning" Label="Bắt buộc đổi mật khẩu" />
+            </MudItem>
+        </MudGrid>
+
+        <MudStack Row="true" Class="mt-4">
+            <MudSpacer />
+            <MudButton Color="Color.Warning" Variant="Variant.Outlined" Disabled="@(_saving || _resettingPassword)" OnClick="ResetPasswordAsync">
+                Reset mật khẩu Owner về mặc định
+            </MudButton>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_saving || _resettingPassword)" OnClick="SaveAsync">
+                Lưu thay đổi
+            </MudButton>
+        </MudStack>
+    </MudPaper>
+}
+
+@code {
+    private const string OwnerRoleName = "Owner";
+    private const string DefaultResetPassword = "Htx@586";
+
+    private readonly SemaphoreSlim _loadLock = new(1, 1);
+
+    private OwnerAccountModel? _model;
+    private bool _loading = true;
+    private bool _loaded;
+    private bool _saving;
+    private bool _resettingPassword;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (_loaded)
+        {
+            return;
+        }
+
+        await _loadLock.WaitAsync();
+
+        try
+        {
+            if (_loaded)
+            {
+                return;
+            }
+
+            _loading = true;
+
+            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return;
+            }
+
+            using var scope = ScopeFactory.CreateScope();
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+            var user = await userManager.FindByIdAsync(userId);
+            if (user is null || user.IsDeleted || !user.IsActive || !await userManager.IsInRoleAsync(user, OwnerRoleName))
+            {
+                return;
+            }
+
+            _model = new OwnerAccountModel
+            {
+                Id = user.Id,
+                UserName = user.UserName ?? string.Empty,
+                FullName = user.FullName,
+                EmployeeCode = user.EmployeeCode,
+                PhoneNumber = user.PhoneNumber,
+                Email = user.Email,
+                IsActive = user.IsActive,
+                MustChangePassword = user.MustChangePassword
+            };
+
+            _loaded = true;
+        }
+        finally
+        {
+            _loading = false;
+            _loadLock.Release();
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_model is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_model.FullName))
+        {
+            Snackbar.Add("Vui lòng nhập họ và tên Owner.", Severity.Warning);
+            return;
+        }
+
+        if (!VietnamPhoneNumber.TryNormalize(_model.PhoneNumber, out var phoneNumber))
+        {
+            Snackbar.Add(VietnamPhoneNumber.ValidationMessage, Severity.Warning);
+            return;
+        }
+
+        _saving = true;
+
+        try
+        {
+            using var scope = ScopeFactory.CreateScope();
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+            var user = await userManager.FindByIdAsync(_model.Id);
+            if (user is null || user.IsDeleted || !user.IsActive || !await userManager.IsInRoleAsync(user, OwnerRoleName))
+            {
+                Snackbar.Add("Không tìm thấy tài khoản Owner.", Severity.Error);
+                return;
+            }
+
+            var normalizedPhoneAsUserName = userManager.NormalizeName(phoneNumber);
+            var otherUsers = await userManager.Users.AsNoTracking()
+                .Where(x => x.Id != user.Id && (x.PhoneNumber != null || x.NormalizedUserName == normalizedPhoneAsUserName))
+                .Select(x => new { x.PhoneNumber, x.NormalizedUserName })
+                .ToListAsync();
+            var phoneConflict = otherUsers.Any(x =>
+                x.NormalizedUserName == normalizedPhoneAsUserName ||
+                (VietnamPhoneNumber.TryNormalize(x.PhoneNumber, out var storedPhone) && storedPhone == phoneNumber));
+            if (phoneConflict)
+            {
+                Snackbar.Add("Số điện thoại đang được sử dụng bởi tài khoản khác.", Severity.Error);
+                return;
+            }
+
+            user.FullName = _model.FullName.Trim();
+            user.EmployeeCode = N(_model.EmployeeCode);
+            user.PhoneNumber = phoneNumber;
+            user.Email = N(_model.Email);
+            user.IsActive = true;
+            user.MustChangePassword = _model.MustChangePassword;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            var result = await userManager.UpdateAsync(user);
+
+            Snackbar.Add(
+                result.Succeeded
+                    ? "Đã cập nhật tài khoản Owner."
+                    : string.Join("; ", result.Errors.Select(x => x.Description)),
+                result.Succeeded ? Severity.Success : Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task ResetPasswordAsync()
+    {
+        if (_model is null)
+        {
+            return;
+        }
+
+        _resettingPassword = true;
+
+        try
+        {
+            using var scope = ScopeFactory.CreateScope();
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+
+            var user = await userManager.FindByIdAsync(_model.Id);
+            if (user is null || user.IsDeleted || !user.IsActive || !await userManager.IsInRoleAsync(user, OwnerRoleName))
+            {
+                Snackbar.Add("Không tìm thấy tài khoản Owner.", Severity.Error);
+                return;
+            }
+
+            var token = await userManager.GeneratePasswordResetTokenAsync(user);
+            var resetResult = await userManager.ResetPasswordAsync(user, token, DefaultResetPassword);
+
+            if (!resetResult.Succeeded)
+            {
+                Snackbar.Add(string.Join("; ", resetResult.Errors.Select(x => x.Description)), Severity.Error);
+                return;
+            }
+
+            user.MustChangePassword = true;
+            user.UpdatedAt = DateTime.UtcNow;
+
+            var updateResult = await userManager.UpdateAsync(user);
+
+            if (updateResult.Succeeded)
+            {
+                _model.MustChangePassword = true;
+                Snackbar.Add($"Đã reset mật khẩu Owner về mặc định: {DefaultResetPassword}.", Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add(string.Join("; ", updateResult.Errors.Select(x => x.Description)), Severity.Error);
+            }
+        }
+        finally
+        {
+            _resettingPassword = false;
+        }
+    }
+
+    private static string? N(string? value)
+        => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    // Sư dụng một lớp riêng để tránh việc vô tình thay đổi dữ liệu gốc của ApplicationUser trong quá trình chỉnh sửa.
+    private sealed class OwnerAccountModel
+    {
+        public string Id { get; set; } = string.Empty;
+        public string UserName { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string? EmployeeCode { get; set; }
+        public string? PhoneNumber { get; set; }
+        public string? Email { get; set; }
+        public bool IsActive { get; set; }
+        public bool MustChangePassword { get; set; }
+    }
+}

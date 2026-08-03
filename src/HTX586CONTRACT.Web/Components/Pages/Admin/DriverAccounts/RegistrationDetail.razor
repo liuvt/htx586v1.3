@@ -1,0 +1,72 @@
+@page "/admin/account-registrations/{UserId}"
+@page "/admin/driver-registrations/{UserId}"
+@attribute [Authorize(Roles = "Owner,Admin")]
+@inject IDriverAccountService DriverAccountService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject DriverRegistrationNotificationState RegistrationNotificationState
+
+<PageTitle>Chi tiết yêu cầu cấp tài khoản</PageTitle>
+<PageHeader Title="Chi tiết yêu cầu cấp tài khoản" Subtitle="Xác minh bốn thông tin đăng ký trước khi phê duyệt." />
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_item is null)
+{
+    <MudAlert Severity="Severity.Warning">Yêu cầu không tồn tại hoặc đã được xử lý.</MudAlert>
+}
+else
+{
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudGrid>
+            <MudItem xs="12" sm="6"><InfoListItem Label="ID đăng nhập" Value="@_item.UserName" /></MudItem>
+            <MudItem xs="12" sm="6"><InfoListItem Label="Họ và tên" Value="@_item.FullName" /></MudItem>
+            <MudItem xs="12" sm="6"><InfoListItem Label="Số điện thoại" Value="@_item.PhoneNumber" /></MudItem>
+            <MudItem xs="12" sm="6"><InfoListItem Label="Thời gian gửi" Value="@_item.RequestedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")" /></MudItem>
+            <MudItem xs="12"><MudTextField @bind-Value="_reviewNote" Label="Ghi chú xét duyệt" Lines="3" Variant="Variant.Outlined" /></MudItem>
+        </MudGrid>
+        <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-4">
+            <MudButton Color="Color.Error" Variant="Variant.Outlined" Disabled="_working" OnClick="@(() => ReviewAsync(false))">Từ chối</MudButton>
+            <MudButton Color="Color.Success" Variant="Variant.Filled" Disabled="_working" OnClick="@(() => ReviewAsync(true))">Phê duyệt</MudButton>
+        </MudStack>
+    </MudPaper>
+}
+
+@code {
+    [Parameter] public string UserId { get; set; } = string.Empty;
+    private DriverRegistrationRequestDto? _item;
+    private bool _loading = true;
+    private bool _working;
+    private string? _reviewNote;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _item = await DriverAccountService.GetRegistrationDetailAsync(UserId);
+        if (_item is not null)
+        {
+            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var viewer = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "SYSTEM";
+            await DriverAccountService.MarkRegistrationViewedAsync(UserId, viewer);
+        }
+        _loading = false;
+    }
+
+    private async Task ReviewAsync(bool approve)
+    {
+        try
+        {
+            _working = true;
+            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var reviewer = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "SYSTEM";
+            await DriverAccountService.ReviewRegistrationAsync(UserId, approve, _reviewNote, reviewer);
+            await RegistrationNotificationState.RefreshAsync();
+            Snackbar.Add(approve ? "Đã phê duyệt tài khoản VehicleOwner." : "Đã từ chối yêu cầu.", Severity.Success);
+            Navigation.NavigateTo("/admin/account-registrations");
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _working = false; }
+    }
+}

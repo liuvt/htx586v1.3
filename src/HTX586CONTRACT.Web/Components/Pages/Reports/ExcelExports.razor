@@ -1,0 +1,222 @@
+@page "/owner/reports"
+@page "/admin/reports"
+@attribute [Authorize(Roles = "Owner,Admin")]
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<ApplicationDbContext> Factory
+
+<PageTitle>Báo cáo và xuất Excel</PageTitle>
+<PageHeader Title="Báo cáo và xuất Excel"
+            Subtitle="Xuất dữ liệu quản trị theo đúng phạm vi quyền Owner/Admin." />
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Class="mb-4" />
+}
+else
+{
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">
+        Phạm vi dữ liệu: <b>@_scopeName</b>.
+        Mỗi file danh mục có 2 sheet <b>Tổng hợp</b> và <b>Chi tiết</b>.
+    </MudAlert>
+
+    @if (!_isOwner && !_companyProfileId.HasValue)
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="mb-4">
+            Tài khoản Admin chưa được gán Công ty/Văn phòng nên chưa thể xuất báo cáo.
+        </MudAlert>
+    }
+
+    <MudGrid Class="mb-4">
+        <MudItem xs="12" md="4">
+            <MudPaper Class="pa-4 h-100" Outlined="true">
+                <MudStack Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.Description" Color="Color.Primary" Size="Size.Large" />
+                    <MudText Typo="Typo.h6">Hợp đồng</MudText>
+                    <MudText Typo="Typo.body2">
+                        Tổng hợp hợp đồng và chi tiết nội dung, hành khách, trạng thái ký.
+                    </MudText>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.FileDownload"
+                               Href="/api/reports/export/contracts"
+                               Target="_blank"
+                               Disabled="@ExportDisabled">
+                        Xuất Excel hợp đồng
+                    </MudButton>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudPaper Class="pa-4 h-100" Outlined="true">
+                <MudStack Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.Badge" Color="Color.Success" Size="Size.Large" />
+                    <MudText Typo="Typo.h6">Tài xế</MudText>
+                    <MudText Typo="Typo.body2">
+                        Hồ sơ, GPLX, xe được gán, chữ ký, trạng thái và doanh thu hoàn tất.
+                    </MudText>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Success"
+                               StartIcon="@Icons.Material.Filled.FileDownload"
+                               Href="/api/reports/export/drivers"
+                               Target="_blank"
+                               Disabled="@ExportDisabled">
+                        Xuất Excel tài xế
+                    </MudButton>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudPaper Class="pa-4 h-100" Outlined="true">
+                <MudStack Spacing="2">
+                    <MudIcon Icon="@Icons.Material.Filled.DirectionsCar" Color="Color.Warning" Size="Size.Large" />
+                    <MudText Typo="Typo.h6">Xe và chủ sở hữu</MudText>
+                    <MudText Typo="Typo.body2">
+                        Thông tin xe, chủ sở hữu, tài xế đang gán, chữ ký và doanh thu hoàn tất.
+                    </MudText>
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Warning"
+                               StartIcon="@Icons.Material.Filled.FileDownload"
+                               Href="/api/reports/export/vehicles"
+                               Target="_blank"
+                               Disabled="@ExportDisabled">
+                        Xuất Excel xe và chủ xe
+                    </MudButton>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudPaper Class="pa-4" Outlined="true">
+        <MudStack Spacing="3">
+            <div>
+                <MudText Typo="Typo.h6">Báo cáo doanh thu</MudText>
+                <MudText Typo="Typo.body2">
+                    Chỉ tính hợp đồng có trạng thái Hoàn tất. File xuất gồm Tổng quan, Theo ngày, Theo tháng,
+                    Theo năm và Chi tiết hợp đồng.
+                </MudText>
+            </div>
+
+            <MudGrid>
+                <MudItem xs="12" md="4">
+                    <MudDatePicker @bind-Date="_fromDate"
+                                   Label="Từ ngày"
+                                   DateFormat="dd/MM/yyyy"
+                                   Variant="Variant.Outlined"
+                                   MaxDate="@_toDate" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudDatePicker @bind-Date="_toDate"
+                                   Label="Đến ngày"
+                                   DateFormat="dd/MM/yyyy"
+                                   Variant="Variant.Outlined"
+                                   MinDate="@_fromDate" />
+                </MudItem>
+                <MudItem xs="12" md="4" Class="d-flex align-center">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               FullWidth="true"
+                               StartIcon="@Icons.Material.Filled.Assessment"
+                               Href="@RevenueExportUrl"
+                               Target="_blank"
+                               Disabled="@(!CanExportRevenue)">
+                        Xuất báo cáo doanh thu
+                    </MudButton>
+                </MudItem>
+            </MudGrid>
+
+            @if (!string.IsNullOrWhiteSpace(RevenueValidationMessage))
+            {
+                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
+                    @RevenueValidationMessage
+                </MudAlert>
+            }
+            else
+            {
+                <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">
+                    Khoảng báo cáo: <b>@RevenueDayCount ngày</b>, từ @_fromDate?.ToString("dd/MM/yyyy") đến @_toDate?.ToString("dd/MM/yyyy").
+                </MudAlert>
+            }
+        </MudStack>
+    </MudPaper>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _isOwner;
+    private Guid? _companyProfileId;
+    private string _scopeName = "Đang xác định";
+    private DateTime? _fromDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime? _toDate = DateTime.Today;
+
+    private bool ExportDisabled => !_isOwner && !_companyProfileId.HasValue;
+
+    private int RevenueDayCount =>
+        _fromDate.HasValue && _toDate.HasValue
+            ? (_toDate.Value.Date - _fromDate.Value.Date).Days + 1
+            : 0;
+
+    private string? RevenueValidationMessage
+    {
+        get
+        {
+            if (ExportDisabled)
+                return "Tài khoản Admin chưa được gán Công ty/Văn phòng.";
+            if (!_fromDate.HasValue || !_toDate.HasValue)
+                return "Vui lòng chọn đầy đủ ngày bắt đầu và ngày kết thúc.";
+            if (_toDate.Value.Date < _fromDate.Value.Date)
+                return "Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.";
+            if (_toDate.Value.Date > _fromDate.Value.Date.AddYears(1).AddDays(-1))
+                return "Khoảng thời gian xuất doanh thu tối đa là 01 năm.";
+            return null;
+        }
+    }
+
+    private bool CanExportRevenue => string.IsNullOrWhiteSpace(RevenueValidationMessage);
+
+    private string RevenueExportUrl => !CanExportRevenue
+        ? string.Empty
+        : $"/api/reports/export/revenue?fromDate={_fromDate!.Value:yyyy-MM-dd}&toDate={_toDate!.Value:yyyy-MM-dd}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            _isOwner = auth.User.IsInRole("Owner");
+
+            if (_isOwner)
+            {
+                _scopeName = "Toàn bộ Công ty/Văn phòng trong hệ thống";
+                return;
+            }
+
+            var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+            await using var db = await Factory.CreateDbContextAsync();
+            var admin = await db.Users
+                .AsNoTracking()
+                .Where(x => x.Id == userId && !x.IsDeleted && x.IsActive &&
+                            x.CompanyProfile != null && x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
+                .Select(x => new
+                {
+                    x.CompanyProfileId,
+                    CompanyName = x.CompanyProfile == null
+                        ? string.Empty
+                        : (string.IsNullOrEmpty(x.CompanyProfile.BranchName)
+                            ? x.CompanyProfile.CompanyName
+                            : x.CompanyProfile.CompanyName + " - " + x.CompanyProfile.BranchName)
+                })
+                .FirstOrDefaultAsync();
+
+            _companyProfileId = admin?.CompanyProfileId;
+            _scopeName = _companyProfileId.HasValue
+                ? admin?.CompanyName ?? "Công ty/Văn phòng được gán"
+                : "Chưa được gán Công ty/Văn phòng";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

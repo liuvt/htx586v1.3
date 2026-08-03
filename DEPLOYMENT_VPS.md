@@ -5,7 +5,7 @@
 ```bash
 # Sao lưu thư mục ứng dụng và data
 sudo cp -a /www/wwwroot/htx586contract /www/wwwroot/htx586contract.backup
-sudo cp -a /www/wwwroot/htx586contract_data /www/wwwroot/htx586contract_data.backup
+sudo cp -a /www/wwwroot/HTX586CONTRACT_Data /www/wwwroot/HTX586CONTRACT_Data.backup
 ```
 
 Sao lưu SQL Server bằng công cụ quản trị hoặc lệnh `BACKUP DATABASE` trước khi chạy V2 lần đầu.
@@ -33,10 +33,10 @@ RestartSec=5
 Giả sử ứng dụng đặt tại `/www/wwwroot/htx586contract`:
 
 ```bash
-sudo mkdir -p /www/wwwroot/htx586contract_data/uploads
-sudo mkdir -p /www/wwwroot/htx586contract_data/dataprotection-keys
-sudo chown -R www-data:www-data /www/wwwroot/htx586contract_data
-sudo chmod -R 750 /www/wwwroot/htx586contract_data
+sudo mkdir -p /www/wwwroot/HTX586CONTRACT_Data/uploads
+sudo mkdir -p /www/wwwroot/HTX586CONTRACT_Data/dataprotection-keys
+sudo chown -R www-data:www-data /www/wwwroot/HTX586CONTRACT_Data
+sudo chmod -R 750 /www/wwwroot/HTX586CONTRACT_Data
 ```
 
 Không xóa `dataprotection-keys` khi publish bản mới.

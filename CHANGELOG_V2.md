@@ -1,3 +1,8 @@
+# V2.2 - Web build fix
+
+- Sửa 5 lỗi compile Razor và 17 cảnh báo theo log build.
+- Đổi SDK khóa từ 9.0.316 sang 9.0.301.
+
 # Thay đổi chính — V2
 
 ## Phân quyền

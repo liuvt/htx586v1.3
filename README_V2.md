@@ -24,7 +24,7 @@ Có thể thay thông tin seed bằng `Seed:*` trong `appsettings.Production.jso
 ## Công nghệ
 
 - Target framework: `net9.0`
-- SDK khóa bằng `global.json`: `9.0.316`
+- SDK khóa bằng `global.json`: `9.0.301`
 - ASP.NET Core Identity / EF Core SQL Server: `9.0.18`
 - Blazor Interactive Server
 - MudBlazor, ClosedXML, PDFsharp, SkiaSharp
@@ -120,8 +120,8 @@ Khi chạy sau Nginx, tạo `appsettings.Production.json` từ file mẫu và b�
 Thư mục sau phải tồn tại và user chạy dịch vụ phải có quyền ghi:
 
 ```text
-../htx586contract_data/uploads
-../htx586contract_data/dataprotection-keys
+../HTX586CONTRACT_Data/uploads
+../HTX586CONTRACT_Data/dataprotection-keys
 ```
 
 Giữ nguyên thư mục `dataprotection-keys` qua các lần publish để cookie/antiforgery không mất khả năng giải mã sau khi restart.

@@ -1,0 +1,286 @@
+@page "/admin/vehicles/create"
+@attribute [Authorize(Roles = "Owner,Admin")]
+@inject IDbContextFactory<ApplicationDbContext> Factory
+@inject ICompanyProfileService CompanyProfileService
+@inject ISnackbar Snackbar
+@inject MasterSignatureService MasterSignatureService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Thêm xe</PageTitle>
+<PageHeader Title="Thêm xe" Subtitle="Tạo mới phương tiện; chữ ký chủ xe là tùy chọn và có thể bổ sung sau." />
+
+<MudPaper Class="pa-4" Elevation="1">
+    <MudGrid>
+        <MudItem xs="12" md="4">
+            <MudSelect T="Guid?"
+                       @bind-Value="_model.CompanyProfileId"
+                       Label="Công ty/văn phòng"
+                       Required="true"
+                       Variant="Variant.Outlined">
+
+                @foreach (var company in _companies)
+                {
+                    <MudSelectItem T="Guid?" Value="@((Guid?)company.Id)">
+                        @company.CompanyName (@company.TaxCode)
+                    </MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudSelect T="string"
+                       @bind-Value="_model.AssignedDriverId"
+                       Label="Tài khoản VehicleOwner được cấp xe"
+                       HelperText="Một tài khoản VehicleOwner có thể được cấp nhiều xe thuộc nhiều Công ty/Văn phòng."
+                       Variant="Variant.Outlined"
+                       Clearable="true">
+
+                @foreach (var driver in DriverOptions)
+                {
+                    <MudSelectItem T="string" Value="@driver.Id">
+                        @driver.FullName - @(driver.PhoneNumber ?? driver.UserName)
+                    </MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" md="2">
+            <MudTextField @bind-Value="_model.PlateNumber" Label="Biển số" Required="true" Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="2">
+            <MudTextField @bind-Value="_model.VehicleCode" Label="Mã xe" Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="3">
+            <MudTextField @bind-Value="_model.Brand" Label="Nhãn hiệu" Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="3">
+            <MudNumericField T="int?" @bind-Value="_model.SeatCount" Label="Số chỗ" Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="_model.OwnerName" Label="Chủ sở hữu xe" Required="true" Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="_model.OwnerCitizenId" Label="CCCD chủ xe" Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="_model.OwnerPhoneNumber" Label="Điện thoại chủ xe" Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudDatePicker @bind-Date="_model.OwnerCitizenIdIssuedDate" Label="Ngày cấp CCCD" Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="8">
+            <MudTextField @bind-Value="_model.OwnerCitizenIdIssuedPlace" Label="Nơi cấp CCCD" Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudTextField @bind-Value="_model.OwnerAddress" Label="Địa chỉ chủ xe" Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudText Typo="Typo.subtitle1">Chữ ký cố định chủ xe</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Không bắt buộc khi tạo xe. Nếu ký tại đây, chữ ký sẽ được lưu cùng lúc khi bấm Thêm xe.
+            </MudText>
+
+            <SignaturePad ExistingSignatureUrl="@_model.OwnerSignatureFileUrl"
+                          SignerName="@_model.OwnerName"
+                          SignedAt="@_model.OwnerSignedAt"
+                          OnSignatureSaved="CaptureOwnerSignature" />
+
+            @if (!string.IsNullOrWhiteSpace(_ownerSignatureDataUrl))
+            {
+                <MudChip T="string"
+                         Class="mt-2"
+                         Color="Color.Success"
+                         Size="Size.Small"
+                         Icon="@Icons.Material.Filled.Check">
+                    Đã nhận chữ ký cố định
+                </MudChip>
+            }
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudSwitch T="bool" @bind-Value="_model.IsActive" Color="Color.Success" Label="Xe đang hoạt động" />
+        </MudItem>
+    </MudGrid>
+
+    <MudStack Row="true" Class="mt-4">
+        <MudButton Variant="Variant.Outlined" OnClick="@(() => Navigation.NavigateTo("/admin/vehicles"))">
+            Quay lại
+        </MudButton>
+
+        <MudSpacer />
+
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   Disabled="_saving"
+                   OnClick="SaveAsync">
+            Thêm xe
+        </MudButton>
+    </MudStack>
+</MudPaper>
+
+@code {
+    private Vehicle _model = NewVehicle();
+    private IReadOnlyList<CompanyProfileOptionDto> _companies = [];
+    private List<ApplicationUser> _drivers = [];
+    private string _currentUserId = string.Empty;
+    private Guid? _adminCompanyId;
+    private bool _saving;
+    private string? _ownerSignatureDataUrl;
+
+    private IEnumerable<ApplicationUser> DriverOptions => _drivers;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _currentUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        await using var db = await Factory.CreateDbContextAsync();
+
+        var allCompanies = await CompanyProfileService.GetActiveOptionsAsync();
+        if (auth.User.IsInRole("Admin") && !auth.User.IsInRole("Owner"))
+        {
+            var companyId = await db.Users.AsNoTracking()
+                .Where(x => x.Id == _currentUserId)
+                .Select(x => x.CompanyProfileId)
+                .FirstOrDefaultAsync();
+            _adminCompanyId = companyId;
+            _companies = companyId.HasValue
+                ? allCompanies.Where(x => x.Id == companyId.Value).ToList()
+                : [];
+        }
+        else
+        {
+            _companies = allCompanies;
+        }
+        _model.CompanyProfileId = _companies.FirstOrDefault()?.Id;
+
+        _drivers = await (from user in db.Users.AsNoTracking()
+                          join userRole in db.UserRoles.AsNoTracking() on user.Id equals userRole.UserId
+                          join role in db.Roles.AsNoTracking() on userRole.RoleId equals role.Id
+                          where role.Name == "VehicleOwner" && user.IsActive && !user.IsDeleted && user.RegistrationStatus == "Approved"
+                          orderby user.FullName
+                          select user).ToListAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!Validate())
+            return;
+
+        _saving = true;
+
+        try
+        {
+            await using var db = await Factory.CreateDbContextAsync();
+
+            if (_adminCompanyId.HasValue && _model.CompanyProfileId != _adminCompanyId)
+            {
+                Snackbar.Add("Admin chỉ được tạo xe cho Công ty/Văn phòng được gán.", Severity.Error);
+                return;
+            }
+
+            var plate = _model.PlateNumber.Trim().ToUpperInvariant();
+
+            if (await db.Vehicles.AnyAsync(x => x.PlateNumber == plate))
+            {
+                Snackbar.Add("Biển số xe đã tồn tại.", Severity.Warning);
+                return;
+            }
+
+            _model.Id = Guid.NewGuid();
+            _model.PlateNumber = plate;
+            _model.CreatedAt = DateTime.UtcNow;
+            _model.CreatedBy = _currentUserId;
+
+            db.Vehicles.Add(_model);
+
+            if (!string.IsNullOrWhiteSpace(_model.AssignedDriverId))
+            {
+                db.DriverNotifications.Add(new DriverNotification
+                {
+                    DriverId = _model.AssignedDriverId,
+                    Type = "VehicleAssigned",
+                    Title = "Bạn được gán phương tiện",
+                    Message = $"Phương tiện {_model.PlateNumber} đã được gán cho tài khoản của bạn.",
+                    LinkUrl = "/vehicle-owner/dashboard",
+                    RelatedVehicleId = _model.Id,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            await db.SaveChangesAsync();
+
+            if (!string.IsNullOrWhiteSpace(_ownerSignatureDataUrl))
+            {
+                await MasterSignatureService.SaveVehicleOwnerSignatureAsync(
+                    _model.Id,
+                    _ownerSignatureDataUrl);
+            }
+
+            Snackbar.Add(
+                string.IsNullOrWhiteSpace(_ownerSignatureDataUrl)
+                    ? "Đã thêm xe. Có thể bổ sung chữ ký chủ xe sau."
+                    : "Đã thêm xe và lưu chữ ký chủ xe.",
+                Severity.Success);
+            Navigation.NavigateTo("/admin/vehicles");
+        }
+        catch (DbUpdateException)
+        {
+            Snackbar.Add(
+                "Không thể lưu xe. Tài khoản VehicleOwner có thể vừa bị khóa/xóa hoặc dữ liệu đã thay đổi. Vui lòng tải lại và thử lại.",
+                Severity.Error);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private bool Validate()
+    {
+        if (_model.CompanyProfileId is null || _model.CompanyProfileId == Guid.Empty)
+        {
+            Snackbar.Add("Vui lòng gán Công ty/văn phòng cho xe.", Severity.Warning);
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(_model.PlateNumber) ||
+            string.IsNullOrWhiteSpace(_model.OwnerName))
+        {
+            Snackbar.Add("Vui lòng nhập biển số và chủ sở hữu xe.", Severity.Warning);
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_model.AssignedDriverId) &&
+            !_drivers.Any(x => x.Id == _model.AssignedDriverId))
+        {
+            Snackbar.Add("Tài khoản VehicleOwner không tồn tại hoặc chưa được duyệt.", Severity.Warning);
+            return false;
+        }
+
+        return true;
+    }
+
+    private Task CaptureOwnerSignature(string data)
+    {
+        _ownerSignatureDataUrl = data;
+        Snackbar.Add("Đã nhận chữ ký cố định chủ xe.", Severity.Success);
+        return Task.CompletedTask;
+    }
+
+    private static Vehicle NewVehicle() => new() { IsActive = true };
+}

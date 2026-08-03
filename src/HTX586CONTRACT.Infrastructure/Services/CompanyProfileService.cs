@@ -3,6 +3,7 @@ using HTX586CONTRACT.Application.Admins.CompanyProfiles;
 using HTX586CONTRACT.Domain.Companies;
 using HTX586CONTRACT.Domain.Enums;
 using HTX586CONTRACT.Infrastructure.Persistence;
+using HTX586CONTRACT.Application.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace HTX586CONTRACT.Infrastructure.Services;

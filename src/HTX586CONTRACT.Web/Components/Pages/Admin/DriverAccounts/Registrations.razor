@@ -1,0 +1,39 @@
+@page "/admin/account-registrations"
+@page "/admin/driver-registrations"
+@attribute [Authorize(Roles = "Owner,Admin")]
+@inject IDriverAccountService DriverAccountService
+
+<PageTitle>Yêu cầu cấp tài khoản</PageTitle>
+<PageHeader Title="Yêu cầu cấp tài khoản" Subtitle="Duyệt các tài khoản VehicleOwner tự đăng ký bằng ID, mật khẩu, số điện thoại và họ tên." />
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else if (_items.Count == 0)
+{
+    <MudAlert Severity="Severity.Info">Không có yêu cầu đang chờ duyệt.</MudAlert>
+}
+else
+{
+    <MudTable Items="_items" Hover="true" RowsPerPage="20" Breakpoint="Breakpoint.Sm">
+        <HeaderContent><MudTh>Trạng thái</MudTh><MudTh>Thời gian</MudTh><MudTh>Tài khoản</MudTh><MudTh>Điện thoại</MudTh><MudTh></MudTh></HeaderContent>
+        <RowTemplate>
+            <MudTd><MudChip T="string" Size="Size.Small" Color="@(context.IsViewed ? Color.Default : Color.Warning)">@(context.IsViewed ? "Đã xem" : "Mới")</MudChip></MudTd>
+            <MudTd>@context.RequestedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudTd>
+            <MudTd><b>@context.FullName</b><br /><span class="text-secondary">@context.UserName</span></MudTd>
+            <MudTd>@context.PhoneNumber</MudTd>
+            <MudTd><MudButton Href="@($"/admin/account-registrations/{context.UserId}")" Variant="Variant.Text">Xem và duyệt</MudButton></MudTd>
+        </RowTemplate>
+    </MudTable>
+}
+
+@code {
+    private bool _loading = true;
+    private IReadOnlyList<DriverRegistrationRequestDto> _items = [];
+    protected override async Task OnInitializedAsync()
+    {
+        _items = await DriverAccountService.GetPendingRegistrationsAsync();
+        _loading = false;
+    }
+}

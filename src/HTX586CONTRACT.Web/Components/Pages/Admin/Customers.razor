@@ -1,0 +1,275 @@
+@page "/admin/customers"
+@attribute [Authorize(Roles = "Owner,Admin")]
+@inject IDbContextFactory<ApplicationDbContext> Factory
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ISnackbar Snackbar
+
+<PageTitle>Quản lý khách hàng</PageTitle>
+<PageHeader Title="Quản lý khách hàng" Subtitle="Khách hàng có thể là cá nhân hoặc đơn vị; hệ thống tự lưu tài khoản đã tạo khách hàng." />
+
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudGrid>
+        <MudItem xs="12" md="8"><MudTextField T="string" @bind-Value="_keyword" Placeholder="Tìm tên, số điện thoại, CCCD, mã số thuế hoặc người tạo..." Immediate="true" Clearable="true" Variant="Variant.Outlined" /></MudItem>
+        <MudItem xs="12" md="4" Class="d-flex align-center justify-end"><MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Add" OnClick="NewCustomer">Thêm khách hàng</MudButton></MudItem>
+    </MudGrid>
+</MudPaper>
+
+@if (_editing)
+{
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudGrid>
+            <MudItem xs="12" md="3"><MudSelect T="CustomerType" @bind-Value="_model.Type" Label="Loại khách hàng" Variant="Variant.Outlined"><MudSelectItem Value="@CustomerType.Individual">Cá nhân</MudSelectItem><MudSelectItem Value="@CustomerType.Organization">Đơn vị/Tổ chức</MudSelectItem></MudSelect></MudItem>
+            <MudItem xs="12" md="3"><MudTextField T="string" Value="@_creatorName" Label="Người tạo" Disabled="true" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" md="3"><MudTextField @bind-Value="_model.FullName" Label="Họ tên người liên hệ" Required="true" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" md="3"><MudTextField @bind-Value="_model.PhoneNumber" Label="Số điện thoại" Required="true" Variant="Variant.Outlined" /></MudItem>
+            @if (_model.Type == CustomerType.Organization)
+            {
+                <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.OrganizationName" Label="Tên đơn vị/Tổ chức" Required="true" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" md="3"><MudTextField @bind-Value="_model.TaxCode" Label="Mã số thuế" Variant="Variant.Outlined" /></MudItem>
+            }
+            <MudItem xs="12" md="3"><MudTextField @bind-Value="_model.CitizenId" Label="CCCD" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" md="3"><MudDatePicker @bind-Date="_model.DateOfBirth" Label="Ngày sinh" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" md="3"><MudTextField @bind-Value="_model.Email" Label="Email" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12"><MudTextField @bind-Value="_model.Address" Label="Địa chỉ" Variant="Variant.Outlined" /></MudItem>
+        </MudGrid>
+        <MudStack Row="true" Class="mt-4"><MudButton Variant="Variant.Outlined" OnClick="CancelEdit">Hủy</MudButton><MudSpacer /><MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_saving" OnClick="SaveAsync">Lưu khách hàng</MudButton></MudStack>
+    </MudPaper>
+}
+
+<MudTable T="CustomerRow" Items="FilteredItems" Loading="_loading" Hover="true" Striped="true" RowsPerPage="20" Breakpoint="Breakpoint.Sm">
+    <HeaderContent><MudTh>Khách hàng</MudTh><MudTh>Loại</MudTh><MudTh>Điện thoại</MudTh><MudTh>CCCD/MST</MudTh><MudTh>Người tạo</MudTh><MudTh>Số HĐ</MudTh><MudTh></MudTh></HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Khách hàng"><b>@context.DisplayName</b><br /><small>@context.Address</small></MudTd>
+        <MudTd DataLabel="Loại">@(context.Type == CustomerType.Organization ? "Đơn vị" : "Cá nhân")</MudTd>
+        <MudTd DataLabel="Điện thoại">@context.PhoneNumber</MudTd>
+        <MudTd DataLabel="CCCD/MST">@(context.Type == CustomerType.Organization ? context.TaxCode : context.CitizenId)</MudTd>
+        <MudTd DataLabel="Người tạo">@context.CreatorName</MudTd>
+        <MudTd DataLabel="Số HĐ">@context.ContractCount</MudTd>
+        <MudTd>
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="@(() => EditAsync(context.Id))" />
+            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" OnClick="@(() => DeleteAsync(context.Id))" />
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText Class="pa-4">Chưa có khách hàng.</MudText></NoRecordsContent>
+    <PagerContent><MudTablePager PageSizeOptions="_pageSizeOptions" /></PagerContent>
+</MudTable>
+
+@code {
+    private static readonly int[] _pageSizeOptions = [10, 20, 50, 100];
+    private bool _loading;
+    private bool _saving;
+    private bool _editing;
+    private string? _keyword;
+    private string _currentUserId = string.Empty;
+    private string _currentUserName = string.Empty;
+    private bool _isOwner;
+    private Guid? _companyProfileId;
+    private string _creatorName = string.Empty;
+    private List<CustomerRow> _items = [];
+    private Customer _model = NewModel();
+
+    private IEnumerable<CustomerRow> FilteredItems => string.IsNullOrWhiteSpace(_keyword) ? _items : _items.Where(x =>
+        Contains(x.DisplayName) || Contains(x.PhoneNumber) || Contains(x.CitizenId) || Contains(x.TaxCode) || Contains(x.CreatorName));
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _currentUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        _isOwner = auth.User.IsInRole("Owner");
+
+        await using (var db = await Factory.CreateDbContextAsync())
+        {
+            var currentUser = await db.Users.AsNoTracking()
+                .Where(x => x.Id == _currentUserId && !x.IsDeleted && x.IsActive)
+                .Select(x => new { x.FullName, x.CompanyProfileId })
+                .FirstOrDefaultAsync();
+
+            _currentUserName = currentUser?.FullName ?? auth.User.Identity?.Name ?? "Tài khoản hiện tại";
+            _companyProfileId = currentUser?.CompanyProfileId;
+        }
+
+        if (!_isOwner && !_companyProfileId.HasValue)
+            Snackbar.Add("Tài khoản Admin chưa được gán Công ty/Văn phòng.", Severity.Warning);
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            await using var db = await Factory.CreateDbContextAsync();
+            var query = db.Customers.AsNoTracking().Where(x => !x.IsDeleted && !x.PhoneNumber.StartsWith("PEND"));
+            query = ApplyScope(query, db);
+
+            _items = await query.OrderByDescending(x => x.LastUsedAt ?? x.CreatedAt)
+                .Select(x => new CustomerRow
+                {
+                    Id = x.Id,
+                    Type = x.Type,
+                    DisplayName = x.Type == CustomerType.Organization && x.OrganizationName != null ? x.OrganizationName : x.FullName,
+                    PhoneNumber = x.PhoneNumber,
+                    CitizenId = x.CitizenId,
+                    TaxCode = x.TaxCode,
+                    Address = x.Address,
+                    CreatorName = x.CreatedByDriver.FullName,
+                    ContractCount = x.Contracts.Count
+                }).ToListAsync();
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _loading = false; }
+    }
+
+    private void NewCustomer()
+    {
+        _model = NewModel();
+        _model.CreatedByDriverId = _currentUserId;
+        _creatorName = _currentUserName;
+        _editing = true;
+    }
+
+    private async Task EditAsync(Guid id)
+    {
+        await using var db = await Factory.CreateDbContextAsync();
+        var query = ApplyScope(db.Customers.AsNoTracking().Where(x => !x.IsDeleted && !x.PhoneNumber.StartsWith("PEND")), db);
+        var entity = await query.FirstOrDefaultAsync(x => x.Id == id);
+        if (entity is null)
+        {
+            Snackbar.Add("Không tìm thấy khách hàng hoặc khách hàng nằm ngoài phạm vi quản lý.", Severity.Warning);
+            return;
+        }
+
+        _model = entity;
+        _creatorName = await db.Users.AsNoTracking()
+            .Where(x => x.Id == entity.CreatedByDriverId)
+            .Select(x => x.FullName)
+            .FirstOrDefaultAsync() ?? "Không xác định";
+        _editing = true;
+    }
+
+    private void CancelEdit() { _editing = false; _model = NewModel(); _creatorName = string.Empty; }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_model.FullName) || string.IsNullOrWhiteSpace(_model.PhoneNumber))
+        {
+            Snackbar.Add("Vui lòng nhập họ tên và số điện thoại.", Severity.Warning);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_currentUserId))
+        {
+            Snackbar.Add("Không xác định được tài khoản đang đăng nhập.", Severity.Error);
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            await using var db = await Factory.CreateDbContextAsync();
+            Customer? entity = null;
+            if (_model.Id != Guid.Empty)
+            {
+                var scopedQuery = ApplyScope(db.Customers.Where(x => !x.IsDeleted), db);
+                entity = await scopedQuery.FirstOrDefaultAsync(x => x.Id == _model.Id);
+                if (entity is null)
+                    throw new InvalidOperationException("Khách hàng nằm ngoài phạm vi quản lý hoặc đã bị xóa.");
+            }
+
+            if (entity is null)
+            {
+                entity = new Customer
+                {
+                    Id = Guid.NewGuid(),
+                    CreatedByDriverId = _currentUserId,
+                    CreatedBy = _currentUserId,
+                    CreatedAt = DateTime.UtcNow
+                };
+                db.Customers.Add(entity);
+            }
+
+            Map(entity, _model);
+            entity.UpdatedAt = DateTime.UtcNow;
+            entity.UpdatedBy = _currentUserId;
+            await db.SaveChangesAsync();
+            Snackbar.Add("Đã lưu khách hàng.", Severity.Success);
+            _editing = false;
+            _creatorName = string.Empty;
+            await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _saving = false; }
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        try
+        {
+            await using var db = await Factory.CreateDbContextAsync();
+            var query = ApplyScope(db.Customers.Where(x => !x.IsDeleted), db);
+            var entity = await query.FirstOrDefaultAsync(x => x.Id == id);
+            if (entity is null)
+            {
+                Snackbar.Add("Không tìm thấy khách hàng hoặc khách hàng nằm ngoài phạm vi quản lý.", Severity.Warning);
+                return;
+            }
+            entity.IsDeleted = true;
+            entity.DeletedAt = DateTime.UtcNow;
+            entity.DeletedBy = _currentUserId;
+            entity.UpdatedAt = DateTime.UtcNow;
+            entity.UpdatedBy = _currentUserId;
+            await db.SaveChangesAsync();
+            Snackbar.Add("Đã ẩn khách hàng. Các hợp đồng cũ không bị thay đổi.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+    }
+
+
+    private IQueryable<Customer> ApplyScope(IQueryable<Customer> query, ApplicationDbContext db)
+    {
+        if (_isOwner)
+            return query;
+
+        if (!_companyProfileId.HasValue)
+            return query.Where(_ => false);
+
+        var companyId = _companyProfileId.Value;
+        return query.Where(x =>
+            x.CreatedByDriverId == _currentUserId ||
+            x.CreatedByDriver.CompanyProfileId == companyId ||
+            x.Contracts.Any(c => c.CompanyProfileId == companyId) ||
+            db.Vehicles.Any(v => !v.IsDeleted && v.CompanyProfileId == companyId &&
+                                     v.AssignedDriverId == x.CreatedByDriverId));
+    }
+
+    private bool Contains(string? value) => !string.IsNullOrWhiteSpace(value) && value.Contains(_keyword!.Trim(), StringComparison.OrdinalIgnoreCase);
+    private static Customer NewModel() => new() { Type = CustomerType.Individual };
+    private static void Map(Customer target, Customer source)
+    {
+        target.Type = source.Type;
+        target.FullName = source.FullName.Trim();
+        target.OrganizationName = N(source.OrganizationName);
+        target.TaxCode = N(source.TaxCode);
+        target.PhoneNumber = source.PhoneNumber.Trim();
+        target.CitizenId = N(source.CitizenId);
+        target.DateOfBirth = source.DateOfBirth;
+        target.Address = N(source.Address);
+        target.Email = N(source.Email);
+    }
+    private static string? N(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private sealed class CustomerRow
+    {
+        public Guid Id { get; set; }
+        public CustomerType Type { get; set; }
+        public string DisplayName { get; set; } = string.Empty;
+        public string PhoneNumber { get; set; } = string.Empty;
+        public string? CitizenId { get; set; }
+        public string? TaxCode { get; set; }
+        public string? Address { get; set; }
+        public string CreatorName { get; set; } = string.Empty;
+        public int ContractCount { get; set; }
+    }
+}

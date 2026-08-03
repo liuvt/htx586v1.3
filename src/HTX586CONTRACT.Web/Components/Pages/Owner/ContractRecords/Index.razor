@@ -1,0 +1,135 @@
+@namespace HTX586CONTRACT.Web.Components.Pages.Owner.ContractRecords
+@page "/owner/contracts"
+@attribute [Authorize(Roles = "Owner")]
+@inject IContractService ContractService
+@inject IDialogService Dialog
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Hợp đồng</PageTitle>
+<PageHeader Title="Hợp đồng" Subtitle="Owner quản lý hợp đồng của tất cả Công ty/Văn phòng trong hệ thống." />
+
+<MudPaper Class="pa-4" Outlined="true">
+    <MudStack Row="true" Spacing="2" Class="mb-4">
+        <MudTextField @bind-Value="_search"
+                      Label="Tìm số hợp đồng, khách hàng, biển số"
+                      Variant="Variant.Outlined"
+                      Immediate="true"
+                      Adornment="Adornment.Start"
+                      AdornmentIcon="@Icons.Material.Filled.Search" />
+        <MudSelect T="ContractStatus?" @bind-Value="_status" Label="Trạng thái" Variant="Variant.Outlined" Clearable="true">
+            @foreach (var status in Enum.GetValues<ContractStatus>().Distinct())
+            {
+                <MudSelectItem T="ContractStatus?" Value="@status">@StatusText(status)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="LoadAsync">Lọc</MudButton>
+        <MudSpacer />
+        <MudButton Color="Color.Success"
+                   Variant="Variant.Filled"
+                   StartIcon="@Icons.Material.Filled.Add"
+                   Href="/owner/contracts/create">
+            Tạo hợp đồng
+        </MudButton>
+    </MudStack>
+
+    <MudTable Items="_items" Hover="true" Dense="true" Loading="_loading" RowsPerPage="20">
+        <HeaderContent>
+            <MudTh>Số hợp đồng</MudTh>
+            <MudTh>Công ty/Văn phòng</MudTh>
+            <MudTh>Khách hàng</MudTh>
+            <MudTh>VehicleOwner</MudTh>
+            <MudTh>Biển số</MudTh>
+            <MudTh>Khởi hành</MudTh>
+            <MudTh>Giá trị</MudTh>
+            <MudTh>Trạng thái</MudTh>
+            <MudTh></MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Số hợp đồng">
+                <MudLink Href="@($"/owner/contracts/{context.Id}")">@context.ContractNumber</MudLink>
+            </MudTd>
+            <MudTd DataLabel="Công ty/Văn phòng">@context.CompanyName</MudTd>
+            <MudTd DataLabel="Khách hàng">@context.CustomerName</MudTd>
+            <MudTd DataLabel="VehicleOwner">@context.DriverName</MudTd>
+            <MudTd DataLabel="Biển số">@context.VehiclePlate</MudTd>
+            <MudTd DataLabel="Khởi hành">@context.StartTime?.ToString("dd/MM/yyyy HH:mm")</MudTd>
+            <MudTd DataLabel="Giá trị">@context.ContractValue?.ToString("N0")</MudTd>
+            <MudTd DataLabel="Trạng thái"><ContractStatusChip Status="context.Status" /></MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Href="@($"/owner/contracts/{context.Id}")" />
+                <MudIconButton Icon="@Icons.Material.Filled.VisibilityOff" Color="Color.Warning" OnClick="@(() => DeleteAsync(context))" />
+            </MudTd>
+        </RowTemplate>
+        <NoRecordsContent><MudText>Chưa có hợp đồng.</MudText></NoRecordsContent>
+        <PagerContent><MudTablePager PageSizeOptions="_pageSizeOptions" /></PagerContent>
+    </MudTable>
+</MudPaper>
+
+@code {
+    private static readonly int[] _pageSizeOptions = [10, 20, 50, 100];
+    private List<ContractListItemDto> _items = [];
+    private string? _search;
+    private ContractStatus? _status;
+    private bool _loading;
+    private string _currentUserId = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _currentUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _items = (await ContractService.GetAsync(new ContractFilter
+            {
+                Search = _search,
+                Status = _status,
+                CompanyProfileId = null
+            })).ToList();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task DeleteAsync(ContractListItemDto item)
+    {
+        var confirmed = await Dialog.ShowMessageBoxAsync(
+            "Ẩn hợp đồng",
+            $"Ẩn hợp đồng {item.ContractNumber} khỏi danh sách? Dữ liệu vẫn được giữ nguyên trong database và không bị xóa vật lý.",
+            yesText: "Ẩn khỏi giao diện",
+            cancelText: "Hủy");
+
+        if (confirmed != true)
+            return;
+
+        var hidden = await ContractService.DeleteAsync(item.Id, _currentUserId);
+        if (!hidden)
+        {
+            Snackbar.Add("Không thể ẩn hợp đồng ở trạng thái hiện tại hoặc bạn không có quyền thao tác.", Severity.Warning);
+            return;
+        }
+
+        Snackbar.Add("Đã ẩn hợp đồng khỏi giao diện. Dữ liệu gốc vẫn còn trong database.", Severity.Success);
+        await LoadAsync();
+    }
+
+    private static string StatusText(ContractStatus status) => status switch
+    {
+        ContractStatus.Draft => "Đã tạo",
+        ContractStatus.WaitingCustomerSignature => "Đã phát - chờ nhận",
+        ContractStatus.CustomerSigned => "Khách đã ký",
+        ContractStatus.WaitingDriverConfirmation => "Đã nhận - đang xử lý",
+        ContractStatus.Completed => "Hoàn tất",
+        ContractStatus.Cancelled => "Đã hủy",
+        ContractStatus.Expired => "Hết hạn",
+        _ => "Vô hiệu"
+    };
+}

@@ -1,0 +1,52 @@
+@using HTX586CONTRACT.Domain.Companies
+@page "/admin/company"
+@attribute [Authorize(Roles = "Admin")]
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IDbContextFactory<ApplicationDbContext> Factory
+
+<PageTitle>Công ty/Văn phòng</PageTitle>
+<PageHeader Title="Công ty/Văn phòng được gán" Subtitle="Admin chỉ được xem hồ sơ đơn vị; Owner chịu trách nhiệm cập nhật." />
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (_company is null)
+{
+    <MudAlert Severity="Severity.Warning">Tài khoản chưa được gán Công ty/Văn phòng.</MudAlert>
+}
+else
+{
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudGrid>
+            <MudItem xs="12" md="6"><InfoListItem Label="Tên công ty" Value="@_company.CompanyName" /></MudItem>
+            <MudItem xs="12" md="6"><InfoListItem Label="Chi nhánh/Văn phòng" Value="@Display(_company.BranchName)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Mã số thuế" Value="@_company.TaxCode" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Điện thoại" Value="@Display(_company.PhoneNumber)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Email" Value="@Display(_company.Email)" /></MudItem>
+            <MudItem xs="12"><InfoListItem Label="Địa chỉ" Value="@_company.Address" /></MudItem>
+            <MudItem xs="12" md="6"><InfoListItem Label="Người đại diện" Value="@_company.RepresentativeName" /></MudItem>
+            <MudItem xs="12" md="6"><InfoListItem Label="Chức vụ" Value="@Display(_company.RepresentativePosition)" /></MudItem>
+            <MudItem xs="12" md="6"><InfoListItem Label="Tài khoản ngân hàng" Value="@Display(_company.BankAccountNumber)" /></MudItem>
+            <MudItem xs="12" md="6"><InfoListItem Label="Ngân hàng" Value="@Display(_company.BankName)" /></MudItem>
+        </MudGrid>
+    </MudPaper>
+}
+
+@code {
+    private CompanyProfile? _company;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        await using var db = await Factory.CreateDbContextAsync();
+        var companyId = await db.Users.AsNoTracking().Where(x => x.Id == userId).Select(x => x.CompanyProfileId).FirstOrDefaultAsync();
+        if (companyId.HasValue)
+            _company = await db.CompanyProfiles.AsNoTracking().FirstOrDefaultAsync(x => x.Id == companyId && !x.IsDeleted);
+        _loading = false;
+    }
+
+    private static string Display(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+}

@@ -146,7 +146,7 @@ builder.Services.AddScoped<IExcelReportService, ExcelReportService>();
 var dataProtectionKeysPath = Path.Combine(
     builder.Environment.ContentRootPath,
     "..",
-    "htx586contract_data",
+    "HTX586CONTRACT_Data",
     "dataprotection-keys");
 Directory.CreateDirectory(dataProtectionKeysPath);
 builder.Services

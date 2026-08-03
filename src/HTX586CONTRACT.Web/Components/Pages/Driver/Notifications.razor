@@ -1,0 +1,138 @@
+@page "/vehicle-owner/notifications"
+@attribute [Authorize(Roles = "VehicleOwner")]
+@inject IDriverNotificationService NotificationService
+@inject DriverNotificationState NotificationState
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Thông báo VehicleOwner</PageTitle>
+<PageHeader Title="Thông báo"
+            Subtitle="Thông báo khi Owner/Admin phát hợp đồng hoặc cấp phương tiện cho tài khoản VehicleOwner.">
+    <MudButton Color="Color.Primary"
+               Variant="Variant.Outlined"
+               StartIcon="@Icons.Material.Filled.DoneAll"
+               Disabled="@(_loading || _items.All(x => x.IsRead))"
+               OnClick="MarkAllReadAsync">
+        Đánh dấu đã đọc
+    </MudButton>
+</PageHeader>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Class="mb-4" />
+}
+
+<MudStack Spacing="2">
+    @foreach (var item in _items)
+    {
+        <MudPaper Class="@NotificationClass(item)"
+                  Elevation="@(item.IsRead ? 0 : 2)">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudAvatar Color="@NotificationColor(item.Type)" Variant="Variant.Filled">
+                    <MudIcon Icon="@NotificationIcon(item.Type)" />
+                </MudAvatar>
+                <MudStack Spacing="0" Class="flex-grow-1">
+                    <MudStack Row="true" AlignItems="AlignItems.Center">
+                        <MudText Typo="Typo.subtitle1"><b>@item.Title</b></MudText>
+                        @if (!item.IsRead)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Primary">Mới</MudChip>
+                        }
+                    </MudStack>
+                    <MudText Typo="Typo.body2">@item.Message</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @VietnamTime(item.CreatedAt).ToString("dd/MM/yyyy HH:mm")
+                    </MudText>
+                </MudStack>
+                <MudButton Color="Color.Primary"
+                           Variant="Variant.Text"
+                           EndIcon="@Icons.Material.Filled.ChevronRight"
+                           OnClick="@(() => OpenAsync(item))">
+                    Xem
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+</MudStack>
+
+@if (!_loading && _items.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+        Chưa có thông báo nào.
+    </MudAlert>
+}
+
+<style>
+    .driver-notification-card { border: 1px solid var(--mud-palette-lines-default); border-radius: 12px; }
+    .notification-unread { border-left: 4px solid var(--mud-palette-primary); }
+    .notification-read { opacity: .82; }
+</style>
+
+@code {
+    private string _userId = string.Empty;
+    private bool _loading;
+    private List<DriverNotificationDto> _items = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _items = (await NotificationService.GetAsync(_userId)).ToList();
+            await NotificationState.RefreshAsync(_userId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenAsync(DriverNotificationDto item)
+    {
+        if (!item.IsRead)
+        {
+            await NotificationService.MarkReadAsync(item.Id, _userId);
+            item.IsRead = true;
+            await NotificationState.RefreshAsync(_userId);
+        }
+
+        Navigation.NavigateTo(string.IsNullOrWhiteSpace(item.LinkUrl)
+            ? "/vehicle-owner/notifications"
+            : item.LinkUrl);
+    }
+
+    private async Task MarkAllReadAsync()
+    {
+        await NotificationService.MarkAllReadAsync(_userId);
+        foreach (var item in _items)
+            item.IsRead = true;
+        await NotificationState.RefreshAsync(_userId);
+        Snackbar.Add("Đã đánh dấu toàn bộ thông báo là đã đọc.", Severity.Success);
+    }
+
+    private static DateTime VietnamTime(DateTime value)
+        => value.Kind == DateTimeKind.Utc ? value.AddHours(7) : value;
+
+    private static string NotificationClass(DriverNotificationDto item)
+        => $"pa-4 driver-notification-card {(item.IsRead ? "notification-read" : "notification-unread")}";
+
+    private static string NotificationIcon(string type)
+        => type == "VehicleAssigned"
+            ? Icons.Material.Filled.DirectionsCar
+            : Icons.Material.Filled.Description;
+
+    private static Color NotificationColor(string type)
+        => type == "VehicleAssigned" ? Color.Success : Color.Primary;
+}

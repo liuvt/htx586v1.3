@@ -1,0 +1,352 @@
+@page "/owner/dashboard"
+@attribute [Authorize(Roles = "Owner")]
+@using HTX586CONTRACT.Domain.Companies
+@inject IDbContextFactory<ApplicationDbContext> Factory
+@inject ISnackbar Snackbar
+
+<PageTitle>Trung tâm điều hành Owner</PageTitle>
+<PageHeader Title="Trung tâm điều hành"
+            Subtitle="Theo dõi sức khỏe vận hành, doanh thu và nguồn lực của toàn bộ hệ thống HTX586 trên một màn hình.">
+    <MudButton Href="/owner/contracts/create"
+               Color="Color.Primary"
+               Variant="Variant.Filled"
+               StartIcon="@Icons.Material.Filled.Add">
+        Tạo hợp đồng
+    </MudButton>
+</PageHeader>
+
+<section class="dashboard-hero">
+    <div class="dashboard-hero-copy">
+        <div class="dashboard-hero-kicker">
+            <MudIcon Icon="@Icons.Material.Filled.AutoGraph" Size="Size.Small" />
+            OWNER COMMAND CENTER
+        </div>
+        <MudText Typo="Typo.h2" Class="dashboard-hero-title">
+            Vận hành toàn hệ thống từ một góc nhìn thống nhất.
+        </MudText>
+        <MudText Typo="Typo.body1" Class="dashboard-hero-description">
+            Tổng hợp dữ liệu hợp đồng, phương tiện, VehicleOwner, khách hàng và doanh thu theo từng Công ty/Văn phòng trong @_selectedMonthText.
+        </MudText>
+        <div class="dashboard-hero-actions">
+            <MudButton Href="/owner/contracts"
+                       Variant="Variant.Filled"
+                       Color="Color.Default"
+                       StartIcon="@Icons.Material.Filled.Description">
+                Quản lý hợp đồng
+            </MudButton>
+            <MudButton Href="/owner/reports"
+                       Variant="Variant.Outlined"
+                       Color="Color.Inherit"
+                       StartIcon="@Icons.Material.Filled.FileDownload">
+                Xuất báo cáo
+            </MudButton>
+        </div>
+    </div>
+
+    <div class="dashboard-hero-side">
+        <div class="hero-metric-panel">
+            <div class="hero-metric">
+                <span>THÁNG ĐANG XEM</span>
+                <strong>@_selectedMonthText</strong>
+            </div>
+            <div class="hero-metric">
+                <span>ĐƠN VỊ HOẠT ĐỘNG</span>
+                <strong>@_companies.Count.ToString("N0")</strong>
+            </div>
+            <div class="hero-metric">
+                <span>TỶ LỆ HOÀN TẤT</span>
+                <strong>@_completionRate.ToString("0.#")%</strong>
+            </div>
+            <div class="hero-metric">
+                <span>GIÁ TRỊ HĐ BÌNH QUÂN</span>
+                <strong>@ShortMoney(_averageContractValue)</strong>
+            </div>
+        </div>
+    </div>
+</section>
+
+<MudPaper Class="dashboard-filter-panel" Elevation="0">
+    <MudGrid>
+        <MudItem xs="12" md="3">
+            <div class="dashboard-filter-label">
+                <MudIcon Icon="@Icons.Material.Filled.FilterAlt" Size="Size.Small" />
+                BỘ LỌC PHÂN TÍCH
+            </div>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudDatePicker Date="@_month"
+                           DateChanged="ChangeMonth"
+                           Label="Tháng thống kê"
+                           DateFormat="MM/yyyy"
+                           Margin="Margin.Dense"
+                           Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" sm="6" md="4">
+            <MudSelect T="Guid?"
+                       Value="@_companyProfileId"
+                       ValueChanged="ChangeCompany"
+                       Label="Công ty/Văn phòng"
+                       Clearable="true"
+                       Margin="Margin.Dense"
+                       Variant="Variant.Outlined">
+                @foreach (var company in _companies)
+                {
+                    <MudSelectItem T="Guid?" Value="@((Guid?)company.Id)">@CompanyDisplay(company)</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" md="2">
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       FullWidth="true"
+                       StartIcon="@Icons.Material.Filled.Refresh"
+                       OnClick="LoadAsync"
+                       Disabled="@_loading">
+                Cập nhật
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Class="mb-4" />
+}
+
+<div class="section-heading">
+    <div>
+        <h3>Chỉ số vận hành trọng yếu</h3>
+        <p>Dữ liệu thực tế theo phạm vi và tháng đang chọn.</p>
+    </div>
+    <MudChip T="string" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small">
+        @(_companyProfileId.HasValue ? "Đang lọc theo đơn vị" : "Toàn hệ thống")
+    </MudChip>
+</div>
+
+<MudGrid>
+    <MudItem xs="12" sm="6" xl="3">
+        <StatCard Title="Doanh thu thực"
+                  Value="@($"{_stats.ActualRevenue:N0} ₫")"
+                  Hint="Từ hợp đồng hoàn tất"
+                  Badge="THÁNG"
+                  Icon="@Icons.Material.Filled.AccountBalanceWallet"
+                  Color="Color.Success" />
+    </MudItem>
+    <MudItem xs="12" sm="6" xl="3">
+        <StatCard Title="Hợp đồng hoàn tất"
+                  Value="@_stats.CompletedContracts.ToString("N0")"
+                  Hint="Đã hoàn thành quy trình"
+                  Badge="@($"{_completionRate:0.#}%")"
+                  Icon="@Icons.Material.Filled.TaskAlt"
+                  Color="Color.Primary" />
+    </MudItem>
+    <MudItem xs="12" sm="6" xl="3">
+        <StatCard Title="Đang xử lý"
+                  Value="@_stats.UnfinishedContracts.ToString("N0")"
+                  Hint="Chờ ký hoặc xác nhận"
+                  Icon="@Icons.Material.Filled.PendingActions"
+                  Color="Color.Warning" />
+    </MudItem>
+    <MudItem xs="12" sm="6" xl="3">
+        <StatCard Title="Nguồn lực vận hành"
+                  Value="@($"{_stats.VehicleCount:N0} xe")"
+                  Hint="@($"{_stats.DriverCount:N0} VehicleOwner đang hoạt động")"
+                  Badge="@($"{_driverCoverage:0.#}%")"
+                  Icon="@Icons.Material.Filled.DirectionsCarFilled"
+                  Color="Color.Info" />
+    </MudItem>
+    <MudItem xs="12" sm="6" xl="3">
+        <StatCard Title="Khách hàng"
+                  Value="@_stats.CustomerCount.ToString("N0")"
+                  Hint="Hồ sơ khách hàng trong phạm vi"
+                  Icon="@Icons.Material.Filled.Groups"
+                  Color="Color.Secondary" />
+    </MudItem>
+</MudGrid>
+
+<section class="dashboard-section">
+    <MudGrid>
+        <MudItem xs="12" lg="5">
+            <MudPaper Class="insight-card" Elevation="0">
+                <div class="insight-card-header">
+                    <div>
+                        <div class="insight-card-title">Sức khỏe vận hành</div>
+                        <div class="insight-card-subtitle">Các tỷ lệ giúp phát hiện nhanh điểm nghẽn.</div>
+                    </div>
+                    <MudIcon Icon="@Icons.Material.Filled.MonitorHeart" Color="Color.Primary" />
+                </div>
+
+                <div class="health-row">
+                    <div class="health-row-top">
+                        <span>Tỷ lệ hoàn tất hợp đồng</span>
+                        <strong>@_completionRate.ToString("0.#")%</strong>
+                    </div>
+                    <div class="health-track"><div class="health-fill" style="@($"width:{_completionRate:0.#}%")"></div></div>
+                </div>
+
+                <div class="health-row">
+                    <div class="health-row-top">
+                        <span>Mức phủ VehicleOwner / phương tiện</span>
+                        <strong>@_driverCoverage.ToString("0.#")%</strong>
+                    </div>
+                    <div class="health-track"><div class="health-fill" style="@($"width:{_driverCoverage:0.#}%")"></div></div>
+                </div>
+
+                <div class="health-row">
+                    <div class="health-row-top">
+                        <span>Hợp đồng còn trong quy trình</span>
+                        <strong>@_stats.UnfinishedContracts.ToString("N0") hồ sơ</strong>
+                    </div>
+                    <div class="health-track"><div class="health-fill warning" style="@($"width:{_unfinishedRate:0.#}%")"></div></div>
+                </div>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" lg="7">
+            <MudPaper Class="insight-card" Elevation="0">
+                <div class="insight-card-header">
+                    <div>
+                        <div class="insight-card-title">Truy cập nhanh</div>
+                        <div class="insight-card-subtitle">Đi thẳng tới các nghiệp vụ thường xuyên sử dụng.</div>
+                    </div>
+                    <MudIcon Icon="@Icons.Material.Filled.Bolt" Color="Color.Warning" />
+                </div>
+
+                <div class="quick-action-grid">
+                    <a class="quick-action" href="/owner/contracts">
+                        <div class="quick-action-icon"><MudIcon Icon="@Icons.Material.Filled.Description" /></div>
+                        <div><strong>Hợp đồng toàn hệ thống</strong><span>Tra cứu, cập nhật và theo dõi trạng thái</span></div>
+                    </a>
+                    <a class="quick-action" href="/admin/vehicles">
+                        <div class="quick-action-icon"><MudIcon Icon="@Icons.Material.Filled.DirectionsCar" /></div>
+                        <div><strong>Xe &amp; chủ sở hữu</strong><span>Quản lý phương tiện và phân công tài xế</span></div>
+                    </a>
+                    <a class="quick-action" href="/admin/driver-accounts">
+                        <div class="quick-action-icon"><MudIcon Icon="@Icons.Material.Filled.Badge" /></div>
+                        <div><strong>Đội ngũ tài xế</strong><span>Tài khoản, chữ ký và trạng thái hoạt động</span></div>
+                    </a>
+                    <a class="quick-action" href="/owner/reports">
+                        <div class="quick-action-icon"><MudIcon Icon="@Icons.Material.Filled.QueryStats" /></div>
+                        <div><strong>Báo cáo điều hành</strong><span>Xuất dữ liệu theo ngày, tháng và năm</span></div>
+                    </a>
+                </div>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</section>
+
+@code {
+    private DateTime? _month = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private Guid? _companyProfileId;
+    private bool _loading;
+    private List<CompanyProfile> _companies = [];
+    private DashboardStats _stats = new();
+
+    private string _selectedMonthText => (_month ?? DateTime.Today).ToString("MM/yyyy");
+    private int _totalContracts => _stats.CompletedContracts + _stats.UnfinishedContracts;
+    private double _completionRate => _totalContracts == 0 ? 0 : Math.Round(_stats.CompletedContracts * 100d / _totalContracts, 1);
+    private double _unfinishedRate => _totalContracts == 0 ? 0 : Math.Round(_stats.UnfinishedContracts * 100d / _totalContracts, 1);
+    private double _driverCoverage => _stats.VehicleCount == 0 ? 0 : Math.Min(100, Math.Round(_stats.DriverCount * 100d / _stats.VehicleCount, 1));
+    private decimal _averageContractValue => _stats.CompletedContracts == 0 ? 0 : _stats.ActualRevenue / _stats.CompletedContracts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await Factory.CreateDbContextAsync();
+        _companies = await db.CompanyProfiles.AsNoTracking()
+            .Where(x => x.IsActive && !x.IsDeleted)
+            .OrderBy(x => x.CompanyName)
+            .ThenBy(x => x.BranchName)
+            .ToListAsync();
+
+        await LoadAsync();
+    }
+
+    private async Task ChangeMonth(DateTime? value)
+    {
+        _month = value;
+        await LoadAsync();
+    }
+
+    private async Task ChangeCompany(Guid? value)
+    {
+        _companyProfileId = value;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var selectedMonth = _month ?? DateTime.Today;
+            var from = new DateTime(selectedMonth.Year, selectedMonth.Month, 1);
+            var to = from.AddMonths(1);
+
+            await using var db = await Factory.CreateDbContextAsync();
+
+            var contractQuery = db.Contracts.AsNoTracking()
+                .Where(x => (x.StartTime ?? x.CreatedAt) >= from && (x.StartTime ?? x.CreatedAt) < to);
+            var vehicleQuery = db.Vehicles.AsNoTracking().Where(x => x.IsActive && !x.IsDeleted && (x.CompanyProfile == null || !x.CompanyProfile.IsDeleted));
+            var vehicleOwnerQuery = db.Vehicles.AsNoTracking()
+                .Where(x => x.IsActive && !x.IsDeleted && x.AssignedDriverId != null &&
+                            x.AssignedDriver != null && x.AssignedDriver.IsActive && !x.AssignedDriver.IsDeleted &&
+                            x.AssignedDriver.RegistrationStatus == "Approved");
+
+            if (_companyProfileId.HasValue)
+            {
+                var companyId = _companyProfileId.Value;
+                contractQuery = contractQuery.Where(x => x.CompanyProfileId == companyId);
+                vehicleQuery = vehicleQuery.Where(x => x.CompanyProfileId == companyId);
+                vehicleOwnerQuery = vehicleOwnerQuery.Where(x => x.CompanyProfileId == companyId);
+            }
+
+            var completedQuery = contractQuery.Where(x => x.Status == ContractStatus.Completed);
+            _stats = new DashboardStats
+            {
+                ActualRevenue = await completedQuery.SumAsync(x => x.ContractValue ?? 0),
+                CompletedContracts = await completedQuery.CountAsync(),
+                UnfinishedContracts = await contractQuery.CountAsync(x =>
+                    x.Status == ContractStatus.Draft ||
+                    x.Status == ContractStatus.WaitingCustomerSignature ||
+                    x.Status == ContractStatus.CustomerSigned ||
+                    x.Status == ContractStatus.WaitingDriverConfirmation),
+                VehicleCount = await vehicleQuery.CountAsync(),
+                DriverCount = await vehicleOwnerQuery.Select(x => x.AssignedDriverId).Distinct().CountAsync(),
+                CustomerCount = await db.Customers.AsNoTracking().CountAsync(x =>
+                    !x.IsDeleted && !x.PhoneNumber.StartsWith("PEND") &&
+                    (!_companyProfileId.HasValue || x.Contracts.Any(c => c.CompanyProfileId == _companyProfileId.Value)))
+            };
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string CompanyDisplay(CompanyProfile company)
+        => string.IsNullOrWhiteSpace(company.BranchName)
+            ? company.CompanyName
+            : $"{company.CompanyName} - {company.BranchName}";
+
+    private static string ShortMoney(decimal value)
+    {
+        if (value >= 1_000_000_000) return $"{value / 1_000_000_000:0.#} tỷ";
+        if (value >= 1_000_000) return $"{value / 1_000_000:0.#} tr";
+        if (value >= 1_000) return $"{value / 1_000:0.#} nghìn";
+        return $"{value:N0} ₫";
+    }
+
+    private sealed class DashboardStats
+    {
+        public decimal ActualRevenue { get; set; }
+        public int CompletedContracts { get; set; }
+        public int UnfinishedContracts { get; set; }
+        public int VehicleCount { get; set; }
+        public int DriverCount { get; set; }
+        public int CustomerCount { get; set; }
+    }
+}

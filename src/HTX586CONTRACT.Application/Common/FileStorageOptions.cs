@@ -13,7 +13,7 @@ public sealed class FileStorageOptions
     /// Thư mục vật lý chứa toàn bộ file upload. Có thể là đường dẫn tuyệt đối hoặc tương đối theo ContentRootPath.
     /// Không nên đặt trong wwwroot để tránh bị xóa khi deploy lại.
     /// </summary>
-    public string UploadRootPath { get; set; } = "../htx586contract_data/uploads";
+    public string UploadRootPath { get; set; } = "../HTX586CONTRACT_Data/uploads";
 
     /// <summary>
     /// URL public dùng để mở ảnh chữ ký/PDF đã lưu. Giữ mặc định /uploads để tương thích dữ liệu cũ trong database.

@@ -1,0 +1,119 @@
+@page "/admin/accounts/create"
+@attribute [Authorize(Roles = "Owner")]
+@inject IAdminAccountService AdminAccountService
+@inject ICompanyProfileService CompanyProfileService
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Tạo Admin</PageTitle>
+<PageHeader Title="Tạo tài khoản Admin" Subtitle="Tạo tài khoản Admin mới, giúp quản lý thông tin hồ sơ Tài xế, Hợp đồng tại Công ty/văn phòng." />
+
+<MudPaper Class="pa-4" Elevation="1">
+    <MudText Typo="Typo.h6" Class="mb-3">Thông tin tài khoản Admin</MudText>
+
+    <MudGrid>
+        <MudItem xs="12" md="6">
+            <MudSelect T="Guid"
+                       @bind-Value="_model.CompanyProfileId"
+                       Label="CompanyProfile được gán"
+                       Required="true"
+                       Variant="Variant.Outlined">
+                @foreach (var company in _companies)
+                {
+                    <MudSelectItem T="Guid" Value="@company.Id">
+                        @company.CompanyName (@company.TaxCode)
+                    </MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="_model.UserName" Label="Tên đăng nhập" Required="true" Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="_model.Password" Label="Mật khẩu" Required="true" InputType="InputType.Password" Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="_model.FullName" Label="Họ tên Admin" Required="true" Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="_model.EmployeeCode" Label="Mã nhân viên" Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="_model.PhoneNumber" Label="Số điện thoại" Required="true" HelperText="@VietnamPhoneNumber.ValidationMessage" Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="_model.Email" Label="Email" Variant="Variant.Outlined" />
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudSwitch T="bool"
+                       @bind-Value="_model.MustChangePassword"
+                       Color="Color.Warning"
+                       Label="Bắt buộc đổi mật khẩu lần đầu" />
+        </MudItem>
+    </MudGrid>
+
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4">
+        Tạo thông tin tài khoản Admin, cần nhập đầy đủ thông tin.
+    </MudAlert>
+
+    <MudStack Row="true" Class="mt-4">
+        <MudButton Variant="Variant.Outlined" OnClick="@(() => Navigation.NavigateTo("/admin/accounts"))">
+            Quay lại
+        </MudButton>
+
+        <MudSpacer />
+
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   Disabled="_saving"
+                   OnClick="CreateAsync">
+            Tạo Admin
+        </MudButton>
+    </MudStack>
+</MudPaper>
+
+@code {
+    private CreateAdminAccountRequest _model = new() { MustChangePassword = true };
+    private IReadOnlyList<CompanyProfileOptionDto> _companies = [];
+    private bool _saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _companies = await CompanyProfileService.GetActiveOptionsAsync();
+        _model.CompanyProfileId = _companies.FirstOrDefault()?.Id ?? Guid.Empty;
+    }
+
+    private async Task CreateAsync()
+    {
+        if (_model.CompanyProfileId == Guid.Empty)
+        {
+            Snackbar.Add("Vui lòng tạo/chọn Công ty/văn phòng trước khi tạo Admin.", Severity.Warning);
+            return;
+        }
+
+        _saving = true;
+
+        try
+        {
+            var result = await AdminAccountService.CreateAdminAsync(_model);
+
+            Snackbar.Add("Đã tạo Admin và gán Công ty/văn phòng.", Severity.Success);
+            Navigation.NavigateTo($"/admin/accounts/{result.UserId}");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}
