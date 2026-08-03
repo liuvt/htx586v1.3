@@ -1,120 +1,140 @@
-# HTX586CONTRACT
+# HTX586CONTRACT V2 — .NET 9
 
-Ứng dụng web quản lý và ký hợp đồng vận chuyển hành khách cho HTX 586, viết bằng ASP.NET Core Blazor Interactive Server trên .NET 9.
+Bản viết lại từ mã nguồn HTX586CONTRACT, chuyển hệ thống sang ba vai trò cố định:
 
-## Điểm chính
+- **Owner**: điều hành toàn hệ thống.
+- **Admin**: quản trị đúng Công ty/Văn phòng được gán.
+- **VehicleOwner**: không gán trực tiếp Công ty/Văn phòng; phạm vi được suy ra theo từng xe được cấp.
 
-- Solution và namespace độc lập: `HTX586CONTRACT`.
-- Quản lý hồ sơ HTX, tài xế, khách hàng, phương tiện và hợp đồng.
-- Ký 4 bên: văn phòng HTX, chủ xe, khách hàng, tài xế.
-- Khóa cập nhật/hủy hợp đồng theo trạng thái chữ ký.
-- Sinh PDF 2 trang từ **PDF nền + layout JSON**.
-- Runtime không cần Microsoft Word hoặc LibreOffice.
-- Triển khai thuần ASP.NET Core Blazor trên IIS hoặc VPS chạy Kestrel/systemd.
-- Không còn file triển khai kiểu container trong source.
-- File upload/chữ ký/PDF được tách khỏi `wwwroot` qua cấu hình `FileStorage:UploadRootPath`.
+> Các tên lớp/thuộc tính cũ như `DriverAccountService`, `DriverId`, `AssignedDriverId` được giữ để tương thích database và giảm rủi ro khi nâng cấp. Nghiệp vụ thực tế của các thành phần này đã chuyển thành **VehicleOwner**.
 
-## Chạy local
+## Tài khoản seed
 
-```powershell
-dotnet restore .\HTX586CONTRACT.slnx
-dotnet build .\HTX586CONTRACT.slnx
-dotnet run --project .\src\HTX586CONTRACT.Web\HTX586CONTRACT.Web.csproj --launch-profile https
-```
+| Trường | Giá trị mặc định |
+|---|---|
+| ID đăng nhập | `owner` |
+| Mật khẩu | `Htx@586` |
+| Role | `Owner` |
+| Số điện thoại | `0900000586` |
 
-## User secrets and run
+Mật khẩu reset dùng chung cho Owner, Admin và VehicleOwner là **`Htx@586`**. Sau khi reset, tài khoản được yêu cầu đổi mật khẩu.
 
-```
-dotnet user-secrets init --project src/HTX586CONTRACT.Web
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "..." --project src/HTX586CONTRACT.Web
+Có thể thay thông tin seed bằng `Seed:*` trong `appsettings.Production.json` hoặc biến môi trường.
 
-dotnet clean
-dotnet restore
-dotnet build
-dotnet ef migrations add Init --project src/HTX586CONTRACT.Infrastructure --startup-project src/HTX586CONTRACT.Web
-dotnet ef database update --project src/HTX586CONTRACT.Infrastructure --startup-project src/HTX586CONTRACT.Web
-dotnet watch run /a --project src/HTX586CONTRACT.Web
-```
-## Release
+## Công nghệ
 
-```
-dotnet restore .\HTX586CONTRACT.slnx
-dotnet build .\HTX586CONTRACT.slnx -c Release
-dotnet publish .\src\HTX586CONTRACT.Web\HTX586CONTRACT.Web.csproj -c Release -o .\publish
-```
+- Target framework: `net9.0`
+- SDK khóa bằng `global.json`: `9.0.301`
+- ASP.NET Core Identity / EF Core SQL Server: `9.0.18`
+- Blazor Interactive Server
+- MudBlazor, ClosedXML, PDFsharp, SkiaSharp
 
-Mặc định môi trường Development dùng:
+## Luồng dữ liệu chính
 
 ```text
-ConnectionStrings:Default = Server=localhost;Database=HTX586CONTRACT_DEV;Trusted_Connection=True;TrustServerCertificate=True;
-Owner bootstrap = owner / Owner@123456
+Owner
+  └─ Công ty/Văn phòng
+       ├─ Admin
+       └─ Xe và chủ sở hữu
+            └─ VehicleOwner được cấp xe
+
+VehicleOwner
+  └─ Có thể được cấp nhiều xe
+       └─ Mỗi xe thuộc một Công ty/Văn phòng
 ```
 
-Nếu máy bạn dùng SQL Server khác, cấu hình lại bằng user-secrets:
+- Một VehicleOwner có thể có nhiều xe thuộc nhiều Công ty/Văn phòng khác nhau.
+- Một xe chỉ được cấp cho tối đa một VehicleOwner tại một thời điểm.
+- Muốn chuyển xe sang tài khoản khác phải bỏ gán và lưu trước, sau đó mới gán lại.
+- Chữ ký tài xế được xác nhận một lần **theo từng xe**, không còn dùng chữ ký chung ở cấp tài khoản.
 
-```powershell
-dotnet user-secrets set "ConnectionStrings:Default" "Server=YOUR_SQL_SERVER;Database=HTX586CONTRACT;User Id=YOUR_USER;Password=YOUR_PASSWORD;TrustServerCertificate=True;" --project .\src\HTX586CONTRACT.Web\HTX586CONTRACT.Web.csproj
+## Hợp đồng
+
+Hai loại hợp đồng được seed và kích hoạt:
+
+1. Hợp đồng vận chuyển hành khách.
+2. Hợp đồng vận chuyển hàng hóa bằng xe ô tô.
+
+### Hợp đồng Owner/Admin phát xuống
+
+1. Owner/Admin chọn khách hàng đã có trong danh mục.
+2. Chọn xe đã được cấp cho VehicleOwner.
+3. Hệ thống phát thông báo cho VehicleOwner.
+4. VehicleOwner phải có chữ ký theo xe và bấm **Nhận hợp đồng**.
+5. VehicleOwner cập nhật người lái thực tế, chuyến đi và hành khách.
+6. Khách hàng ký trực tiếp.
+7. VehicleOwner bấm **Hoàn thành hợp đồng**.
+8. Hệ thống chụp snapshot bất biến, khóa hợp đồng và sinh PDF.
+
+### Hợp đồng VehicleOwner tự tạo
+
+- Chỉ được tạo hợp đồng vận chuyển hành khách.
+- Bắt buộc chọn một xe đang được cấp cho tài khoản.
+- Công ty/Văn phòng và chủ xe được suy ra từ xe.
+- Khách hàng được đối chiếu theo số điện thoại trong danh bạ riêng của VehicleOwner.
+- Khách mới chỉ trở thành khách hàng chính thức khi hợp đồng hoàn thành.
+- Hợp đồng hoàn thành hoặc đã hủy không thể sửa lại.
+
+### Biến dữ liệu PDF
+
+Renderer PDF hỗ trợ biến chung `CONTRACT_TITLE`, `CONTRACT_BUSINESS_TYPE` và các biến hàng hóa `CARGO_NAME`, `CARGO_WEIGHT`, `CARGO_UNIT`, `CARGO_WEIGHT_UNIT`. Metadata PDF tự đổi theo loại hợp đồng. Chữ ký VehicleOwner lấy từ chữ ký đã xác nhận của chính chiếc xe trong snapshot hợp đồng.
+
+> PDF nền hiện có trong source là mẫu hành khách. Khi đưa mẫu hàng hóa riêng vào vận hành, bổ sung các key trên vào file layout tương ứng để hiển thị đúng vị trí.
+
+## Phạm vi dữ liệu
+
+- **Owner**: toàn hệ thống.
+- **Admin**: xe, hợp đồng, doanh thu và khách hàng thuộc Công ty/Văn phòng được gán.
+- **VehicleOwner**: xe được cấp, hợp đồng của tài khoản và khách hàng do chính tài khoản tạo.
+
+## Database
+
+Ứng dụng chạy bộ nâng cấp schema idempotent tại thời điểm khởi động để hỗ trợ database cũ:
+
+- Chuyển role `Driver` sang `VehicleOwner`.
+- Bỏ gán `CompanyProfileId` trực tiếp khỏi VehicleOwner.
+- Bỏ unique index cũ giới hạn một tài khoản chỉ có một xe.
+- Thêm chữ ký theo xe, người phát hợp đồng, thời điểm nhận/khóa và các trường snapshot mới.
+- Giữ nguyên dữ liệu lịch sử và dùng soft-delete.
+
+**Luôn sao lưu database trước lần chạy đầu tiên của bản V2.**
+
+## Cấu hình bắt buộc
+
+Không lưu mật khẩu SQL thật trong source. Trên VPS nên dùng biến môi trường:
+
+```bash
+export ConnectionStrings__Default='Server=SQL_HOST,1433;Database=HTX586CONTRACT;User Id=DB_USER;Password=DB_PASSWORD;TrustServerCertificate=True;'
+export ASPNETCORE_ENVIRONMENT=Production
 ```
 
-## Cấu hình production
+Khi chạy sau Nginx, tạo `appsettings.Production.json` từ file mẫu và bật:
 
-Ứng dụng đọc cấu hình chính từ `ConnectionStrings:Default`, `Seed:OwnerPassword` và `FileStorage:UploadRootPath`.
-
-Ví dụ biến môi trường Windows/IIS:
-
-```powershell
-setx ConnectionStrings__Default "Server=YOUR_SQL_SERVER,1433;Database=HTX586CONTRACT;User Id=YOUR_DB_USER;Password=YOUR_DB_PASSWORD;TrustServerCertificate=True;"
-setx Seed__OwnerUserName "owner"
-setx Seed__OwnerPassword "CHANGE_ME_WITH_A_STRONG_PASSWORD"
-setx FileStorage__UploadRootPath "D:\HTX586CONTRACT_Data\uploads"
+```json
+{
+  "ForwardedHeaders": { "Enabled": true },
+  "Authentication": { "CookieSecurePolicy": "Always" }
+}
 ```
 
-Có thể tham khảo file mẫu:
+Thư mục sau phải tồn tại và user chạy dịch vụ phải có quyền ghi:
 
 ```text
-src/HTX586CONTRACT.Web/appsettings.Production.example.json
+../HTX586CONTRACT_Data/uploads
+../HTX586CONTRACT_Data/dataprotection-keys
 ```
 
-Không lưu connection string/mật khẩu thật vào Git.
+Giữ nguyên thư mục `dataprotection-keys` qua các lần publish để cookie/antiforgery không mất khả năng giải mã sau khi restart.
 
-## Publish IIS hoặc VPS
+## Build và publish
 
-Publish:
-
-```powershell
-dotnet publish .\src\HTX586CONTRACT.Web\HTX586CONTRACT.Web.csproj -c Release -o .\publish
+```bash
+dotnet --version
+dotnet restore HTX586CONTRACT.slnx
+dotnet build HTX586CONTRACT.slnx -c Release
+dotnet publish src/HTX586CONTRACT.Web/HTX586CONTRACT.Web.csproj \
+  -c Release \
+  -o ./publish
 ```
 
-Với IIS: cài ASP.NET Core Hosting Bundle đúng phiên bản .NET đang dùng, tạo Application Pool `No Managed Code`, trỏ website tới thư mục `publish`, và cấp quyền ghi cho thư mục upload tách riêng, ví dụ:
-
-```text
-D:\HTX586CONTRACT_Data\uploads
-```
-
-Với VPS chạy Kestrel/systemd: copy thư mục `publish` lên server, cấu hình biến môi trường, tạo thư mục upload riêng như `/var/lib/htx586contract/uploads`, rồi chạy `dotnet HTX586CONTRACT.Web.dll` sau reverse proxy Nginx/IIS ARR. Nếu chạy sau reverse proxy, đặt:
-
-```text
-ForwardedHeaders__Enabled=true
-```
-
-## Phân quyền
-
-- `Owner`: quản lý tổng, được tạo từ seeding ban đầu. Owner tạo tài khoản `Admin`.
-- `Admin`: được tạo kèm `CompanyProfile` và chữ ký cố định người đại diện.
-- `Driver`: tài xế được gán vào `CompanyProfile` và có chữ ký cố định tài xế.
-- Database mới ở Development tự tạo tài khoản bootstrap `owner / Owner@123456`.
-- Production/Staging cần cấu hình `Seed:OwnerPassword` riêng để bootstrap an toàn.
-
-## Template runtime
-
-```text
-src/HTX586CONTRACT.Web/Templates/Contracts/
-├── HopDongVanChuyenHanhKhach.template.pdf
-└── HopDongVanChuyenHanhKhach.layout.json
-```
-
-File thiết kế gốc nằm trong thư mục `design` và không tham gia vào runtime.
-
-## Tài liệu triển khai
-
-Xem [docs/DEPLOY_IIS_VPS.md](docs/DEPLOY_IIS_VPS.md), [docs/UPLOAD_STORAGE.md](docs/UPLOAD_STORAGE.md) và [HTX586CONTRACT_LATEST.md](HTX586CONTRACT_LATEST.md).
+Chi tiết triển khai VPS xem [DEPLOYMENT_VPS.md](DEPLOYMENT_VPS.md).
