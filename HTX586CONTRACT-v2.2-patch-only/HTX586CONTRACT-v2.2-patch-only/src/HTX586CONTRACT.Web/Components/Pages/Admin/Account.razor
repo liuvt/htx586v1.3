@@ -1,0 +1,138 @@
+@page "/admin/account"
+@attribute [Authorize(Roles = "Admin")]
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IServiceScopeFactory ScopeFactory
+@inject ISnackbar Snackbar
+
+<PageTitle>Tài khoản Admin</PageTitle>
+<PageHeader Title="Tài khoản cá nhân Admin" Subtitle="Cập nhật thông tin cá nhân; Công ty/Văn phòng chỉ Owner mới được thay đổi." />
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (_model is null)
+{
+    <MudAlert Severity="Severity.Error">Không tìm thấy tài khoản Admin.</MudAlert>
+}
+else
+{
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudGrid>
+            <MudItem xs="12" md="4"><MudTextField Value="@_model.UserName" Label="ID đăng nhập" Disabled="true" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" md="4"><MudTextField T="string" Value="@RoleName" Label="Role" Disabled="true" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" md="4"><MudTextField Value="@_model.CompanyName" Label="Công ty/Văn phòng" Disabled="true" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.FullName" Label="Họ tên" Required="true" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.PhoneNumber" Label="Số điện thoại" Required="true" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.Email" Label="Email" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.EmployeeCode" Label="Mã nhân viên" Variant="Variant.Outlined" /></MudItem>
+        </MudGrid>
+        <MudStack Row="true" Class="mt-4" Justify="Justify.FlexEnd">
+            <MudButton Color="Color.Warning" Variant="Variant.Outlined" Disabled="@(_saving || _resetting)" OnClick="ResetPasswordAsync">Reset mật khẩu về Htx@586</MudButton>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_saving || _resetting)" OnClick="SaveAsync">Cập nhật thông tin</MudButton>
+        </MudStack>
+    </MudPaper>
+}
+
+@code {
+    private const string RoleName = "Admin";
+    private const string ResetPassword = "Htx@586";
+    private AccountModel? _model;
+    private bool _loading = true;
+    private bool _saving;
+    private bool _resetting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId)) { _loading = false; return; }
+
+        using var scope = ScopeFactory.CreateScope();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var user = await userManager.Users.AsNoTracking()
+            .Include(x => x.CompanyProfile)
+            .FirstOrDefaultAsync(x => x.Id == userId && !x.IsDeleted);
+        if (user is not null && await userManager.IsInRoleAsync(user, RoleName))
+        {
+            _model = new AccountModel
+            {
+                Id = user.Id,
+                UserName = user.UserName ?? string.Empty,
+                FullName = user.FullName,
+                PhoneNumber = user.PhoneNumber,
+                Email = user.Email,
+                EmployeeCode = user.EmployeeCode,
+                CompanyName = user.CompanyProfile == null
+                    ? "Chưa được gán"
+                    : (string.IsNullOrWhiteSpace(user.CompanyProfile.BranchName)
+                        ? user.CompanyProfile.CompanyName
+                        : user.CompanyProfile.CompanyName + " - " + user.CompanyProfile.BranchName)
+            };
+        }
+        _loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_model is null || string.IsNullOrWhiteSpace(_model.FullName)) return;
+        if (!VietnamPhoneNumber.TryNormalize(_model.PhoneNumber, out var phone))
+        {
+            Snackbar.Add(VietnamPhoneNumber.ValidationMessage, Severity.Warning);
+            return;
+        }
+        _saving = true;
+        try
+        {
+            using var scope = ScopeFactory.CreateScope();
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var user = await userManager.FindByIdAsync(_model.Id) ?? throw new InvalidOperationException("Không tìm thấy tài khoản.");
+            var duplicate = await userManager.Users.AsNoTracking().AnyAsync(x => x.Id != user.Id && !x.IsDeleted && x.PhoneNumber == phone);
+            if (duplicate) throw new InvalidOperationException("Số điện thoại đang được tài khoản khác sử dụng.");
+            user.FullName = _model.FullName.Trim();
+            user.PhoneNumber = phone;
+            user.Email = N(_model.Email);
+            user.EmployeeCode = N(_model.EmployeeCode);
+            user.UpdatedAt = DateTime.UtcNow;
+            user.UpdatedByUserId = user.Id;
+            var result = await userManager.UpdateAsync(user);
+            if (!result.Succeeded) throw new InvalidOperationException(string.Join("; ", result.Errors.Select(x => x.Description)));
+            Snackbar.Add("Đã cập nhật tài khoản Admin.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _saving = false; }
+    }
+
+    private async Task ResetPasswordAsync()
+    {
+        if (_model is null) return;
+        _resetting = true;
+        try
+        {
+            using var scope = ScopeFactory.CreateScope();
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var user = await userManager.FindByIdAsync(_model.Id) ?? throw new InvalidOperationException("Không tìm thấy tài khoản.");
+            var token = await userManager.GeneratePasswordResetTokenAsync(user);
+            var result = await userManager.ResetPasswordAsync(user, token, ResetPassword);
+            if (!result.Succeeded) throw new InvalidOperationException(string.Join("; ", result.Errors.Select(x => x.Description)));
+            user.MustChangePassword = true;
+            user.UpdatedAt = DateTime.UtcNow;
+            await userManager.UpdateAsync(user);
+            Snackbar.Add($"Đã reset mật khẩu về {ResetPassword}.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _resetting = false; }
+    }
+
+    private static string? N(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private sealed class AccountModel
+    {
+        public string Id { get; set; } = string.Empty;
+        public string UserName { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string? PhoneNumber { get; set; }
+        public string? Email { get; set; }
+        public string? EmployeeCode { get; set; }
+        public string CompanyName { get; set; } = string.Empty;
+    }
+}

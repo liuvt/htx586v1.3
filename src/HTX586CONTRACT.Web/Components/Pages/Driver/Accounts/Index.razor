@@ -1,0 +1,228 @@
+@page "/vehicle-owner/account"
+@attribute [Authorize(Roles = "VehicleOwner")]
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IServiceScopeFactory ScopeFactory
+@inject IDbContextFactory<ApplicationDbContext> Factory
+@inject ISnackbar Snackbar
+
+<PageTitle>Tài khoản VehicleOwner</PageTitle>
+<PageHeader Title="Tài khoản cá nhân" Subtitle="Cập nhật thông tin liên hệ và kiểm tra toàn bộ xe được cấp cho tài khoản.">
+    <MudButton Href="/vehicle-owner/vehicles" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.DirectionsCar">
+        Xe và chữ ký theo xe
+    </MudButton>
+</PageHeader>
+
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (_model is null)
+{
+    <MudAlert Severity="Severity.Error">Không tìm thấy tài khoản VehicleOwner.</MudAlert>
+}
+else
+{
+    <MudGrid>
+        <MudItem xs="12" lg="7">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudText Typo="Typo.h6" Class="mb-3">Thông tin tài khoản</MudText>
+                <MudGrid>
+                    <MudItem xs="12" md="6"><MudTextField Value="@_model.UserName" Label="ID đăng nhập" Disabled="true" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12" md="6"><MudTextField T="string" Value="@RoleName" Label="Role" Disabled="true" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.FullName" Label="Họ tên" Required="true" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.PhoneNumber" Label="Số điện thoại" Required="true" HelperText="@VietnamPhoneNumber.ValidationMessage" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.Email" Label="Email" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.CitizenId" Label="CCCD" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12"><MudTextField @bind-Value="_model.Address" Label="Địa chỉ" Variant="Variant.Outlined" /></MudItem>
+                </MudGrid>
+
+                <MudStack Row="true" Class="mt-4" Justify="Justify.FlexEnd">
+                    <MudButton Color="Color.Warning" Variant="Variant.Outlined" Disabled="@(_saving || _resetting)" OnClick="ResetPasswordAsync">
+                        Reset mật khẩu về Htx@586
+                    </MudButton>
+                    <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_saving || _resetting)" OnClick="SaveAsync">
+                        Cập nhật thông tin
+                    </MudButton>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" lg="5">
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+                    <MudText Typo="Typo.h6">Xe được cấp</MudText>
+                    <MudSpacer />
+                    <MudChip T="string" Color="Color.Primary" Size="Size.Small">@_vehicles.Count xe</MudChip>
+                </MudStack>
+
+                @if (_vehicles.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">Chưa có xe. Tài khoản chưa thể tạo hoặc nhận hợp đồng.</MudAlert>
+                }
+                else
+                {
+                    @foreach (var vehicle in _vehicles)
+                    {
+                        <MudPaper Class="pa-3 mb-2" Outlined="true">
+                            <MudText Typo="Typo.subtitle1"><b>@vehicle.PlateNumber</b></MudText>
+                            <MudText Typo="Typo.body2">@vehicle.CompanyName</MudText>
+                            <MudText Typo="Typo.caption">Chủ xe: @vehicle.OwnerName</MudText><br />
+                            <MudChip T="string" Size="Size.Small" Color="@(vehicle.DriverSignedAt.HasValue ? Color.Success : Color.Warning)" Class="mt-2">
+                                @(vehicle.DriverSignedAt.HasValue ? "Đã ký theo xe" : "Chưa ký theo xe")
+                            </MudChip>
+                        </MudPaper>
+                    }
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private const string RoleName = "VehicleOwner";
+    private const string ResetPassword = "Htx@586";
+    private AccountModel? _model;
+    private List<VehicleRow> _vehicles = [];
+    private bool _loading = true;
+    private bool _saving;
+    private bool _resetting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            _loading = false;
+            return;
+        }
+
+        using (var scope = ScopeFactory.CreateScope())
+        {
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var user = await userManager.FindByIdAsync(userId);
+            if (user is not null && !user.IsDeleted && await userManager.IsInRoleAsync(user, RoleName))
+            {
+                _model = new AccountModel
+                {
+                    Id = user.Id,
+                    UserName = user.UserName ?? string.Empty,
+                    FullName = user.FullName,
+                    PhoneNumber = user.PhoneNumber,
+                    Email = user.Email,
+                    CitizenId = user.CitizenId,
+                    Address = user.Address
+                };
+            }
+        }
+
+        await using (var db = await Factory.CreateDbContextAsync())
+        {
+            _vehicles = await db.Vehicles.AsNoTracking()
+                .Where(x => !x.IsDeleted && x.AssignedDriverId == userId)
+                .OrderBy(x => x.PlateNumber)
+                .Select(x => new VehicleRow
+                {
+                    PlateNumber = x.PlateNumber,
+                    OwnerName = x.OwnerName,
+                    DriverSignedAt = x.AccountDriverSignedAt,
+                    CompanyName = x.CompanyProfile == null
+                        ? "Chưa gán Công ty/Văn phòng"
+                        : (string.IsNullOrWhiteSpace(x.CompanyProfile.BranchName)
+                            ? x.CompanyProfile.CompanyName
+                            : x.CompanyProfile.CompanyName + " - " + x.CompanyProfile.BranchName)
+                })
+                .ToListAsync();
+        }
+
+        _loading = false;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_model is null || string.IsNullOrWhiteSpace(_model.FullName))
+        {
+            Snackbar.Add("Vui lòng nhập họ tên.", Severity.Warning);
+            return;
+        }
+        if (!VietnamPhoneNumber.TryNormalize(_model.PhoneNumber, out var phone))
+        {
+            Snackbar.Add(VietnamPhoneNumber.ValidationMessage, Severity.Warning);
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            using var scope = ScopeFactory.CreateScope();
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var user = await userManager.FindByIdAsync(_model.Id);
+            if (user is null || user.IsDeleted || !await userManager.IsInRoleAsync(user, RoleName))
+                throw new InvalidOperationException("Không tìm thấy tài khoản VehicleOwner.");
+
+            var duplicate = await userManager.Users.AsNoTracking().AnyAsync(x =>
+                x.Id != user.Id && !x.IsDeleted && x.PhoneNumber == phone);
+            if (duplicate)
+                throw new InvalidOperationException("Số điện thoại đang được tài khoản khác sử dụng.");
+
+            user.FullName = _model.FullName.Trim();
+            user.PhoneNumber = phone;
+            user.Email = N(_model.Email);
+            user.CitizenId = N(_model.CitizenId);
+            user.Address = N(_model.Address);
+            user.UpdatedAt = DateTime.UtcNow;
+            user.UpdatedByUserId = user.Id;
+            var result = await userManager.UpdateAsync(user);
+            if (!result.Succeeded)
+                throw new InvalidOperationException(string.Join("; ", result.Errors.Select(x => x.Description)));
+
+            Snackbar.Add("Đã cập nhật tài khoản.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _saving = false; }
+    }
+
+    private async Task ResetPasswordAsync()
+    {
+        if (_model is null) return;
+        _resetting = true;
+        try
+        {
+            using var scope = ScopeFactory.CreateScope();
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+            var user = await userManager.FindByIdAsync(_model.Id)
+                ?? throw new InvalidOperationException("Không tìm thấy tài khoản.");
+            var token = await userManager.GeneratePasswordResetTokenAsync(user);
+            var result = await userManager.ResetPasswordAsync(user, token, ResetPassword);
+            if (!result.Succeeded)
+                throw new InvalidOperationException(string.Join("; ", result.Errors.Select(x => x.Description)));
+            user.MustChangePassword = true;
+            user.UpdatedAt = DateTime.UtcNow;
+            await userManager.UpdateAsync(user);
+            Snackbar.Add($"Đã reset mật khẩu về {ResetPassword}.", Severity.Success);
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _resetting = false; }
+    }
+
+    private static string? N(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private sealed class AccountModel
+    {
+        public string Id { get; set; } = string.Empty;
+        public string UserName { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string? PhoneNumber { get; set; }
+        public string? Email { get; set; }
+        public string? CitizenId { get; set; }
+        public string? Address { get; set; }
+    }
+
+    private sealed class VehicleRow
+    {
+        public string PlateNumber { get; set; } = string.Empty;
+        public string CompanyName { get; set; } = string.Empty;
+        public string OwnerName { get; set; } = string.Empty;
+        public DateTime? DriverSignedAt { get; set; }
+    }
+}

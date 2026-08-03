@@ -1,0 +1,169 @@
+@page "/vehicle-owner/contracts"
+@attribute [Authorize(Roles = "VehicleOwner")]
+@inject IContractService ContractService
+@inject IDbContextFactory<ApplicationDbContext> Factory
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ISnackbar Snackbar
+
+<PageTitle>Hợp đồng của tôi</PageTitle>
+<PageHeader Title="Hợp đồng cá nhân" Subtitle="Chỉ nhận và tạo hợp đồng khi tài khoản đang được gán xe hoạt động." />
+
+@if (!_hasAssignedVehicle)
+{
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
+        Tài khoản chưa được gán xe đang hoạt động. Bạn không thể tạo hoặc nhận hợp đồng mới; các hợp đồng đã hoàn thành trước đây vẫn được giữ trong lịch sử.
+    </MudAlert>
+}
+
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <MudGrid>
+        <MudItem xs="12" md="4">
+            <MudDatePicker @bind-Date="_month" Label="Tháng thống kê" DateFormat="MM/yyyy" Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" md="4">
+            <MudSelect T="ContractBusinessType?" @bind-Value="_businessType" Label="Loại hợp đồng" Clearable="true" Variant="Variant.Outlined">
+                <MudSelectItem T="ContractBusinessType?" Value="@((ContractBusinessType?)ContractBusinessType.Passenger)">Vận chuyển hành khách</MudSelectItem>
+                <MudSelectItem T="ContractBusinessType?" Value="@((ContractBusinessType?)ContractBusinessType.Cargo)" Disabled="true">Vận chuyển hàng hóa bằng xe ô tô (Tạm chưa dùng)</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" md="4" Class="d-flex align-center">
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="LoadAsync">Lọc</MudButton>
+            <MudSpacer />
+            <MudButton Color="Color.Success"
+                       Variant="Variant.Filled"
+                       StartIcon="@Icons.Material.Filled.Add"
+                       Href="/vehicle-owner/contracts/create"
+                       Disabled="@(!_hasAssignedVehicle)">
+                Tạo hợp đồng
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+<MudGrid Class="mb-4">
+    <MudItem xs="12" sm="4">
+        <MudPaper Class="pa-4"><MudText Typo="Typo.caption">Tổng hợp đồng</MudText><MudText Typo="Typo.h4">@_items.Count</MudText></MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="4">
+        <MudPaper Class="pa-4"><MudText Typo="Typo.caption">Đã hoàn tất</MudText><MudText Typo="Typo.h4">@_items.Count(x => x.Status == ContractStatus.Completed)</MudText></MudPaper>
+    </MudItem>
+    <MudItem xs="12" sm="4">
+        <MudPaper Class="pa-4"><MudText Typo="Typo.caption">Doanh thu thực</MudText><MudText Typo="Typo.h4">@ActualRevenue.ToString("N0")</MudText></MudPaper>
+    </MudItem>
+</MudGrid>
+
+<MudTable T="ContractListItemDto" Items="_items" Loading="_loading" Hover="true" Striped="true" RowsPerPage="20" Breakpoint="Breakpoint.Sm">
+    <HeaderContent>
+        <MudTh>Số hợp đồng</MudTh>
+        <MudTh>Loại</MudTh>
+        <MudTh>Khách hàng</MudTh>
+        <MudTh>Xe</MudTh>
+        <MudTh>Ngày tạo</MudTh>
+        <MudTh>Giá trị</MudTh>
+        <MudTh>Trạng thái</MudTh>
+        <MudTh></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Số hợp đồng">
+            <MudLink Href="@ContractHref(context)">@context.ContractNumber</MudLink>
+        </MudTd>
+        <MudTd DataLabel="Loại">@BusinessName(context.BusinessType)</MudTd>
+        <MudTd DataLabel="Khách hàng">@context.CustomerName</MudTd>
+        <MudTd DataLabel="Xe">@context.VehiclePlate</MudTd>
+        <MudTd DataLabel="Ngày tạo">@VietnamTime(context.CreatedAt).ToString("dd/MM/yyyy")</MudTd>
+        <MudTd DataLabel="Giá trị">@context.ContractValue?.ToString("N0")</MudTd>
+        <MudTd DataLabel="Trạng thái">
+            <ContractStatusChip Status="context.Status" />
+        </MudTd>
+        <MudTd>
+            <MudIconButton Icon="@Icons.Material.Filled.Visibility"
+                           Href="@($"/vehicle-owner/contracts/detail/{context.Id}")"
+                           title="Xem chi tiết/lịch sử" />
+        </MudTd>
+    </RowTemplate>
+    <NoRecordsContent><MudText Class="pa-4">Không có hợp đồng phù hợp trong tháng đã chọn.</MudText></NoRecordsContent>
+    <PagerContent><MudTablePager PageSizeOptions="_pageSizeOptions" /></PagerContent>
+</MudTable>
+
+@code {
+    private static readonly int[] _pageSizeOptions = [10, 20, 50, 100];
+    private bool _loading;
+    private bool _hasAssignedVehicle;
+    private string _userId = string.Empty;
+    private DateTime? _month = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private ContractBusinessType? _businessType;
+    private List<ContractListItemDto> _items = [];
+    private HashSet<Guid> _assignedVehicleIds = [];
+
+    private decimal ActualRevenue
+        => _items.Where(x => x.Status == ContractStatus.Completed).Sum(x => x.ContractValue ?? 0);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            await using var db = await Factory.CreateDbContextAsync();
+            _assignedVehicleIds = (await db.Vehicles.AsNoTracking()
+                .Where(x => x.IsActive && x.AssignedDriverId == _userId)
+                .Select(x => x.Id)
+                .ToListAsync())
+                .ToHashSet();
+            _hasAssignedVehicle = _assignedVehicleIds.Count > 0;
+
+            var month = _month ?? DateTime.Today;
+            var all = (await ContractService.GetAsync(new ContractFilter
+            {
+                DriverId = _userId,
+                BusinessType = _businessType,
+                FromDate = new DateTime(month.Year, month.Month, 1),
+                ToDate = new DateTime(month.Year, month.Month, 1).AddMonths(1).AddDays(-1)
+            })).ToList();
+
+            // Hợp đồng đang xử lý chỉ hiển thị khi xe của hợp đồng hiện vẫn được gán cho tài xế.
+            // Hợp đồng đã kết thúc luôn được giữ để tài xế xem lịch sử đã chạy.
+            _items = all
+                .Where(x => IsHistoryStatus(x.Status) ||
+                            (x.VehicleId.HasValue && _assignedVehicleIds.Contains(x.VehicleId.Value)))
+                .ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string ContractHref(ContractListItemDto item)
+        => IsHistoryStatus(item.Status)
+            ? $"/vehicle-owner/contracts/detail/{item.Id}"
+            : $"/vehicle-owner/contracts/{item.Id}";
+
+    private static bool IsHistoryStatus(ContractStatus status)
+        => status is ContractStatus.Completed
+            or ContractStatus.Cancelled
+            or ContractStatus.Expired
+            or ContractStatus.Invalidated;
+
+    private static DateTime VietnamTime(DateTime value)
+        => value.Kind == DateTimeKind.Utc ? value.AddHours(7) : value;
+
+    private static string BusinessName(ContractBusinessType type) => type switch
+    {
+        ContractBusinessType.Passenger => "Vận chuyển hành khách",
+        ContractBusinessType.Cargo => "Vận chuyển hàng hóa bằng xe ô tô",
+        _ => "Loại hợp đồng cũ"
+    };
+
+
+}

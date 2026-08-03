@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="utf-8" />
+
+    <meta name="viewport"
+          content="width=device-width,
+                   initial-scale=1.0,
+                   maximum-scale=1.0,
+                   user-scalable=no,
+                   viewport-fit=cover" />
+
+    <base href="/" />
+
+    <title>HTX586CONTRACT</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet" />
+    <link href="@Assets["_content/MudBlazor/MudBlazor.min.css"]" rel="stylesheet" />
+
+    <link rel="stylesheet"
+          href="css/app.css" />
+
+    <link rel="stylesheet"
+          href="css/mystyle.css" />
+
+    <link rel="stylesheet"
+          href="css/pdf-layout-designer.css" />
+
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+
+<body>
+    <Routes @rendermode="InteractiveServer" />
+
+    <div id="components-reconnect-modal" class="reconnect-modal" role="status" aria-live="polite">
+        <div class="reconnect-card">
+            <div class="reconnect-spinner" aria-hidden="true"></div>
+            <div class="reconnect-show-text">
+                <strong>Đang kết nối lại...</strong>
+                <span>Lần thử <b id="components-reconnect-current-attempt"></b>/<b id="components-reconnect-max-retries"></b></span>
+            </div>
+            <div class="reconnect-failed-text">
+                <strong>Kết nối mạng chưa ổn định</strong>
+                <span>Hệ thống đang thử kết nối lại tự động.</span>
+            </div>
+            <div class="reconnect-rejected-text">
+                <strong>Phiên làm việc đã được làm mới</strong>
+                <span>Trang sẽ tự tải lại để tiếp tục.</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/signature-pad.js?v=20260716-1"></script>
+    <script src="js/pdf-layout-designer.js"></script>
+
+    <script src="@Assets["_content/MudBlazor/MudBlazor.min.js"]"></script>
+    <script src="_framework/blazor.web.js" autostart="false"></script>
+    <script src="js/blazor-reconnect.js?v=20260801-1"></script>
+</body>
+
+</html>

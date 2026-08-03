@@ -1,0 +1,958 @@
+@namespace HTX586CONTRACT.Web.Components.Pages.Owner.ContractRecords
+@page "/owner/contracts/create"
+@page "/owner/contracts/{Id:guid}"
+@attribute [Authorize(Roles = "Owner")]
+@using HTX586CONTRACT.Domain.Companies
+@inject IContractService ContractService
+@inject IContractDocumentService DocumentService
+@inject IDbContextFactory<ApplicationDbContext> Factory
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>@(Id.HasValue ? "Cập nhật hợp đồng" : "Tạo hợp đồng")</PageTitle>
+<PageHeader Title="@(Id.HasValue ? "Cập nhật hợp đồng" : "Tạo hợp đồng")"
+            Subtitle="Owner lập hợp đồng cho Công ty/Văn phòng được chọn và phát xuống tài xế; tài xế tiếp tục cập nhật nội dung hợp đồng, danh sách hành khách và thực hiện bước ký với khách hàng." />
+
+@if (Id.HasValue)
+{
+    <MudPaper Class="pa-3 mb-4 d-flex align-center" Outlined="true">
+        <MudText Typo="Typo.subtitle2" Class="mr-3">Trạng thái hợp đồng:</MudText>
+        <ContractStatusChip Status="_model.Status" ChipSize="Size.Medium" />
+    </MudPaper>
+}
+
+@if (IsHistoryLocked && _detail is not null)
+{
+    <ContractHistoryView Detail="_detail" BackUrl="/owner/contracts" />
+}
+else
+{
+<MudForm @ref="_form" @bind-IsValid="_valid">
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudPaper Class="pa-4 mb-4" Elevation="0" Style="border:1px solid var(--mud-palette-lines-default);">
+            <MudText Typo="Typo.h6" Class="mb-3">1. Thông tin hợp đồng</MudText>
+            <MudGrid>
+                <MudItem xs="12" md="4">
+                    <MudSelect T="Guid?"
+                               Value="@_model.CompanyProfileId"
+                               ValueChanged="SelectCompany"
+                               Label="Công ty/Văn phòng"
+                               HelperText="@CompanyHelperText"
+                               Variant="Variant.Outlined"
+                               Required="true"
+                               Clearable="true"
+                               Disabled="false">
+                        @foreach (var company in CompanyOptions)
+                        {
+                            <MudSelectItem T="Guid?" Value="@((Guid?)company.Id)">@CompanyDisplay(company)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudSelect T="ContractBusinessType"
+                               @bind-Value="_model.BusinessType"
+                               Label="Loại hợp đồng"
+                               Variant="Variant.Outlined"
+                               Required="true">
+                        <MudSelectItem T="ContractBusinessType" Value="@ContractBusinessType.Passenger">HỢP ĐỒNG VẬN CHUYỂN HÀNH KHÁCH</MudSelectItem>
+                        <MudSelectItem T="ContractBusinessType" Value="@ContractBusinessType.Cargo">HỢP ĐỒNG VẬN CHUYỂN HÀNG HÓA BẰNG XE Ô TÔ</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_model.ContractNumber"
+                                  Label="Số hợp đồng"
+                                  HelperText="Để trống để hệ thống tự sinh."
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        <MudPaper Class="pa-4 mb-4" Elevation="0" Style="border:1px solid var(--mud-palette-lines-default);">
+            <MudText Typo="Typo.h6" Class="mb-3">2. Phương tiện</MudText>
+            <MudGrid>
+                <MudItem xs="12" md="6">
+                    <MudAutocomplete T="Vehicle"
+                                     Value="@SelectedVehicle"
+                                     ValueChanged="SelectVehicle"
+                                     SearchFunc="SearchVehiclesAsync"
+                                     ToStringFunc="VehicleDisplay"
+                                     Label="Xe"
+                                     Placeholder="Chọn hoặc gõ biển số, hãng xe, chủ sở hữu"
+                                     HelperText="Chỉ gợi ý xe đang hoạt động thuộc Công ty/Văn phòng đã chọn."
+                                     Variant="Variant.Outlined"
+                                     Required="true"
+                                     Clearable="true"
+                                     ResetValueOnEmptyText="true"
+                                     CoerceText="true"
+                                     MaxItems="50"
+                                     Disabled="@(!_model.CompanyProfileId.HasValue)" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudAutocomplete T="ApplicationUser"
+                                     Value="@SelectedDriver"
+                                     ValueChanged="SelectDriver"
+                                     SearchFunc="SearchDriversAsync"
+                                     ToStringFunc="DriverDisplay"
+                                     Label="Tài xế"
+                                     Placeholder="Chọn hoặc gõ họ tên, số điện thoại tài xế"
+                                     HelperText="@DriverHelperText"
+                                     Variant="Variant.Outlined"
+                                     Required="true"
+                                     Clearable="true"
+                                     ResetValueOnEmptyText="true"
+                                     CoerceText="true"
+                                     MaxItems="50"
+                                     Disabled="@DriverSelectDisabled" />
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        <MudPaper Class="pa-4 mb-4" Elevation="0" Style="border:1px solid var(--mud-palette-lines-default);">
+            <MudText Typo="Typo.h6" Class="mb-3">3. Khách hàng/người thuê</MudText>
+            <MudGrid>
+                <MudItem xs="12" md="9">
+                    <MudAutocomplete T="Customer"
+                                     Value="@SelectedCustomer"
+                                     ValueChanged="SelectCustomer"
+                                     SearchFunc="SearchCustomersAsync"
+                                     ToStringFunc="CustomerDisplay"
+                                     Label="Khách hàng/người thuê có sẵn"
+                                     Placeholder="Chọn hoặc gõ họ tên, số điện thoại, CCCD/MST"
+                                     HelperText="Gõ trực tiếp trong ô để hiển thị gợi ý khách hàng thuộc Công ty/Văn phòng đã chọn."
+                                     Variant="Variant.Outlined"
+                                     Clearable="true"
+                                     ResetValueOnEmptyText="true"
+                                     CoerceText="true"
+                                     MaxItems="50"
+                                     Disabled="@(!_model.CompanyProfileId.HasValue)" />
+                </MudItem>
+                <MudItem xs="12" md="3" Class="d-flex align-center">
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Groups"
+                               FullWidth="true"
+                               Disabled="@(!_model.CompanyProfileId.HasValue)"
+                               Href="/admin/customers">
+                        Qua Quản lý Khách hàng
+                    </MudButton>
+                </MudItem>
+
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_model.CustomerName"
+                                  Label="Tên khách hàng/người thuê"
+                                  Required="true"
+                                  Variant="Variant.Outlined"
+                                  Disabled="@CustomerFieldsDisabled" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_model.CustomerPhone"
+                                  Label="Số điện thoại"
+                                  Required="true"
+                                  Variant="Variant.Outlined"
+                                  Disabled="@CustomerFieldsDisabled" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_model.CustomerCitizenId"
+                                  Label="CCCD/MST khách hàng"
+                                  Variant="Variant.Outlined"
+                                  Disabled="@CustomerFieldsDisabled" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_model.CustomerAddress"
+                                  Label="Địa chỉ khách hàng"
+                                  Variant="Variant.Outlined"
+                                  Disabled="@CustomerFieldsDisabled" />
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        <MudPaper Class="pa-4 mb-4" Elevation="0" Style="border:1px solid var(--mud-palette-lines-default);">
+            <MudText Typo="Typo.h6" Class="mb-3">4. Nội dung hợp đồng</MudText>
+            <MudGrid>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudDatePicker Date="@_startDate"
+                                   DateChanged="SetStartDate"
+                                   Label="Ngày bắt đầu"
+                                   DateFormat="dd/MM/yyyy"
+                                   Editable="true"
+                                   Clearable="true"
+                                   Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudTimePicker Time="@_startTime"
+                                   TimeChanged="SetStartTime"
+                                   Label="Giờ bắt đầu"
+                                   Editable="true"
+                                   Clearable="true"
+                                   Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudDatePicker Date="@_endDate"
+                                   DateChanged="SetEndDate"
+                                   Label="Ngày kết thúc"
+                                   DateFormat="dd/MM/yyyy"
+                                   Editable="true"
+                                   Clearable="true"
+                                   Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
+                    <MudTimePicker Time="@_endTime"
+                                   TimeChanged="SetEndTime"
+                                   Label="Giờ kết thúc"
+                                   Editable="true"
+                                   Clearable="true"
+                                   Variant="Variant.Outlined" />
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_model.PickupLocation" Label="Điểm đi" Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudTextField @bind-Value="_model.DropoffLocation" Label="Điểm đến" Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_model.RouteDescription"
+                                  Label="Lộ trình chi tiết"
+                                  Lines="3"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+
+                @if (_model.BusinessType == ContractBusinessType.Cargo)
+                {
+                    <MudItem xs="12" md="6">
+                        <MudTextField @bind-Value="_model.CargoName" Label="Tên hàng hóa" Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudNumericField T="decimal?" @bind-Value="_model.CargoWeight" Label="Khối lượng" Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudTextField @bind-Value="_model.CargoUnit" Label="Đơn vị" Variant="Variant.Outlined" />
+                    </MudItem>
+                }
+
+                <MudItem xs="12" md="4">
+                    <MudNumericField T="decimal?"
+                                     @bind-Value="_model.ContractValue"
+                                     Label="Giá trị hợp đồng"
+                                     Format="N0"
+                                     Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudSelect T="string"
+                               @bind-Value="_model.PaymentMethod"
+                               Label="Hình thức thanh toán"
+                               Variant="Variant.Outlined"
+                               Clearable="true">
+                        <MudSelectItem T="string" Value="@("Tiền mặt")">Tiền mặt</MudSelectItem>
+                        <MudSelectItem T="string" Value="@("Chuyển khoản")">Chuyển khoản</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudAutocomplete T="string"
+                                     @bind-Value="_model.PaymentTime"
+                                     Label="Thời gian thanh toán"
+                                     Placeholder="Nhập hoặc chọn phương án"
+                                     SearchFunc="SearchPaymentTimes"
+                                     CoerceText="true"
+                                     CoerceValue="true"
+                                     Clearable="true"
+                                     Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="_model.Note"
+                                  Label="Ghi chú"
+                                  Lines="3"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        <MudPaper Class="pa-4" Elevation="0" Style="border:1px solid var(--mud-palette-lines-default);">
+            <MudStack Row="true" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.h6">5. Danh sách hành khách</MudText>
+                <MudNumericField T="int" Value="@PassengerCount" Label="Số lượng khách" HelperText="Tự tính theo danh sách bên dưới" Variant="Variant.Outlined" Disabled="true" Style="max-width:220px;" />
+                <MudSpacer />
+                <MudButton StartIcon="@Icons.Material.Filled.Add"
+                           Variant="Variant.Outlined"
+                           OnClick="AddPassenger">
+                    Thêm hành khách
+                </MudButton>
+            </MudStack>
+
+            <MudTable T="ContractPassengerDto" Items="_model.Passengers" Dense="true" Class="mt-3">
+                <HeaderContent>
+                    <MudTh>STT</MudTh>
+                    <MudTh>Họ tên</MudTh>
+                    <MudTh>Năm sinh</MudTh>
+                    <MudTh>Ghi chú</MudTh>
+                    <MudTh></MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="STT">@context.SortOrder</MudTd>
+                    <MudTd DataLabel="Họ tên"><MudTextField @bind-Value="context.FullName" Immediate="true" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudTd>
+                    <MudTd DataLabel="Năm sinh"><MudNumericField T="int?" @bind-Value="context.BirthYear" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudTd>
+                    <MudTd DataLabel="Ghi chú"><MudTextField @bind-Value="context.Note" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudTd>
+                    <MudTd><MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => RemovePassenger(context))" /></MudTd>
+                </RowTemplate>
+            </MudTable>
+        </MudPaper>
+
+        <MudStack Row="true" Class="mt-4">
+            <MudButton Variant="Variant.Outlined" Href="/owner/contracts">Quay lại</MudButton>
+            <MudSpacer />
+            <MudButton Color="Color.Primary"
+                       Variant="Variant.Filled"
+                       Disabled="_saving"
+                       OnClick="SaveAsync">
+                Lưu hợp đồng
+            </MudButton>
+        </MudStack>
+    </MudPaper>
+</MudForm>
+
+@if (Id.HasValue)
+{
+    <MudPaper Class="pa-4 mt-4" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-3">Thông tin chữ ký hợp đồng</MudText>
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3">
+Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố định nếu đã được lưu trong danh mục.
+            Owner/Admin chỉ được xem chữ ký. Chỉ tài khoản VehicleOwner được ghi nhận chữ ký khách hàng và chốt hợp đồng hoàn tất.
+        </MudAlert>
+        <MudGrid>
+            <MudItem xs="12" md="3">
+                <MudText Typo="Typo.subtitle1">Văn phòng đại diện</MudText>
+                <SignaturePad Disabled="true"
+                              ExistingSignatureUrl="@FixedOfficeSignatureUrl"
+                              SignerName="@OfficeSigner"
+                              SignedAt="@FixedOfficeSignedAt" />
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudText Typo="Typo.subtitle1">Chủ sở hữu xe</MudText>
+                <SignaturePad Disabled="true"
+                              ExistingSignatureUrl="@FixedOwnerSignatureUrl"
+                              SignerName="@OwnerSigner"
+                              SignedAt="@FixedOwnerSignedAt" />
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudText Typo="Typo.subtitle1">Tài xế</MudText>
+                <SignaturePad Disabled="true"
+                              ExistingSignatureUrl="@FixedDriverSignatureUrl"
+                              SignerName="@DriverSigner"
+                              SignedAt="@FixedDriverSignedAt" />
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudText Typo="Typo.subtitle1">Khách hàng (Người thuê xe)</MudText>
+                @if (!string.IsNullOrWhiteSpace(SignatureUrl(SignatureParty.Customer)))
+                {
+                    <SignaturePad Disabled="true"
+                                  ExistingSignatureUrl="@SignatureUrl(SignatureParty.Customer)"
+                                  SignerName="@SignatureName(SignatureParty.Customer)"
+                                  SignedAt="@SignatureTime(SignatureParty.Customer)" />
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
+                        Chưa có chữ ký khách hàng. Chỉ tài khoản VehicleOwner được thao tác chân ký này.
+                    </MudAlert>
+                }
+            </MudItem>
+        </MudGrid>
+        <MudButton Class="mt-4"
+                   Color="Color.Error"
+                   Variant="Variant.Filled"
+                   StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                   Disabled="@(_model.Status != ContractStatus.Completed)"
+                   OnClick="GeneratePdfAsync">
+            Tạo và mở PDF
+        </MudButton>
+    </MudPaper>
+}
+
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private static readonly string[] PaymentTimeOptions =
+    [
+        "Thanh toán ngay khi ký hợp đồng",
+        "Thanh toán trước chuyến đi",
+        "Thanh toán sau khi kết thúc chuyến đi",
+        "Thanh toán theo thỏa thuận"
+    ];
+
+    private MudForm? _form;
+    private ContractDetailDto? _detail;
+    private bool _valid;
+    private bool _saving;
+    private string _currentUserId = string.Empty;
+    private string _vehicleSearch = string.Empty;
+    private string _customerSearch = string.Empty;
+    private SaveContractRequest _model = new() { Passengers = [] };
+    private bool IsHistoryLocked => _model.Status is ContractStatus.Completed
+        or ContractStatus.Cancelled
+        or ContractStatus.Expired
+        or ContractStatus.Invalidated;
+    private int PassengerCount => _model.Passengers.Count(x => !string.IsNullOrWhiteSpace(x.FullName));
+    private List<CompanyProfile> _companies = [];
+    private List<ApplicationUser> _drivers = [];
+    private List<Vehicle> _vehicles = [];
+    private List<Vehicle> _assignedVehicles = [];
+    private List<Customer> _customers = [];
+    private List<ContractSignatureDto> _signatures = [];
+    private DateTime? _startDate;
+    private DateTime? _endDate;
+    private TimeSpan? _startTime;
+    private TimeSpan? _endTime;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _currentUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        await using var db = await Factory.CreateDbContextAsync();
+        var companyQuery = db.CompanyProfiles.AsNoTracking().Where(x => x.IsActive && !x.IsDeleted);
+
+        _companies = await companyQuery
+            .OrderBy(x => x.CompanyName)
+            .ThenBy(x => x.BranchName)
+            .ToListAsync();
+
+        var driverQuery = from user in db.Users
+                          join userRole in db.UserRoles on user.Id equals userRole.UserId
+                          join role in db.Roles on userRole.RoleId equals role.Id
+                          where role.Name == "VehicleOwner" && user.IsActive && !user.IsDeleted && user.RegistrationStatus == "Approved"
+                          select user;
+
+
+        _drivers = await driverQuery
+            .OrderBy(x => x.FullName)
+            .ToListAsync();
+
+        var vehicleQuery = db.Vehicles.AsNoTracking()
+            .Include(x => x.AssignedDriver)
+            .Where(x => x.IsActive && x.CompanyProfileId != null && x.AssignedDriverId != null);
+
+
+        _vehicles = await vehicleQuery
+            .OrderBy(x => x.PlateNumber)
+            .ToListAsync();
+
+        _assignedVehicles = await db.Vehicles.AsNoTracking()
+            .Where(x => x.AssignedDriverId != null)
+            .OrderBy(x => x.PlateNumber)
+            .ToListAsync();
+
+        var customerQuery = db.Customers.AsNoTracking()
+            .Include(x => x.CreatedByDriver)
+            .Include(x => x.Contracts)
+            .Where(x => !x.PhoneNumber.StartsWith("PEND"));
+
+
+        _customers = await customerQuery
+            .OrderByDescending(x => x.LastUsedAt ?? x.CreatedAt)
+            .ToListAsync();
+
+        if (!Id.HasValue)
+        {
+            _detail = null;
+            Guid? defaultCompanyId = _companies.Count == 1
+                ? _companies[0].Id
+                : null;
+
+            _model = new SaveContractRequest
+            {
+                CompanyProfileId = defaultCompanyId,
+                Passengers = []
+            };
+            _signatures = [];
+            _vehicleSearch = string.Empty;
+            _customerSearch = string.Empty;
+            _startDate = null;
+            _startTime = null;
+            _endDate = null;
+            _endTime = null;
+            AddPassenger();
+            return;
+        }
+
+        var detail = await ContractService.GetByIdAsync(Id.Value);
+        if (detail is null)
+        {
+            Snackbar.Add("Không tìm thấy hợp đồng.", Severity.Error);
+            Navigation.NavigateTo("/owner/contracts");
+            return;
+        }
+
+
+        _detail = detail;
+        _model = new SaveContractRequest
+        {
+            Id = detail.Id,
+            CompanyProfileId = detail.CompanyProfileId,
+            ContractNumber = detail.ContractNumber,
+            BusinessType = detail.BusinessType,
+            ContractTypeId = detail.ContractTypeId,
+            DriverId = detail.DriverId,
+            CustomerId = detail.CustomerId,
+            CustomerName = detail.CustomerName,
+            CustomerPhone = detail.CustomerPhone,
+            CustomerCitizenId = detail.CustomerCitizenId,
+            CustomerAddress = detail.CustomerAddress,
+            AreaCode = detail.AreaCode,
+            VehicleId = detail.VehicleId,
+            ActualPassengerCount = detail.ActualPassengerCount,
+            CustomerTravelsWithGroup = detail.CustomerTravelsWithGroup,
+            OperatingDriverName = detail.OperatingDriverName,
+            OperatingDriverPhoneNumber = detail.OperatingDriverPhoneNumber,
+            OperatingDriverLicenseNumber = detail.OperatingDriverLicenseNumber,
+            OperatingDriverLicenseClass = detail.OperatingDriverLicenseClass,
+            CargoName = detail.CargoName,
+            CargoWeight = detail.CargoWeight,
+            CargoUnit = detail.CargoUnit,
+            PickupLocation = detail.PickupLocation,
+            DropoffLocation = detail.DropoffLocation,
+            StartTime = detail.StartTime,
+            EndTime = detail.EndTime,
+            RouteDescription = detail.RouteDescription,
+            TotalKilometers = detail.TotalKilometers,
+            ContractValue = detail.ContractValue,
+            PaymentMethod = detail.PaymentMethod,
+            PaymentTime = detail.PaymentTime,
+            Note = detail.Note,
+            Status = detail.Status,
+            Passengers = detail.Passengers
+        };
+
+        _signatures = detail.Signatures;
+        _startDate = detail.StartTime?.Date;
+        _startTime = detail.StartTime?.TimeOfDay;
+        _endDate = detail.EndTime?.Date;
+        _endTime = detail.EndTime?.TimeOfDay;
+        _vehicleSearch = string.Empty;
+        _customerSearch = string.Empty;
+    }
+
+    private void SelectCompany(Guid? companyProfileId)
+    {
+        if (_model.CompanyProfileId == companyProfileId)
+            return;
+
+        _model.CompanyProfileId = companyProfileId;
+        _model.VehicleId = null;
+        _model.DriverId = string.Empty;
+        _model.AreaCode = string.Empty;
+        _vehicleSearch = string.Empty;
+        StartNewCustomer();
+    }
+
+    private void SelectVehicle(Vehicle? vehicle)
+    {
+        _model.VehicleId = vehicle?.Id;
+        _vehicleSearch = string.Empty;
+
+        if (vehicle is null)
+        {
+            _model.DriverId = string.Empty;
+            return;
+        }
+
+        if (_model.CompanyProfileId != vehicle.CompanyProfileId)
+        {
+            _model.VehicleId = null;
+            _model.DriverId = string.Empty;
+            Snackbar.Add("Xe không thuộc Công ty/Văn phòng đã chọn.", Severity.Error);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(vehicle.AssignedDriverId))
+        {
+            _model.VehicleId = null;
+            _model.DriverId = string.Empty;
+            Snackbar.Add("Xe chưa được gán tài khoản VehicleOwner. Hãy gán tại Quản lý Xe trước.", Severity.Warning);
+            return;
+        }
+
+        _model.DriverId = vehicle.AssignedDriverId;
+        ApplyDriverDefaults();
+    }
+
+    private void SelectDriver(ApplicationUser? driver)
+    {
+        // Tài khoản nhận hợp đồng luôn lấy cố định từ chiếc xe đã được gán.
+        _model.DriverId = SelectedVehicle?.AssignedDriverId ?? string.Empty;
+    }
+
+    private void ApplyDriverDefaults()
+    {
+        var driver = SelectedDriver;
+        if (string.IsNullOrWhiteSpace(_model.AreaCode) &&
+            !string.IsNullOrWhiteSpace(driver?.AreaCode))
+        {
+            _model.AreaCode = driver.AreaCode;
+        }
+    }
+
+    private void SelectCustomer(Customer? customer)
+    {
+        if (customer is null)
+        {
+            StartNewCustomer();
+            return;
+        }
+
+        if (!CustomerBelongsToSelectedCompany(customer))
+        {
+            StartNewCustomer();
+            Snackbar.Add("Khách hàng không thuộc Công ty/Văn phòng đã chọn.", Severity.Error);
+            return;
+        }
+
+        _model.CustomerId = customer.Id;
+        _model.CustomerName = customer.FullName;
+        _model.CustomerPhone = customer.PhoneNumber;
+        _model.CustomerCitizenId = customer.CitizenId;
+        _model.CustomerAddress = customer.Address;
+        _customerSearch = string.Empty;
+    }
+
+    private void StartNewCustomer()
+    {
+        _model.CustomerId = null;
+        _model.CustomerName = string.Empty;
+        _model.CustomerPhone = string.Empty;
+        _model.CustomerCitizenId = null;
+        _model.CustomerAddress = null;
+        _customerSearch = string.Empty;
+    }
+
+    private void AddPassenger()
+        => _model.Passengers.Add(new ContractPassengerDto
+        {
+            SortOrder = _model.Passengers.Count + 1
+        });
+
+    private void RemovePassenger(ContractPassengerDto passenger)
+    {
+        _model.Passengers.Remove(passenger);
+        for (var i = 0; i < _model.Passengers.Count; i++)
+            _model.Passengers[i].SortOrder = i + 1;
+    }
+
+    private void SetStartDate(DateTime? value)
+    {
+        _startDate = value;
+        CombineDates();
+    }
+
+    private void SetStartTime(TimeSpan? value)
+    {
+        _startTime = value;
+        CombineDates();
+    }
+
+    private void SetEndDate(DateTime? value)
+    {
+        _endDate = value;
+        CombineDates();
+    }
+
+    private void SetEndTime(TimeSpan? value)
+    {
+        _endTime = value;
+        CombineDates();
+    }
+
+    private void CombineDates()
+    {
+        _model.StartTime = _startDate?.Date + (_startTime ?? TimeSpan.Zero);
+        _model.EndTime = _endDate?.Date + (_endTime ?? TimeSpan.Zero);
+    }
+
+    private Task<IEnumerable<Vehicle>> SearchVehiclesAsync(string? value, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!_model.CompanyProfileId.HasValue)
+            return Task.FromResult(Enumerable.Empty<Vehicle>());
+
+        var companyId = _model.CompanyProfileId.Value;
+        IEnumerable<Vehicle> result = _vehicles.Where(x => x.CompanyProfileId == companyId);
+        var search = value?.Trim();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            result = result.Where(x =>
+                Contains(x.PlateNumber, search) ||
+                Contains(x.Brand, search) ||
+                Contains(x.Model, search) ||
+                Contains(x.OwnerName, search));
+        }
+
+        return Task.FromResult(result.OrderBy(x => x.PlateNumber).Take(50));
+    }
+
+    private Task<IEnumerable<ApplicationUser>> SearchDriversAsync(string? value, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var selected = SelectedDriver;
+        return Task.FromResult(selected is null
+            ? Enumerable.Empty<ApplicationUser>()
+            : new[] { selected }.AsEnumerable());
+    }
+
+    private Task<IEnumerable<Customer>> SearchCustomersAsync(string? value, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!_model.CompanyProfileId.HasValue)
+            return Task.FromResult(Enumerable.Empty<Customer>());
+
+        IEnumerable<Customer> result = _customers.Where(CustomerBelongsToSelectedCompany);
+        var search = value?.Trim();
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            result = result.Where(x =>
+                Contains(x.FullName, search) ||
+                Contains(x.PhoneNumber, search) ||
+                Contains(x.CitizenId, search) ||
+                Contains(x.TaxCode, search));
+        }
+
+        return Task.FromResult(result
+            .OrderByDescending(x => x.LastUsedAt ?? x.CreatedAt)
+            .Take(50));
+    }
+
+    private Task<IEnumerable<string>> SearchPaymentTimes(string? value, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        IEnumerable<string> result = string.IsNullOrWhiteSpace(value)
+            ? PaymentTimeOptions
+            : PaymentTimeOptions.Where(x => x.Contains(value.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        return Task.FromResult(result);
+    }
+
+    private async Task SaveAsync()
+    {
+        await _form!.ValidateAsync();
+        if (!_valid)
+            return;
+
+        if (!_model.CompanyProfileId.HasValue)
+        {
+            Snackbar.Add("Vui lòng chọn Công ty/Văn phòng.", Severity.Error);
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var result = Id.HasValue
+                ? await ContractService.UpdateAsync(Id.Value, _model, _currentUserId)
+                : await ContractService.CreateAsync(_model, _currentUserId);
+
+            Snackbar.Add(result.Message, result.Succeeded ? Severity.Success : Severity.Error);
+            if (result.Succeeded && !Id.HasValue)
+                Navigation.NavigateTo($"/owner/contracts/{result.Id}");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private CompanyProfile? SelectedCompany
+        => _companies.FirstOrDefault(x => x.Id == _model.CompanyProfileId);
+
+    private ApplicationUser? SelectedDriver
+        => _drivers.FirstOrDefault(x => x.Id == _model.DriverId);
+
+    private Vehicle? SelectedVehicle
+        => _vehicles.FirstOrDefault(x => x.Id == _model.VehicleId);
+
+    private Customer? SelectedCustomer
+        => _customers.FirstOrDefault(x => x.Id == _model.CustomerId);
+
+    private IEnumerable<CompanyProfile> CompanyOptions
+        => _companies;
+
+    private IEnumerable<Vehicle> VehicleOptions
+    {
+        get
+        {
+            if (!_model.CompanyProfileId.HasValue)
+                return Enumerable.Empty<Vehicle>();
+
+            var companyId = _model.CompanyProfileId.Value;
+            IEnumerable<Vehicle> result = _vehicles.Where(x => x.CompanyProfileId == companyId);
+            var search = _vehicleSearch?.Trim();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                result = result.Where(x =>
+                    Contains(x.PlateNumber, search) ||
+                    Contains(x.Brand, search) ||
+                    Contains(x.Model, search) ||
+                    Contains(x.OwnerName, search));
+            }
+
+            var selected = SelectedVehicle;
+            if (selected is not null && selected.CompanyProfileId == companyId && result.All(x => x.Id != selected.Id))
+                result = result.Append(selected);
+
+            return result.OrderBy(x => x.PlateNumber);
+        }
+    }
+
+    private IEnumerable<ApplicationUser> DriverOptions
+        => SelectedDriver is null ? Enumerable.Empty<ApplicationUser>() : new[] { SelectedDriver };
+
+    private IEnumerable<Customer> CustomerOptions
+    {
+        get
+        {
+            if (!_model.CompanyProfileId.HasValue)
+                return Enumerable.Empty<Customer>();
+
+            IEnumerable<Customer> result = _customers.Where(CustomerBelongsToSelectedCompany);
+            var search = _customerSearch?.Trim();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                result = result.Where(x =>
+                    Contains(x.FullName, search) ||
+                    Contains(x.PhoneNumber, search) ||
+                    Contains(x.CitizenId, search) ||
+                    Contains(x.TaxCode, search));
+            }
+
+            var selected = _customers.FirstOrDefault(x => x.Id == _model.CustomerId);
+            if (selected is not null && result.All(x => x.Id != selected.Id))
+                result = result.Prepend(selected);
+
+            return result.OrderByDescending(x => x.LastUsedAt ?? x.CreatedAt);
+        }
+    }
+
+    private bool CustomerBelongsToSelectedCompany(Customer customer)
+    {
+        if (!_model.CompanyProfileId.HasValue)
+            return false;
+
+        var companyId = _model.CompanyProfileId.Value;
+        return customer.CreatedByDriver?.CompanyProfileId == companyId ||
+               customer.Contracts.Any(x => x.CompanyProfileId == companyId);
+    }
+
+    private bool DriverSelectionLocked
+        => !string.IsNullOrWhiteSpace(SelectedVehicle?.AssignedDriverId);
+
+    private bool DriverSelectDisabled => true;
+
+    private bool CustomerFieldsDisabled => true;
+
+    private string CompanyHelperText
+        => "Chọn Công ty/Văn phòng trước để lọc xe, tài xế và khách hàng.";
+
+    private string DriverHelperText
+        => SelectedVehicle is null
+            ? "Chọn xe trước."
+            : string.IsNullOrWhiteSpace(SelectedVehicle.AssignedDriverId)
+                ? "Xe chưa được gán tài khoản VehicleOwner."
+                : "Tài khoản nhận hợp đồng được lấy cố định theo xe; một tài khoản có thể nhận nhiều xe.";
+
+    private static string CompanyDisplay(CompanyProfile company)
+        => string.IsNullOrWhiteSpace(company.BranchName)
+            ? company.CompanyName
+            : $"{company.CompanyName} - {company.BranchName}";
+
+    private static string? VehicleDisplay(Vehicle? vehicle)
+    {
+        if (vehicle is null)
+            return null;
+
+        var brand = string.IsNullOrWhiteSpace(vehicle.Brand) ? string.Empty : $" - {vehicle.Brand}";
+        var owner = string.IsNullOrWhiteSpace(vehicle.OwnerName) ? string.Empty : $" - Chủ xe: {vehicle.OwnerName}";
+        var assignment = string.IsNullOrWhiteSpace(vehicle.AssignedDriverId) ? " (chưa gán VehicleOwner)" : string.Empty;
+        return $"{vehicle.PlateNumber}{brand}{owner}{assignment}";
+    }
+
+    private static string? DriverDisplay(ApplicationUser? driver)
+        => driver is null ? null : $"{driver.FullName} - {driver.PhoneNumber ?? driver.UserName}";
+
+    private static string? CustomerDisplay(Customer? customer)
+    {
+        if (customer is null)
+            return null;
+
+        var citizenId = string.IsNullOrWhiteSpace(customer.CitizenId) ? string.Empty : $" - {customer.CitizenId}";
+        return $"{customer.FullName} - {customer.PhoneNumber}{citizenId}";
+    }
+
+    private static bool Contains(string? source, string search)
+        => !string.IsNullOrWhiteSpace(source) && source.Contains(search, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsPlaceholderCustomer(string? name, string? phone)
+        => string.IsNullOrWhiteSpace(name) ||
+           string.Equals(name.Trim(), "Chờ tài xế bổ sung", StringComparison.OrdinalIgnoreCase) ||
+           string.IsNullOrWhiteSpace(phone) ||
+           phone.StartsWith("PEND", StringComparison.OrdinalIgnoreCase);
+
+    private string OfficeSigner
+        => SelectedCompany?.RepresentativeName ?? "Đại diện văn phòng";
+
+    private string OwnerSigner
+        => SelectedVehicle?.OwnerName ?? "Chủ sở hữu xe";
+
+    private string DriverSigner
+        => SelectedDriver?.FullName ?? "Tài xế";
+
+    private string? FixedOfficeSignatureUrl
+        => SelectedCompany?.RepresentativeSignatureFileUrl;
+
+    private DateTime? FixedOfficeSignedAt
+        => SelectedCompany?.RepresentativeSignedAt;
+
+    private string? FixedOwnerSignatureUrl
+        => SelectedVehicle?.OwnerSignatureFileUrl;
+
+    private DateTime? FixedOwnerSignedAt
+        => SelectedVehicle?.OwnerSignedAt;
+
+    private string? FixedDriverSignatureUrl
+        => SelectedVehicle?.AccountDriverSignatureFileUrl;
+
+    private DateTime? FixedDriverSignedAt
+        => SelectedVehicle?.AccountDriverSignedAt;
+
+    private ContractSignatureDto? GetSignature(SignatureParty party)
+        => _signatures.FirstOrDefault(x => x.Party == party);
+
+    private string? SignatureUrl(SignatureParty party)
+        => GetSignature(party)?.SignatureFileUrl;
+
+    private string? SignatureName(SignatureParty party)
+        => GetSignature(party)?.SignerName;
+
+    private DateTime? SignatureTime(SignatureParty party)
+        => GetSignature(party)?.ServerSignedAt;
+
+    private async Task GeneratePdfAsync()
+    {
+        if (!Id.HasValue)
+            return;
+
+        try
+        {
+            var url = await DocumentService.GeneratePdfAsync(Id.Value);
+            Navigation.NavigateTo(url, true);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

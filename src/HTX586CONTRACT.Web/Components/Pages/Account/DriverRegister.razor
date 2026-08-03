@@ -1,0 +1,135 @@
+@page "/account/register"
+@page "/account/driver-register"
+@layout AuthLayout
+@attribute [AllowAnonymous]
+@inject IDriverAccountService DriverAccountService
+@inject ISnackbar Snackbar
+
+<PageTitle>Đăng ký tài khoản VehicleOwner</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraSmall" Class="pa-0">
+    <MudPaper Elevation="0" Class="pa-5 register-card">
+        <MudText Typo="Typo.h5" Align="Align.Center">Đăng ký tài khoản</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Align="Align.Center" Class="mb-5">
+            Tài khoản sẽ ở trạng thái chờ đến khi Owner hoặc Admin phê duyệt.
+        </MudText>
+
+        @if (_submitted)
+        {
+            <MudAlert Severity="Severity.Success" Variant="Variant.Filled">
+                Đã gửi yêu cầu cấp tài khoản. Bạn có thể đăng nhập sau khi được phê duyệt.
+            </MudAlert>
+            <MudButton Href="/account/login" FullWidth="true" Variant="Variant.Filled" Color="Color.Primary" Class="mt-4">
+                Về trang đăng nhập
+            </MudButton>
+        }
+        else
+        {
+            <MudForm @ref="_form" @bind-IsValid="_isValid">
+                <MudTextField @bind-Value="_model.UserName"
+                              Label="ID đăng nhập"
+                              Required="true"
+                              RequiredError="Vui lòng nhập ID đăng nhập"
+                              Immediate="true"
+                              Variant="Variant.Outlined"
+                              Class="mb-3"
+                              AutoComplete="username" />
+
+                <MudTextField @bind-Value="_model.FullName"
+                              Label="Họ và tên"
+                              Required="true"
+                              RequiredError="Vui lòng nhập họ tên"
+                              Immediate="true"
+                              Variant="Variant.Outlined"
+                              Class="mb-3" />
+
+                <MudTextField @bind-Value="_model.PhoneNumber"
+                              Label="Số điện thoại"
+                              Required="true"
+                              RequiredError="Vui lòng nhập số điện thoại"
+                              HelperText="@VietnamPhoneNumber.ValidationMessage"
+                              Immediate="true"
+                              Variant="Variant.Outlined"
+                              Class="mb-3" />
+
+                <MudTextField @bind-Value="_model.Password"
+                              Label="Mật khẩu"
+                              Required="true"
+                              RequiredError="Vui lòng nhập mật khẩu"
+                              Immediate="true"
+                              InputType="@(_showPassword ? InputType.Text : InputType.Password)"
+                              Variant="Variant.Outlined"
+                              Adornment="Adornment.End"
+                              AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
+                              OnAdornmentClick="@(() => _showPassword = !_showPassword)"
+                              AutoComplete="new-password" />
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1 mb-4">
+                    Tối thiểu 6 ký tự và có ít nhất 1 chữ số.
+                </MudText>
+
+                <MudButton Color="Color.Primary"
+                           Variant="Variant.Filled"
+                           FullWidth="true"
+                           Size="Size.Large"
+                           Disabled="@_saving"
+                           OnClick="SubmitAsync">
+                    @(_saving ? "Đang gửi yêu cầu..." : "Gửi yêu cầu cấp tài khoản")
+                </MudButton>
+            </MudForm>
+
+            <MudButton Href="/account/login" FullWidth="true" Variant="Variant.Text" Class="mt-2">
+                Đã có tài khoản
+            </MudButton>
+        }
+    </MudPaper>
+</MudContainer>
+
+<style>
+    .register-card { border-radius: 18px; }
+    @@media (max-width: 600px) {
+        .register-card { border-radius: 0; min-height: 100vh; }
+    }
+</style>
+
+@code {
+    private MudForm? _form;
+    private bool _isValid;
+    private bool _saving;
+    private bool _submitted;
+    private bool _showPassword;
+    private SelfRegisterDriverRequest _model = new();
+
+    private async Task SubmitAsync()
+    {
+        if (_form is not null)
+            await _form.ValidateAsync();
+        if (!_isValid) return;
+
+        if (!VietnamPhoneNumber.TryNormalize(_model.PhoneNumber, out _))
+        {
+            Snackbar.Add(VietnamPhoneNumber.ValidationMessage, Severity.Warning);
+            return;
+        }
+
+        if (_model.Password.Length < 6 || !_model.Password.Any(char.IsDigit))
+        {
+            Snackbar.Add("Mật khẩu phải có tối thiểu 6 ký tự và ít nhất 1 chữ số.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            _saving = true;
+            await DriverAccountService.SubmitRegistrationAsync(_model);
+            _submitted = true;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

@@ -1,0 +1,76 @@
+<AuthorizeView>
+    <Authorized Context="ctx">
+        <MudMenu Label="@DisplayName(ctx.User)"
+                 StartIcon="@Icons.Material.Filled.AccountCircle"
+                 Variant="Variant.Text"
+                 Class="workspace-user-menu"
+                 AnchorOrigin="Origin.BottomRight"
+                 TransformOrigin="Origin.TopRight">
+            <div class="user-menu-summary">
+                <div class="user-menu-avatar">@Initials(ctx.User)</div>
+                <div>
+                    <strong>@DisplayName(ctx.User)</strong>
+                    <span>@RoleName(ctx.User)</span>
+                </div>
+            </div>
+            <MudDivider />
+
+            @if (ctx.User.IsInRole("VehicleOwner"))
+            {
+                <MudMenuItem Icon="@Icons.Material.Filled.ManageAccounts" Href="/vehicle-owner/account">
+                    Tài khoản của tôi
+                </MudMenuItem>
+            }
+            else if (ctx.User.IsInRole("Owner"))
+            {
+                <MudMenuItem Icon="@Icons.Material.Filled.ManageAccounts" Href="/owner/account">
+                    Tài khoản của tôi
+                </MudMenuItem>
+            }
+            else if (ctx.User.IsInRole("Admin"))
+            {
+                <MudMenuItem Href="/admin/company" Icon="@Icons.Material.Filled.Business">
+                    Công ty/Văn phòng được gán
+                </MudMenuItem>
+            }
+
+            <MudMenuItem Icon="@Icons.Material.Filled.LockReset" OnClick="OpenChangePasswordAsync">
+                Đổi mật khẩu
+            </MudMenuItem>
+            <MudDivider />
+            <MudMenuItem Icon="@Icons.Material.Filled.Logout" IconColor="Color.Error">
+                <form method="post" action="/account/logout/submit" class="logout-form">
+                    <AntiforgeryToken />
+                    <button type="submit" class="logout-button">Đăng xuất</button>
+                </form>
+            </MudMenuItem>
+        </MudMenu>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    [Parameter] public EventCallback OnChangePassword { get; set; }
+
+    private Task OpenChangePasswordAsync() => OnChangePassword.InvokeAsync();
+
+    private static string DisplayName(ClaimsPrincipal user)
+        => user.FindFirstValue(ClaimTypes.Name)
+           ?? user.Identity?.Name
+           ?? "Tài khoản";
+
+    private static string RoleName(ClaimsPrincipal user)
+        => user.IsInRole("Owner") ? "Chủ hệ thống"
+         : user.IsInRole("Admin") ? "Quản trị đơn vị"
+         : user.IsInRole("VehicleOwner") ? "Chủ xe / VehicleOwner"
+         : "Người dùng";
+
+    private static string Initials(ClaimsPrincipal user)
+    {
+        var name = DisplayName(user).Trim();
+        if (string.IsNullOrWhiteSpace(name)) return "U";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 1
+            ? parts[0][0].ToString().ToUpperInvariant()
+            : $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
+    }
+}

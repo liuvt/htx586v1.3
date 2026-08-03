@@ -1,0 +1,96 @@
+@inject NavigationManager NavigationManager
+@inject DriverNotificationState DriverNotificationState
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@implements IDisposable
+
+<MudPaper Class="mobile-bottom-nav"
+          Square="true"
+          Elevation="8">
+
+    <MudStack Row="true"
+              AlignItems="AlignItems.Center"
+              Justify="Justify.SpaceAround">
+
+        <MudIconButton Icon="@Icons.Material.Filled.Home"
+                       Color="@GetColor("/vehicle-owner/dashboard")"
+                       OnClick="@(() =>
+                                                  NavigateTo("/vehicle-owner/dashboard"))" />
+
+        <MudIconButton Icon="@Icons.Material.Filled.Description"
+                       Color="@GetColor("/vehicle-owner/contracts")"
+                       OnClick="@(() =>
+                                                  NavigateTo("/vehicle-owner/contracts"))" />
+
+        <MudButton Color="Color.Primary"
+                   Variant="Variant.Filled"
+                   Class="mobile-create-button"
+                   OnClick="@(() =>
+                                          NavigateTo("/vehicle-owner/contracts/create"))">
+
+            <MudIcon Icon="@Icons.Material.Filled.Add" />
+
+        </MudButton>
+
+        <div class="mobile-nav-notification-wrap">
+            <MudIconButton Icon="@Icons.Material.Filled.Notifications"
+                           Color="@GetColor("/vehicle-owner/notifications")"
+                           OnClick="@(() => NavigateTo("/vehicle-owner/notifications"))" />
+            @if (DriverNotificationState.UnreadCount > 0)
+            {
+                <span class="mobile-nav-notification-count">@(DriverNotificationState.UnreadCount > 99 ? "99+" : DriverNotificationState.UnreadCount)</span>
+            }
+        </div>
+
+        <MudIconButton Icon="@Icons.Material.Filled.Person"
+                       Color="@GetColor("/vehicle-owner/account")"
+                       OnClick="@(() =>
+                                                  NavigateTo("/vehicle-owner/account"))" />
+    </MudStack>
+
+</MudPaper>
+
+
+<style>
+    .mobile-nav-notification-wrap { position: relative; display: inline-flex; }
+    .mobile-nav-notification-count {
+        position: absolute; top: 0; right: -2px; min-width: 18px; height: 18px;
+        padding: 0 4px; border-radius: 999px; background: var(--mud-palette-error);
+        color: var(--mud-palette-error-text); font-size: 10px; line-height: 18px;
+        text-align: center; font-weight: 700; pointer-events: none;
+    }
+</style>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        DriverNotificationState.Changed += OnNotificationChanged;
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(userId))
+            await DriverNotificationState.RefreshAsync(userId);
+    }
+
+    private void OnNotificationChanged() => InvokeAsync(StateHasChanged);
+
+    private void NavigateTo(string url)
+    {
+        NavigationManager.NavigateTo(url);
+    }
+
+    public void Dispose()
+    {
+        DriverNotificationState.Changed -= OnNotificationChanged;
+    }
+
+    private Color GetColor(string path)
+    {
+        var currentPath =
+            new Uri(NavigationManager.Uri).AbsolutePath;
+
+        return currentPath.StartsWith(
+            path,
+            StringComparison.OrdinalIgnoreCase)
+                ? Color.Primary
+                : Color.Default;
+    }
+}
