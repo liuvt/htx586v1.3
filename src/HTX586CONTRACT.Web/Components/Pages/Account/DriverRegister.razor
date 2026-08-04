@@ -32,8 +32,7 @@
                               RequiredError="Vui lòng nhập ID đăng nhập"
                               Immediate="true"
                               Variant="Variant.Outlined"
-                              Class="mb-3"
-                              AutoComplete="username" />
+                              Class="mb-3" />
 
                 <MudTextField @bind-Value="_model.FullName"
                               Label="Họ và tên"
@@ -61,8 +60,7 @@
                               Variant="Variant.Outlined"
                               Adornment="Adornment.End"
                               AdornmentIcon="@(_showPassword ? Icons.Material.Filled.VisibilityOff : Icons.Material.Filled.Visibility)"
-                              OnAdornmentClick="@(() => _showPassword = !_showPassword)"
-                              AutoComplete="new-password" />
+                              OnAdornmentClick="@(() => _showPassword = !_showPassword)" />
                 <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1 mb-4">
                     Tối thiểu 6 ký tự và có ít nhất 1 chữ số.
                 </MudText>

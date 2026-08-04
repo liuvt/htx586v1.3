@@ -1,6 +1,7 @@
 @page "/owner/companies"
 @attribute [Authorize(Roles = "Owner")]
 @inject ICompanyProfileService CompanyService
+@inject CompanyExcelImportService CompanyImportService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
 @inject MasterSignatureService MasterSignatureService
@@ -9,20 +10,192 @@
 <PageTitle>Công ty/Văn phòng đại diện</PageTitle>
 <PageHeader Title="Công ty/Văn phòng đại diện" Subtitle="Quản lý thông tin các công ty và văn phòng đại diện trong hệ thống." />
 
-<MudPaper Class="pa-4 mb-4" Elevation="1">
-    <MudGrid>
-        <MudItem xs="12" md="8">
-            <MudTextField T="string" @bind-Value="_keyword" Placeholder="Tìm tên đơn vị, mã số thuế, người đại diện..." Immediate="true" Clearable="true" Variant="Variant.Outlined" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
+<MudPaper Class="pa-4 mb-4" Outlined="true">
+    <MudGrid Spacing="2">
+        <MudItem xs="12" md="6">
+            <MudTextField T="string"
+                          @bind-Value="_keyword"
+                          Label="Tìm kiếm"
+                          Placeholder="Tên đơn vị, mã số thuế, người đại diện..."
+                          Immediate="true"
+                          Clearable="true"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" />
         </MudItem>
-        <MudItem xs="12" md="4" Class="d-flex align-center justify-end">
+
+        <MudItem xs="12" md="6">
             <AuthorizeView Roles="Owner">
                 <Authorized>
-                    <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreate">Thêm</MudButton>
+                    <MudStack Row="true"
+                              Wrap="Wrap.Wrap"
+                              Spacing="2"
+                              Justify="Justify.FlexEnd"
+                              AlignItems="AlignItems.Center">
+                        <MudButton Href="/templates/Template_Import_Company_HTX586.xlsx"
+                                   download="Template_Import_Company_HTX586.xlsx"
+                                   Color="Color.Default"
+                                   Variant="Variant.Outlined"
+                                   StartIcon="@Icons.Material.Filled.Download"
+                                   Disabled="@(_readingImportFile || _importing)">
+                            Tải mẫu
+                        </MudButton>
+
+                        <MudFileUpload @ref="_companyFileUpload"
+                                       T="IBrowserFile"
+                                       Accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                       FilesChanged="ReadImportFileAsync"
+                                       MaximumFileCount="1"
+                                       Disabled="@(_readingImportFile || _importing)">
+                            <CustomContent Context="fileUpload">
+                                <MudButton Color="Color.Success"
+                                           Variant="Variant.Outlined"
+                                           Disabled="@(_readingImportFile || _importing)"
+                                           OnClick="@fileUpload.OpenFilePickerAsync">
+                                    @if (_readingImportFile)
+                                    {
+                                        <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                        <span>Đang đọc file...</span>
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.UploadFile" Size="Size.Small" Class="mr-2" />
+                                        <span>Import Excel</span>
+                                    }
+                                </MudButton>
+                            </CustomContent>
+                        </MudFileUpload>
+
+                        <MudButton Color="Color.Primary"
+                                   Variant="Variant.Filled"
+                                   StartIcon="@Icons.Material.Filled.Add"
+                                   Disabled="@(_readingImportFile || _importing)"
+                                   OnClick="OpenCreate">
+                            Thêm mới
+                        </MudButton>
+                    </MudStack>
                 </Authorized>
             </AuthorizeView>
         </MudItem>
     </MudGrid>
 </MudPaper>
+@if (_importPreview is not null)
+{
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+            <div>
+                <MudText Typo="Typo.h6">Kiểm tra dữ liệu import</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">File: @_importPreview.FileName</MudText>
+            </div>
+            <MudSpacer />
+            <MudIconButton Icon="@Icons.Material.Filled.Close"
+                           Disabled="_importing"
+                           OnClick="CancelImport"
+                           title="Đóng kết quả kiểm tra" />
+        </MudStack>
+
+        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mb-3">
+            <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined">
+                Tổng @_importPreview.TotalRows dòng
+            </MudChip>
+            <MudChip T="string" Color="Color.Success" Variant="Variant.Filled">
+                @_importPreview.ValidRows hợp lệ
+            </MudChip>
+            <MudChip T="string" Color="@(_importPreview.InvalidRows > 0 ? Color.Error : Color.Default)" Variant="Variant.Outlined">
+                @_importPreview.InvalidRows lỗi
+            </MudChip>
+        </MudStack>
+
+        @if (_importPreview.TotalRows == 0)
+        {
+            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-3">
+                File không có dòng dữ liệu để import. Dữ liệu phải bắt đầu từ dòng 2 của sheet <b>IMPORT_COMPANY</b>.
+            </MudAlert>
+        }
+        else if (_importPreview.InvalidRows > 0)
+        {
+            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-3">
+                Các dòng lỗi sẽ không được import. Bạn có thể import các dòng hợp lệ trước, sau đó sửa file và import lại phần còn lỗi.
+            </MudAlert>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mb-3">
+                Toàn bộ dữ liệu hợp lệ. Bấm <b>Xác nhận import</b> để thêm mới vào hệ thống.
+            </MudAlert>
+        }
+
+        <MudTable T="CompanyImportRowPreview"
+                  Items="_importPreview.Rows"
+                  Dense="true"
+                  Hover="true"
+                  Striped="true"
+                  Loading="_importing"
+                  RowsPerPage="10"
+                  Breakpoint="Breakpoint.Sm">
+            <HeaderContent>
+                <MudTh>Dòng</MudTh>
+                <MudTh>Công ty/Văn phòng</MudTh>
+                <MudTh>Mã số thuế</MudTh>
+                <MudTh>Người đại diện</MudTh>
+                <MudTh>Trạng thái</MudTh>
+                <MudTh>Chi tiết lỗi</MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Dòng">@context.RowNumber</MudTd>
+                <MudTd DataLabel="Công ty/Văn phòng">
+                    <b>@context.Data.CompanyName</b>
+                    @if (!string.IsNullOrWhiteSpace(context.Data.BranchName))
+                    {
+                        <br /><small>@context.Data.BranchName</small>
+                    }
+                </MudTd>
+                <MudTd DataLabel="Mã số thuế">@context.Data.TaxCode</MudTd>
+                <MudTd DataLabel="Người đại diện">@context.Data.RepresentativeName</MudTd>
+                <MudTd DataLabel="Trạng thái">
+                    <MudChip T="string"
+                             Size="Size.Small"
+                             Color="@(context.IsValid ? Color.Success : Color.Error)">
+                        @(context.IsValid ? "Hợp lệ" : "Có lỗi")
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Chi tiết lỗi">
+                    @if (context.IsValid)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Success">Sẵn sàng import</MudText>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Error">@context.ErrorMessage</MudText>
+                    }
+                </MudTd>
+            </RowTemplate>
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[] { 10, 20, 50, 100 }" />
+            </PagerContent>
+            <NoRecordsContent>
+                <MudText Class="pa-4">Không có dữ liệu trong file.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+
+        <MudStack Row="true" Class="mt-4">
+            <MudButton Variant="Variant.Outlined"
+                       Disabled="_importing"
+                       OnClick="CancelImport">
+                Hủy
+            </MudButton>
+            <MudSpacer />
+            <MudButton Color="Color.Success"
+                       Variant="Variant.Filled"
+                       StartIcon="@Icons.Material.Filled.Publish"
+                       Disabled="@(_importing || _importPreview.ValidRows == 0)"
+                       OnClick="ConfirmImportAsync">
+                @(_importing ? "Đang import..." : $"Xác nhận import {_importPreview.ValidRows} dòng")
+            </MudButton>
+        </MudStack>
+    </MudPaper>
+}
 
 @if (_showCreate)
 {
@@ -79,10 +252,14 @@
     private bool _loading;
     private bool _saving;
     private bool _showCreate;
+    private bool _readingImportFile;
+    private bool _importing;
     private string? _keyword;
     private IReadOnlyList<CompanyProfileListItemDto> _items = [];
     private CreateCompanyProfileRequest _create = NewCompany();
     private string? _companySignatureDataUrl;
+    private CompanyImportPreview? _importPreview;
+    private MudFileUpload<IBrowserFile>? _companyFileUpload;
 
     private IEnumerable<CompanyProfileListItemDto> FilteredItems => string.IsNullOrWhiteSpace(_keyword)
         ? _items
@@ -100,6 +277,7 @@
 
     private void OpenCreate()
     {
+        CancelImport();
         _create = NewCompany();
         _companySignatureDataUrl = null;
         _showCreate = true;
@@ -109,6 +287,130 @@
     {
         _companySignatureDataUrl = null;
         _showCreate = false;
+    }
+
+    private async Task ReadImportFileAsync(IBrowserFile? file)
+    {
+        if (_readingImportFile || _importing)
+            return;
+
+        _readingImportFile = true;
+        _showCreate = false;
+        _importPreview = null;
+
+        try
+        {
+            if (file is null)
+                return;
+
+            if (!file.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Vui lòng chọn file Excel có đuôi .xlsx.");
+
+            await using var browserStream = file.OpenReadStream(CompanyExcelImportService.MaximumFileSize);
+            using var memoryStream = new MemoryStream();
+            await browserStream.CopyToAsync(memoryStream);
+            memoryStream.Position = 0;
+
+            _importPreview = await CompanyImportService.PreviewAsync(memoryStream, file.Name);
+
+            Snackbar.Add(
+                $"Đã kiểm tra {_importPreview.TotalRows} dòng: {_importPreview.ValidRows} hợp lệ, {_importPreview.InvalidRows} lỗi.",
+                _importPreview.InvalidRows == 0 ? Severity.Success : Severity.Warning);
+        }
+        catch (IOException)
+        {
+            Snackbar.Add("File vượt quá 5 MB hoặc không thể đọc. Vui lòng sử dụng đúng file mẫu.", Severity.Error);
+            ResetImportSelection();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            ResetImportSelection();
+        }
+        finally
+        {
+            if (_companyFileUpload is not null)
+                await _companyFileUpload.ClearAsync();
+
+            _readingImportFile = false;
+        }
+    }
+
+    private async Task ConfirmImportAsync()
+    {
+        if (_importPreview is null || _importPreview.ValidRows == 0 || _importing)
+            return;
+
+        _importing = true;
+        try
+        {
+            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(userId))
+                throw new InvalidOperationException("Không xác định được tài khoản Owner thực hiện import.");
+
+            var originalPreview = _importPreview;
+            var result = await CompanyImportService.ImportAsync(originalPreview.Rows, userId);
+
+            if (result.ImportedCount > 0)
+                await LoadAsync();
+
+            var remainingRows = originalPreview.Rows.Where(x => !x.IsValid).ToList();
+            foreach (var importError in result.Errors)
+            {
+                var row = originalPreview.Rows.FirstOrDefault(x => x.RowNumber == importError.RowNumber);
+                if (row is null)
+                    continue;
+
+                if (!row.Errors.Contains(importError.Error, StringComparer.OrdinalIgnoreCase))
+                    row.Errors.Add(importError.Error);
+                remainingRows.Add(row);
+            }
+
+            Snackbar.Add(
+                result.FailedCount == 0
+                    ? $"Import thành công {result.ImportedCount} Công ty/Văn phòng."
+                    : $"Đã import {result.ImportedCount} dòng; còn {result.FailedCount} dòng không thể lưu.",
+                result.FailedCount == 0 ? Severity.Success : Severity.Warning);
+
+            if (remainingRows.Count == 0)
+            {
+                ResetImportSelection();
+            }
+            else
+            {
+                _importPreview = new CompanyImportPreview
+                {
+                    FileName = originalPreview.FileName,
+                    Rows = remainingRows
+                        .GroupBy(x => x.RowNumber)
+                        .Select(x => x.First())
+                        .OrderBy(x => x.RowNumber)
+                        .ToList()
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _importing = false;
+        }
+    }
+
+    private void CancelImport()
+    {
+        if (_importing)
+            return;
+
+        ResetImportSelection();
+    }
+
+    private void ResetImportSelection()
+    {
+        _importPreview = null;
     }
 
     private Task CaptureCompanySignature(string data)
