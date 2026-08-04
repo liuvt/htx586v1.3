@@ -18,7 +18,7 @@
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudGrid>
         <MudItem xs="12" md="4">
-            <MudDatePicker @bind-Date="_month" Label="Tháng thống kê" DateFormat="MM/yyyy" Variant="Variant.Outlined" />
+            <MudDatePicker @bind-Date="_month" Label="Tháng thống kê" DateFormat="MM/yyyy" Variant="Variant.Outlined" Editable="true" ImmediateText="true" Placeholder="MM/yyyy" Culture="@AppCulture.Vietnamese" AutoClose="true" />
         </MudItem>
         <MudItem xs="12" md="4">
             <MudSelect T="ContractBusinessType?" @bind-Value="_businessType" Label="Loại hợp đồng" Clearable="true" Variant="Variant.Outlined">

@@ -30,7 +30,7 @@ else
             <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.RepresentativeName" Label="Người đại diện" Required="true" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.RepresentativePosition" Label="Chức vụ" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.RepresentativeCitizenId" Label="CCCD người đại diện" Required="true" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudDatePicker @bind-Date="_model.RepresentativeCitizenIdIssuedDate" Label="Ngày cấp CCCD" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" md="4"><MudDatePicker @bind-Date="_model.RepresentativeCitizenIdIssuedDate" Label="Ngày cấp CCCD" Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Placeholder="dd/MM/yyyy" Culture="@AppCulture.Vietnamese" AutoClose="true" /></MudItem>
             <MudItem xs="12" md="8"><MudTextField @bind-Value="_model.RepresentativeCitizenIdIssuedPlace" Label="Nơi cấp CCCD" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.Email" Label="Email" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.BankAccountNumber" Label="Số tài khoản" Variant="Variant.Outlined" /></MudItem>

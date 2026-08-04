@@ -104,14 +104,24 @@ else
                                    Label="Từ ngày"
                                    DateFormat="dd/MM/yyyy"
                                    Variant="Variant.Outlined"
-                                   MaxDate="@_toDate" />
+                                   MaxDate="@_toDate"
+                                   Editable="true"
+                                   ImmediateText="true"
+                                   Placeholder="dd/MM/yyyy"
+                                   Culture="@AppCulture.Vietnamese"
+                                   AutoClose="true" />
                 </MudItem>
                 <MudItem xs="12" md="4">
                     <MudDatePicker @bind-Date="_toDate"
                                    Label="Đến ngày"
                                    DateFormat="dd/MM/yyyy"
                                    Variant="Variant.Outlined"
-                                   MinDate="@_fromDate" />
+                                   MinDate="@_fromDate"
+                                   Editable="true"
+                                   ImmediateText="true"
+                                   Placeholder="dd/MM/yyyy"
+                                   Culture="@AppCulture.Vietnamese"
+                                   AutoClose="true" />
                 </MudItem>
                 <MudItem xs="12" md="4" Class="d-flex align-center">
                     <MudButton Variant="Variant.Filled"

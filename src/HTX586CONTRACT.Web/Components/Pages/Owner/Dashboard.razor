@@ -79,7 +79,12 @@
                            Label="Tháng thống kê"
                            DateFormat="MM/yyyy"
                            Margin="Margin.Dense"
-                           Variant="Variant.Outlined" />
+                           Variant="Variant.Outlined"
+                           Editable="true"
+                           ImmediateText="true"
+                           Placeholder="MM/yyyy"
+                           Culture="@AppCulture.Vietnamese"
+                           AutoClose="true" />
         </MudItem>
         <MudItem xs="12" sm="6" md="4">
             <MudSelect T="Guid?"

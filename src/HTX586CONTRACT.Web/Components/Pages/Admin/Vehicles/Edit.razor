@@ -84,7 +84,7 @@ else
             </MudItem>
 
             <MudItem xs="12" md="4">
-                <MudDatePicker @bind-Date="_model.OwnerCitizenIdIssuedDate" Label="Ngày cấp CCCD" Variant="Variant.Outlined" />
+                <MudDatePicker @bind-Date="_model.OwnerCitizenIdIssuedDate" Label="Ngày cấp CCCD" Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Placeholder="dd/MM/yyyy" Culture="@AppCulture.Vietnamese" AutoClose="true" />
             </MudItem>
 
             <MudItem xs="12" md="8">

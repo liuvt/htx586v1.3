@@ -28,7 +28,7 @@
                 <MudItem xs="12" md="3"><MudTextField @bind-Value="_model.TaxCode" Label="Mã số thuế" Variant="Variant.Outlined" /></MudItem>
             }
             <MudItem xs="12" md="3"><MudTextField @bind-Value="_model.CitizenId" Label="CCCD" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="3"><MudDatePicker @bind-Date="_model.DateOfBirth" Label="Ngày sinh" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" md="3"><MudDatePicker @bind-Date="_model.DateOfBirth" Label="Ngày sinh" Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Placeholder="dd/MM/yyyy" Culture="@AppCulture.Vietnamese" AutoClose="true" /></MudItem>
             <MudItem xs="12" md="3"><MudTextField @bind-Value="_model.Email" Label="Email" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12"><MudTextField @bind-Value="_model.Address" Label="Địa chỉ" Variant="Variant.Outlined" /></MudItem>
         </MudGrid>

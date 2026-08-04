@@ -198,7 +198,11 @@ else
                                        Editable="true"
                                        Clearable="true"
                                        Variant="Variant.Outlined"
-                                       Disabled="@IsDriverEditableContentLocked" />
+                                       Disabled="@IsDriverEditableContentLocked"
+                                       ImmediateText="true"
+                                       Placeholder="dd/MM/yyyy"
+                                       Culture="@AppCulture.Vietnamese"
+                                       AutoClose="true" />
                     </MudItem>
                     <MudItem xs="12" sm="6" md="3">
                         <MudTimePicker Time="@_startTime"
@@ -207,7 +211,12 @@ else
                                        Editable="true"
                                        Clearable="true"
                                        Variant="Variant.Outlined"
-                                       Disabled="@IsDriverEditableContentLocked" />
+                                       Disabled="@IsDriverEditableContentLocked"
+                                       TimeFormat="HH:mm"
+                                       ImmediateText="true"
+                                       Placeholder="HH:mm"
+                                       Culture="@AppCulture.Vietnamese"
+                                       AutoClose="true" />
                     </MudItem>
                     <MudItem xs="12" sm="6" md="3">
                         <MudDatePicker Date="@_endDate"
@@ -217,7 +226,11 @@ else
                                        Editable="true"
                                        Clearable="true"
                                        Variant="Variant.Outlined"
-                                       Disabled="@IsDriverEditableContentLocked" />
+                                       Disabled="@IsDriverEditableContentLocked"
+                                       ImmediateText="true"
+                                       Placeholder="dd/MM/yyyy"
+                                       Culture="@AppCulture.Vietnamese"
+                                       AutoClose="true" />
                     </MudItem>
                     <MudItem xs="12" sm="6" md="3">
                         <MudTimePicker Time="@_endTime"
@@ -226,7 +239,12 @@ else
                                        Editable="true"
                                        Clearable="true"
                                        Variant="Variant.Outlined"
-                                       Disabled="@IsDriverEditableContentLocked" />
+                                       Disabled="@IsDriverEditableContentLocked"
+                                       TimeFormat="HH:mm"
+                                       ImmediateText="true"
+                                       Placeholder="HH:mm"
+                                       Culture="@AppCulture.Vietnamese"
+                                       AutoClose="true" />
                     </MudItem>
                     <MudItem xs="12" md="6">
                         <MudTextField @bind-Value="_model.PickupLocation"
