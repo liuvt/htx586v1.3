@@ -1,120 +1,101 @@
 @page "/admin/accounts/{UserId}"
 @attribute [Authorize(Roles = "Owner")]
-@inject IAdminAccountService AdminAccountService
+@inject IAdminAccountService AccountService
+@inject AuthenticationStateProvider AuthenticationStateProvider
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
 
-<PageTitle>Chi tiết Admin</PageTitle>
-<PageHeader Title="Chi tiết Admin" Subtitle="Xem thông tin tài khoản Admin và Công ty/văn phòng được gán." />
+<PageTitle>Chi tiết tài khoản</PageTitle>
+<PageHeader Title="Chi tiết tài khoản" Subtitle="Thông tin chung, vai trò, văn phòng quản lý và xe sở hữu." />
 
 @if (_loading)
 {
     <MudProgressCircular Indeterminate="true" />
 }
-else if (_model is null)
+else if (_detail is null)
 {
-    <MudAlert Severity="Severity.Error">Không tìm thấy tài khoản Admin.</MudAlert>
+    <MudAlert Severity="Severity.Error">Không tìm thấy tài khoản.</MudAlert>
 }
 else
 {
     <MudPaper Class="pa-4" Elevation="1">
         <MudGrid>
-            <MudItem xs="12" md="4">
-                <MudText Typo="Typo.caption">Tên đăng nhập</MudText>
-                <MudText Typo="Typo.h6">@_model.UserName</MudText>
-            </MudItem>
-
-            <MudItem xs="12" md="4">
-                <MudText Typo="Typo.caption">Quyền</MudText>
-                <MudText>@Display(_model.Roles)</MudText>
-            </MudItem>
-
-            <MudItem xs="12" md="4">
-                <MudText Typo="Typo.caption">Công ty/văn phòng</MudText>
-                <MudText>@Display(_model.CompanyName)</MudText>
-            </MudItem>
-
-            <MudItem xs="12" md="6">
-                <MudText Typo="Typo.caption">Họ và tên</MudText>
-                <MudText>@Display(_model.FullName)</MudText>
-            </MudItem>
-
-            <MudItem xs="12" md="4">
-                <MudText Typo="Typo.caption">Mã nhân viên</MudText>
-                <MudText>@Display(_model.EmployeeCode)</MudText>
-            </MudItem>
-
-            <MudItem xs="12" md="4">
-                <MudText Typo="Typo.caption">Số điện thoại</MudText>
-                <MudText>@Display(_model.PhoneNumber)</MudText>
-            </MudItem>
-
-            <MudItem xs="12" md="4">
-                <MudText Typo="Typo.caption">Email</MudText>
-                <MudText>@Display(_model.Email)</MudText>
-            </MudItem>
-
-            <MudItem xs="12" md="6">
-                <MudText Typo="Typo.subtitle1">Trạng thái</MudText>
-
-                <MudStack Row="true" Spacing="2">
-                    <MudChip T="string"
-                             Size="Size.Small"
-                             Color="@(_model.IsActive ? Color.Success : Color.Error)">
-                        @(_model.IsActive ? "Tài khoản hoạt động" : "Tài khoản đã khóa")
-                    </MudChip>
-
-                    <MudChip T="string"
-                             Size="Size.Small"
-                             Color="@(_model.MustChangePassword ? Color.Warning : Color.Success)">
-                        @(_model.MustChangePassword ? "Bắt buộc đổi mật khẩu" : "Không bắt buộc đổi mật khẩu")
-                    </MudChip>
-                </MudStack>
-            </MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Tên đăng nhập" Value="@_detail.UserName" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Vai trò" Value="@_detail.Role" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Trạng thái" Value="@(_detail.IsActive ? "Hoạt động" : "Đã khóa")" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Họ và tên" Value="@_detail.FullName" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Mã nhân viên" Value="@Display(_detail.EmployeeCode)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Số điện thoại" Value="@Display(_detail.PhoneNumber)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Email" Value="@Display(_detail.Email)" /></MudItem>
+            <MudItem xs="12" md="8"><InfoListItem Label="Công ty/Văn phòng" Value="@Display(_detail.OfficeNames)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="CCCD" Value="@Display(_detail.CitizenId)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Ngày sinh" Value="@DateText(_detail.DateOfBirth)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Ngày cấp CCCD" Value="@DateText(_detail.CitizenIdIssuedDate)" /></MudItem>
+            <MudItem xs="12" md="6"><InfoListItem Label="Nơi cấp CCCD" Value="@Display(_detail.CitizenIdIssuedPlace)" /></MudItem>
+            <MudItem xs="12" md="6"><InfoListItem Label="Địa chỉ" Value="@Display(_detail.Address)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Số GPLX" Value="@Display(_detail.DriverLicenseNumber)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Hạng GPLX" Value="@Display(_detail.DriverLicenseClass)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Hết hạn GPLX" Value="@DateText(_detail.DriverLicenseExpiryDate)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Số xe sở hữu" Value="@_detail.VehicleCount.ToString()" /></MudItem>
+            <MudItem xs="12" md="8"><InfoListItem Label="Danh sách biển số" Value="@Display(_detail.VehiclePlates)" /></MudItem>
         </MudGrid>
 
-        <MudStack Row="true" Class="mt-4">
-            <MudButton Variant="Variant.Outlined"
-                       OnClick="@(() => Navigation.NavigateTo("/admin/accounts"))">
-                Quay lại
+        <MudStack Row="true" Class="mt-4" Spacing="2">
+            <MudButton Variant="Variant.Outlined" OnClick="@(() => Navigation.NavigateTo("/admin/accounts"))">Quay lại</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="@(_detail.IsActive ? Color.Warning : Color.Success)" Disabled="_working" OnClick="ToggleActiveAsync">
+                @(_detail.IsActive ? "Khóa tài khoản" : "Mở khóa tài khoản")
             </MudButton>
-
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" Disabled="_working" OnClick="DeleteAsync">Xóa tài khoản</MudButton>
             <MudSpacer />
-
-            <MudButton Color="Color.Primary"
-                       Variant="Variant.Filled"
-                       StartIcon="@Icons.Material.Filled.Edit"
-                       OnClick="@(() => Navigation.NavigateTo($"/admin/accounts/{UserId}/edit"))">
-                Cập nhật
-            </MudButton>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Edit"
+                       OnClick="@(() => Navigation.NavigateTo($"/admin/accounts/{UserId}/edit"))">Cập nhật</MudButton>
         </MudStack>
     </MudPaper>
 }
 
 @code {
     [Parameter] public string UserId { get; set; } = string.Empty;
-
-    private AdminAccountDetail? _model;
+    private AdminAccountDetail? _detail;
     private bool _loading = true;
+    private bool _working;
 
-    protected override async Task OnParametersSetAsync()
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
     {
         _loading = true;
-
-        try
-        {
-            _model = await AdminAccountService.GetDetailAsync(UserId);
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add(ex.Message, Severity.Error);
-        }
-        finally
-        {
-            _loading = false;
-        }
+        try { _detail = await AccountService.GetDetailAsync(UserId); }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _loading = false; }
     }
 
-    private static string Display(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? "—" : value;
+    private async Task ToggleActiveAsync()
+    {
+        if (_detail is null) return;
+        _working = true;
+        try
+        {
+            var result = await AccountService.SetActiveAsync(UserId, !_detail.IsActive);
+            Snackbar.Add(result.Message, result.Succeeded ? Severity.Success : Severity.Error);
+            if (result.Succeeded) await LoadAsync();
+        }
+        finally { _working = false; }
+    }
+
+    private async Task DeleteAsync()
+    {
+        _working = true;
+        try
+        {
+            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var actor = auth.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var result = await AccountService.DeleteAsync(UserId, actor);
+            Snackbar.Add(result.Message, result.Succeeded ? Severity.Success : Severity.Error);
+            if (result.Succeeded) Navigation.NavigateTo("/admin/accounts");
+        }
+        finally { _working = false; }
+    }
+
+    private static string Display(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+    private static string DateText(DateTime? value) => value?.ToString("dd/MM/yyyy") ?? "—";
 }

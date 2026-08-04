@@ -10,10 +10,10 @@
 <PageTitle>Hợp đồng</PageTitle>
 <PageHeader Title="Hợp đồng" Subtitle="Admin quản lý hợp đồng thuộc Công ty/Văn phòng được phân quyền." />
 
-@if (!_currentCompanyProfileId.HasValue && !_loading)
+@if (_managedCompanyProfileIds.Count == 0 && !_loading)
 {
     <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
-        Tài khoản Admin chưa được gán Công ty/Văn phòng nên chưa thể quản lý hợp đồng.
+        Tài khoản Admin chưa được phân quyền Công ty/Văn phòng nên chưa thể quản lý hợp đồng.
     </MudAlert>
 }
 
@@ -25,6 +25,12 @@
                       Immediate="true"
                       Adornment="Adornment.Start"
                       AdornmentIcon="@Icons.Material.Filled.Search" />
+        <MudSelect T="Guid?" @bind-Value="_selectedCompanyProfileId" Label="Công ty/Văn phòng" Variant="Variant.Outlined" Clearable="true">
+            @foreach (var company in _companies)
+            {
+                <MudSelectItem T="Guid?" Value="@((Guid?)company.Id)">@CompanyDisplay(company)</MudSelectItem>
+            }
+        </MudSelect>
         <MudSelect T="ContractStatus?" @bind-Value="_status" Label="Trạng thái" Variant="Variant.Outlined" Clearable="true">
             @foreach (var status in Enum.GetValues<ContractStatus>().Distinct())
             {
@@ -37,7 +43,7 @@
                    Variant="Variant.Filled"
                    StartIcon="@Icons.Material.Filled.Add"
                    Href="/admin/contracts/create"
-                   Disabled="@(!_currentCompanyProfileId.HasValue)">
+                   Disabled="@(_managedCompanyProfileIds.Count == 0)">
             Tạo hợp đồng
         </MudButton>
     </MudStack>
@@ -80,7 +86,9 @@
     private ContractStatus? _status;
     private bool _loading = true;
     private string _currentUserId = string.Empty;
-    private Guid? _currentCompanyProfileId;
+    private HashSet<Guid> _managedCompanyProfileIds = [];
+    private List<CompanyProfile> _companies = [];
+    private Guid? _selectedCompanyProfileId;
 
     protected override async Task OnInitializedAsync()
     {
@@ -88,11 +96,17 @@
         _currentUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
 
         await using var db = await Factory.CreateDbContextAsync();
-        _currentCompanyProfileId = await db.Users.AsNoTracking()
-            .Where(x => x.Id == _currentUserId && !x.IsDeleted && x.IsActive &&
-                            x.CompanyProfile != null && x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
+        _managedCompanyProfileIds = await db.AdminOffices.AsNoTracking()
+            .Where(x => x.AdminUserId == _currentUserId && x.IsActive && !x.IsDeleted &&
+                        x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
             .Select(x => x.CompanyProfileId)
-            .FirstOrDefaultAsync();
+            .ToHashSetAsync();
+        _companies = await db.CompanyProfiles.AsNoTracking()
+            .Where(x => _managedCompanyProfileIds.Contains(x.Id) && x.IsActive && !x.IsDeleted)
+            .OrderBy(x => x.CompanyName)
+            .ThenBy(x => x.BranchName)
+            .ToListAsync();
+        _selectedCompanyProfileId = _companies.Count == 1 ? _companies[0].Id : null;
 
         await LoadAsync();
     }
@@ -102,18 +116,30 @@
         _loading = true;
         try
         {
-            if (!_currentCompanyProfileId.HasValue)
+            if (_managedCompanyProfileIds.Count == 0)
             {
                 _items = [];
                 return;
             }
 
-            _items = (await ContractService.GetAsync(new ContractFilter
+            var officeIds = _selectedCompanyProfileId.HasValue
+                ? new[] { _selectedCompanyProfileId.Value }
+                : _managedCompanyProfileIds;
+            var rows = new List<ContractListItemDto>();
+            foreach (var officeId in officeIds)
             {
-                Search = _search,
-                Status = _status,
-                CompanyProfileId = _currentCompanyProfileId
-            })).ToList();
+                rows.AddRange(await ContractService.GetAsync(new ContractFilter
+                {
+                    Search = _search,
+                    Status = _status,
+                    CompanyProfileId = officeId
+                }));
+            }
+            _items = rows
+                .GroupBy(x => x.Id)
+                .Select(x => x.First())
+                .OrderByDescending(x => x.CreatedAt)
+                .ToList();
         }
         finally
         {
@@ -142,6 +168,11 @@
         Snackbar.Add("Đã ẩn hợp đồng khỏi giao diện. Dữ liệu gốc vẫn còn trong database.", Severity.Success);
         await LoadAsync();
     }
+
+    private static string CompanyDisplay(CompanyProfile company)
+        => string.IsNullOrWhiteSpace(company.BranchName)
+            ? company.CompanyName
+            : $"{company.CompanyName} - {company.BranchName}";
 
     private static string StatusText(ContractStatus status) => status switch
     {

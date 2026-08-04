@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -117,7 +117,6 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                     Id = table.Column<string>(type: "nvarchar(450)", nullable: false),
                     FullName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
                     EmployeeCode = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
-                    CompanyProfileId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     CitizenId = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
                     CitizenIdIssuedDate = table.Column<DateTime>(type: "date", nullable: true),
                     CitizenIdIssuedPlace = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
@@ -172,12 +171,6 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AspNetUsers", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_AspNetUsers_CompanyProfiles_CompanyProfileId",
-                        column: x => x.CompanyProfileId,
-                        principalTable: "CompanyProfiles",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -388,7 +381,6 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                     OwnerCitizenIdIssuedPlace = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
                     OwnerAddress = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
                     OwnerPhoneNumber = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
-                    CompanyProfileId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     AssignedDriverId = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: true),
                     OwnerSignatureFileUrl = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
                     OwnerSignatureHash = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: true),
@@ -416,10 +408,78 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         principalTable: "AspNetUsers",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AdminOffices",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    AdminUserId = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: false),
+                    CompanyProfileId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsPrimary = table.Column<bool>(type: "bit", nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    AssignedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    AssignedByUserId = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AdminOffices", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Vehicles_CompanyProfiles_CompanyProfileId",
+                        name: "FK_AdminOffices_AspNetUsers_AdminUserId",
+                        column: x => x.AdminUserId,
+                        principalTable: "AspNetUsers",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_AdminOffices_CompanyProfiles_CompanyProfileId",
                         column: x => x.CompanyProfileId,
                         principalTable: "CompanyProfiles",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "OfficeVehicles",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    VehicleId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    CompanyProfileId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    IsPrimary = table.Column<bool>(type: "bit", nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    AssignedFrom = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    AssignedTo = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_OfficeVehicles", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_OfficeVehicles_CompanyProfiles_CompanyProfileId",
+                        column: x => x.CompanyProfileId,
+                        principalTable: "CompanyProfiles",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_OfficeVehicles_Vehicles_VehicleId",
+                        column: x => x.VehicleId,
+                        principalTable: "Vehicles",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -723,11 +783,6 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                 filter: "[CitizenId] IS NOT NULL");
 
             migrationBuilder.CreateIndex(
-                name: "IX_AspNetUsers_CompanyProfileId",
-                table: "AspNetUsers",
-                column: "CompanyProfileId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_AspNetUsers_IsActive",
                 table: "AspNetUsers",
                 column: "IsActive");
@@ -913,24 +968,38 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                 column: "IsDeleted");
 
             migrationBuilder.CreateIndex(
+                name: "IX_AdminOffices_Office_Active",
+                table: "AdminOffices",
+                columns: new[] { "CompanyProfileId", "IsActive" });
+
+            migrationBuilder.CreateIndex(
+                name: "UX_AdminOffices_Admin_Office",
+                table: "AdminOffices",
+                columns: new[] { "AdminUserId", "CompanyProfileId" },
+                unique: true,
+                filter: "[IsDeleted] = 0");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_OfficeVehicles_Office_Active",
+                table: "OfficeVehicles",
+                columns: new[] { "CompanyProfileId", "IsActive" });
+
+            migrationBuilder.CreateIndex(
+                name: "UX_OfficeVehicles_Vehicle_Office",
+                table: "OfficeVehicles",
+                columns: new[] { "VehicleId", "CompanyProfileId" },
+                unique: true,
+                filter: "[IsDeleted] = 0");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_Vehicles_AssignedVehicleOwnerId",
                 table: "Vehicles",
                 column: "AssignedDriverId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Vehicles_CompanyProfileId",
-                table: "Vehicles",
-                column: "CompanyProfileId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Vehicles_IsActive",
                 table: "Vehicles",
                 column: "IsActive");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Vehicles_VehicleOwner_Company_Active",
-                table: "Vehicles",
-                columns: new[] { "AssignedDriverId", "CompanyProfileId", "IsActive" });
 
             migrationBuilder.CreateIndex(
                 name: "UX_Vehicles_PlateNumber",
@@ -984,6 +1053,12 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "Customers");
+
+            migrationBuilder.DropTable(
+                name: "AdminOffices");
+
+            migrationBuilder.DropTable(
+                name: "OfficeVehicles");
 
             migrationBuilder.DropTable(
                 name: "Vehicles");

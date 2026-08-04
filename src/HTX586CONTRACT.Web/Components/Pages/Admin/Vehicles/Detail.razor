@@ -1,188 +1,72 @@
 @page "/admin/vehicles/{Id:guid}"
 @attribute [Authorize(Roles = "Owner,Admin")]
 @inject IDbContextFactory<ApplicationDbContext> Factory
-@inject NavigationManager Navigation
+@inject IOfficeAccessService OfficeAccessService
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
 <PageTitle>Chi tiết xe</PageTitle>
-<PageHeader Title="Chi tiết xe" Subtitle="Thông tin phương tiện, chủ xe và chữ ký cố định." />
+<PageHeader Title="Chi tiết xe" Subtitle="Thông tin phương tiện, VehicleOwner và các Công ty/Văn phòng hoạt động." />
 
-@if (_loading)
-{
-    <MudProgressCircular Indeterminate="true" />
-}
-else if (_item is null)
-{
-    <MudAlert Severity="Severity.Error">Không tìm thấy xe.</MudAlert>
-}
+@if (_loading) { <MudProgressCircular Indeterminate="true" /> }
+else if (_item is null) { <MudAlert Severity="Severity.Error">Không tìm thấy xe hoặc xe nằm ngoài phạm vi quản lý.</MudAlert> }
 else
 {
     <MudPaper Class="pa-4" Elevation="1">
         <MudGrid>
-            <MudItem xs="12" md="4">
-                <MudText Typo="Typo.caption">Biển số</MudText>
-                <MudText Typo="Typo.h6">@_item.PlateNumber</MudText>
-            </MudItem>
-
-            <MudItem xs="12" md="4">
-                <MudText Typo="Typo.caption">Công ty/văn phòng</MudText>
-                <MudText>@(_item.CompanyProfile?.CompanyName ?? "Chưa gán")</MudText>
-            </MudItem>
-
-            <MudItem xs="12" md="4">
-                <MudText Typo="Typo.caption">Tài xế được giao</MudText>
-                <MudText>@(_item.AssignedDriver?.FullName ?? "Chưa gán")</MudText>
-            </MudItem>
-
-            <MudItem xs="12" md="4">
-                <MudText Typo="Typo.caption">Mã xe</MudText>
-                <MudText>@(_item.VehicleCode ?? "—")</MudText>
-            </MudItem>
-
-            <MudItem xs="12" md="4">
-                <MudText Typo="Typo.caption">Nhãn hiệu</MudText>
-                <MudText>@(_item.Brand ?? "—")</MudText>
-            </MudItem>
-
-            <MudItem xs="12" md="4">
-                <MudText Typo="Typo.caption">Số chỗ</MudText>
-                <MudText>@(_item.SeatCount?.ToString() ?? "—")</MudText>
-            </MudItem>
-
-            <MudItem xs="12" md="4">
-                <MudText Typo="Typo.caption">Chủ sở hữu</MudText>
-                <MudText>@_item.OwnerName</MudText>
-            </MudItem>
-
-            <MudItem xs="12" md="4">
-                <MudText Typo="Typo.caption">CCCD chủ xe</MudText>
-                <MudText>@(_item.OwnerCitizenId ?? "—")</MudText>
-            </MudItem>
-
-            <MudItem xs="12" md="4">
-                <MudText Typo="Typo.caption">Điện thoại chủ xe</MudText>
-                <MudText>@(_item.OwnerPhoneNumber ?? "—")</MudText>
-            </MudItem>
-
-            <MudItem xs="12">
-                <MudText Typo="Typo.caption">Địa chỉ chủ xe</MudText>
-                <MudText>@(_item.OwnerAddress ?? "—")</MudText>
-            </MudItem>
-
+            <MudItem xs="12" md="4"><InfoListItem Label="Biển số" Value="@_item.PlateNumber" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Mã xe" Value="@Display(_item.VehicleCode)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="VehicleOwner" Value="@Display(_item.AssignedDriver?.FullName)" /></MudItem>
+            <MudItem xs="12"><InfoListItem Label="Công ty/Văn phòng" Value="@Display(_officeNames)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Nhãn hiệu" Value="@Display(_item.Brand)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Dòng xe" Value="@Display(_item.Model)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Số chỗ" Value="@(_item.SeatCount?.ToString() ?? "—")" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Chủ sở hữu pháp lý" Value="@_item.OwnerName" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="CCCD chủ xe" Value="@Display(_item.OwnerCitizenId)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Điện thoại chủ xe" Value="@Display(_item.OwnerPhoneNumber)" /></MudItem>
+            <MudItem xs="12"><InfoListItem Label="Địa chỉ chủ xe" Value="@Display(_item.OwnerAddress)" /></MudItem>
             <MudItem xs="12" md="6">
-                <MudText Typo="Typo.subtitle1">Chữ ký cố định chủ xe</MudText>
-
+                <MudText Typo="Typo.subtitle1">Chữ ký chủ xe</MudText>
                 @if (!string.IsNullOrWhiteSpace(_item.OwnerSignatureFileUrl))
                 {
-                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Icon="@Icons.Material.Filled.Verified">
-                        Đã lưu
-                    </MudChip>
-
-                    <MudPaper Class="pa-2 mt-2" Outlined="true">
-                        <img src="@GetSignatureUrl()"
-                             style="max-width:260px; max-height:120px; object-fit:contain;" />
-                    </MudPaper>
-
-                    @if (_item.OwnerSignedAt.HasValue)
-                    {
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">
-                            Xác nhận lúc @_item.OwnerSignedAt.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
-                        </MudText>
-                    }
+                    <img src="@($"{_item.OwnerSignatureFileUrl}?v={_item.OwnerSignedAt?.Ticks ?? 0}")" style="max-width:260px;max-height:120px;object-fit:contain" />
                 }
-                else
-                {
-                    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
-                        Chưa có chữ ký cố định chủ xe.
-                    </MudAlert>
-                }
+                else { <MudText>Chưa có chữ ký.</MudText> }
             </MudItem>
-
-            <MudItem xs="12" md="6">
-                <MudText Typo="Typo.subtitle1">Trạng thái</MudText>
-                <MudChip T="string"
-                         Size="Size.Small"
-                         Color="@(_item.IsActive ? Color.Success : Color.Default)">
-                    @(_item.IsActive ? "Hoạt động" : "Ngừng")
-                </MudChip>
-            </MudItem>
+            <MudItem xs="12" md="6"><InfoListItem Label="Trạng thái" Value="@(_item.IsActive ? "Hoạt động" : "Ngừng")" /></MudItem>
         </MudGrid>
-
-        <MudStack Row="true" Class="mt-4">
-            <MudButton Variant="Variant.Outlined" OnClick="@(() => Navigation.NavigateTo("/admin/vehicles"))">
-                Quay lại
-            </MudButton>
-
-            <MudSpacer />
-
-            <MudButton Color="Color.Primary"
-                       Variant="Variant.Filled"
-                       StartIcon="@Icons.Material.Filled.Edit"
-                       OnClick="@(() => Navigation.NavigateTo($"/admin/vehicles/{Id}/edit"))">
-                Cập nhật
-            </MudButton>
+        <MudStack Row="true" Class="mt-4"><MudButton Variant="Variant.Outlined" OnClick="@(() => Navigation.NavigateTo("/admin/vehicles"))">Quay lại</MudButton><MudSpacer />
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Edit" OnClick="@(() => Navigation.NavigateTo($"/admin/vehicles/{Id}/edit"))">Cập nhật</MudButton>
         </MudStack>
     </MudPaper>
 }
 
 @code {
     [Parameter] public Guid Id { get; set; }
-
     private Vehicle? _item;
+    private string _officeNames = string.Empty;
     private bool _loading = true;
-    private bool _isOwner;
 
     protected override async Task OnParametersSetAsync()
     {
         _loading = true;
-
         try
         {
             var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-            _isOwner = auth.User.IsInRole("Owner");
-            var currentUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
-
+            var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+            var isOwner = auth.User.IsInRole("Owner");
+            if (!await OfficeAccessService.CanManageVehicleAsync(userId, Id, isOwner)) return;
             await using var db = await Factory.CreateDbContextAsync();
-
-            var query = db.Vehicles.AsNoTracking()
-                .Include(x => x.CompanyProfile)
-                .Include(x => x.AssignedDriver)
-                .Where(x => x.Id == Id && (x.CompanyProfile == null || !x.CompanyProfile.IsDeleted));
-
-            if (!_isOwner)
-            {
-                var companyProfileId = await db.Users.AsNoTracking()
-                    .Where(x => x.Id == currentUserId && !x.IsDeleted && x.IsActive &&
-                            x.CompanyProfile != null && x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
-                    .Select(x => x.CompanyProfileId)
-                    .FirstOrDefaultAsync();
-
-                query = companyProfileId.HasValue
-                    ? query.Where(x => x.CompanyProfileId == companyProfileId.Value)
-                    : query.Where(x => false);
-            }
-
-            _item = await query.FirstOrDefaultAsync();
-
-            if (_item is null && !_isOwner)
-            {
-                Snackbar.Add("Admin chỉ được xem xe thuộc Công ty/Văn phòng được gán.", Severity.Error);
-            }
+            _item = await db.Vehicles.AsNoTracking().Include(x => x.AssignedDriver).FirstOrDefaultAsync(x => x.Id == Id);
+            _officeNames = string.Join(", ", await db.OfficeVehicles.AsNoTracking().Where(x => x.VehicleId == Id && x.IsActive)
+                .OrderByDescending(x => x.IsPrimary).ThenBy(x => x.CompanyProfile.CompanyName)
+                .Select(x => x.CompanyProfile.BranchName == null || x.CompanyProfile.BranchName == "" ? x.CompanyProfile.CompanyName : x.CompanyProfile.CompanyName + " - " + x.CompanyProfile.BranchName)
+                .ToListAsync());
         }
-        finally
-        {
-            _loading = false;
-        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _loading = false; }
     }
 
-    private string? GetSignatureUrl()
-    {
-        if (string.IsNullOrWhiteSpace(_item?.OwnerSignatureFileUrl))
-            return null;
-
-        var version = _item.OwnerSignedAt?.Ticks ?? DateTime.UtcNow.Ticks;
-
-        return $"{_item.OwnerSignatureFileUrl}?v={version}";
-    }
+    private static string Display(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
 }

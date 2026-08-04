@@ -130,6 +130,7 @@ builder.Services.AddScoped< IAuthorizationHandler, PasswordChangedHandler>();
 builder.Services.AddScoped<IDriverAccountService,DriverAccountService>();
 builder.Services.AddScoped<  IAdminAccountService, AdminAccountService>();
 builder.Services.AddScoped<  ICompanyProfileService, CompanyProfileService>();
+builder.Services.AddScoped<IOfficeAccessService, OfficeAccessService>();
 builder.Services.AddScoped<CompanyExcelImportService>();
 builder.Services.AddScoped<IContractService, ContractService>();
 builder.Services.AddScoped<IDriverNotificationService, DriverNotificationService>();

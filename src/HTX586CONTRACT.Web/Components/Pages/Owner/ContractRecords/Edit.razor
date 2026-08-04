@@ -449,7 +449,9 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
 
         var vehicleQuery = db.Vehicles.AsNoTracking()
             .Include(x => x.AssignedDriver)
-            .Where(x => x.IsActive && x.CompanyProfileId != null && x.AssignedDriverId != null);
+            .Include(x => x.OfficeVehicles)
+            .Where(x => x.IsActive && x.AssignedDriverId != null &&
+                        x.OfficeVehicles.Any(ov => ov.IsActive && ov.AssignedTo == null));
 
 
         _vehicles = await vehicleQuery
@@ -457,7 +459,8 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
             .ToListAsync();
 
         _assignedVehicles = await db.Vehicles.AsNoTracking()
-            .Where(x => x.AssignedDriverId != null)
+            .Include(x => x.OfficeVehicles)
+            .Where(x => x.AssignedDriverId != null && !x.IsDeleted)
             .OrderBy(x => x.PlateNumber)
             .ToListAsync();
 
@@ -575,11 +578,11 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
             return;
         }
 
-        if (_model.CompanyProfileId != vehicle.CompanyProfileId)
+        if (!_model.CompanyProfileId.HasValue || !VehicleBelongsToOffice(vehicle, _model.CompanyProfileId.Value))
         {
             _model.VehicleId = null;
             _model.DriverId = string.Empty;
-            Snackbar.Add("Xe không thuộc Công ty/Văn phòng đã chọn.", Severity.Error);
+            Snackbar.Add("Xe không được phân công hoạt động tại Công ty/Văn phòng đã chọn.", Severity.Error);
             return;
         }
 
@@ -695,7 +698,7 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
             return Task.FromResult(Enumerable.Empty<Vehicle>());
 
         var companyId = _model.CompanyProfileId.Value;
-        IEnumerable<Vehicle> result = _vehicles.Where(x => x.CompanyProfileId == companyId);
+        IEnumerable<Vehicle> result = _vehicles.Where(x => VehicleBelongsToOffice(x, companyId));
         var search = value?.Trim();
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -805,7 +808,7 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
                 return Enumerable.Empty<Vehicle>();
 
             var companyId = _model.CompanyProfileId.Value;
-            IEnumerable<Vehicle> result = _vehicles.Where(x => x.CompanyProfileId == companyId);
+            IEnumerable<Vehicle> result = _vehicles.Where(x => VehicleBelongsToOffice(x, companyId));
             var search = _vehicleSearch?.Trim();
 
             if (!string.IsNullOrWhiteSpace(search))
@@ -818,7 +821,7 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
             }
 
             var selected = SelectedVehicle;
-            if (selected is not null && selected.CompanyProfileId == companyId && result.All(x => x.Id != selected.Id))
+            if (selected is not null && VehicleBelongsToOffice(selected, companyId) && result.All(x => x.Id != selected.Id))
                 result = result.Append(selected);
 
             return result.OrderBy(x => x.PlateNumber);
@@ -861,9 +864,15 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
             return false;
 
         var companyId = _model.CompanyProfileId.Value;
-        return customer.CreatedByDriver?.CompanyProfileId == companyId ||
-               customer.Contracts.Any(x => x.CompanyProfileId == companyId);
+        return customer.Contracts.Any(x => x.CompanyProfileId == companyId) ||
+               _assignedVehicles.Any(x => x.AssignedDriverId == customer.CreatedByDriverId &&
+                                          VehicleBelongsToOffice(x, companyId));
     }
+
+
+    private static bool VehicleBelongsToOffice(Vehicle vehicle, Guid companyProfileId)
+        => vehicle.OfficeVehicles.Any(x => x.IsActive && x.AssignedTo == null &&
+                                           x.CompanyProfileId == companyProfileId);
 
     private bool DriverSelectionLocked
         => !string.IsNullOrWhiteSpace(SelectedVehicle?.AssignedDriverId);

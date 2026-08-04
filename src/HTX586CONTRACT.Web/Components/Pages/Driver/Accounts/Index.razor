@@ -118,21 +118,20 @@ else
 
         await using (var db = await Factory.CreateDbContextAsync())
         {
-            _vehicles = await db.Vehicles.AsNoTracking()
-                .Where(x => !x.IsDeleted && x.AssignedDriverId == userId)
+            var vehicles = await db.Vehicles.AsNoTracking()
+                .Include(x => x.OfficeVehicles)
+                    .ThenInclude(x => x.CompanyProfile)
+                .Where(x => x.AssignedDriverId == userId)
                 .OrderBy(x => x.PlateNumber)
-                .Select(x => new VehicleRow
-                {
-                    PlateNumber = x.PlateNumber,
-                    OwnerName = x.OwnerName,
-                    DriverSignedAt = x.AccountDriverSignedAt,
-                    CompanyName = x.CompanyProfile == null
-                        ? "Chưa gán Công ty/Văn phòng"
-                        : (string.IsNullOrWhiteSpace(x.CompanyProfile.BranchName)
-                            ? x.CompanyProfile.CompanyName
-                            : x.CompanyProfile.CompanyName + " - " + x.CompanyProfile.BranchName)
-                })
                 .ToListAsync();
+
+            _vehicles = vehicles.Select(x => new VehicleRow
+            {
+                PlateNumber = x.PlateNumber,
+                OwnerName = x.OwnerName,
+                DriverSignedAt = x.AccountDriverSignedAt,
+                CompanyName = OfficeNames(x)
+            }).ToList();
         }
 
         _loading = false;
@@ -203,6 +202,22 @@ else
         }
         catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
         finally { _resetting = false; }
+    }
+
+
+    private static string OfficeNames(Vehicle vehicle)
+    {
+        var names = vehicle.OfficeVehicles
+            .Where(x => x.IsActive && !x.IsDeleted && x.AssignedTo == null &&
+                        x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
+            .OrderByDescending(x => x.IsPrimary)
+            .ThenBy(x => x.CompanyProfile.CompanyName)
+            .Select(x => string.IsNullOrWhiteSpace(x.CompanyProfile.BranchName)
+                ? x.CompanyProfile.CompanyName
+                : $"{x.CompanyProfile.CompanyName} - {x.CompanyProfile.BranchName}")
+            .Distinct()
+            .ToArray();
+        return names.Length == 0 ? "Chưa gán Công ty/Văn phòng" : string.Join(", ", names);
     }
 
     private static string? N(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

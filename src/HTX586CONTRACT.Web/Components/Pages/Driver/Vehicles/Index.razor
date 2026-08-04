@@ -116,7 +116,8 @@ else
             .FirstOrDefaultAsync() ?? _fullName;
         _vehicles.Clear();
         _vehicles.AddRange(await db.Vehicles.AsNoTracking()
-            .Include(x => x.CompanyProfile)
+            .Include(x => x.OfficeVehicles)
+                .ThenInclude(x => x.CompanyProfile)
             .Where(x => x.AssignedDriverId == _userId && x.IsActive)
             .OrderBy(x => x.PlateNumber)
             .ToListAsync());
@@ -146,11 +147,19 @@ else
     }
 
     private static string CompanyDisplay(Vehicle vehicle)
-        => vehicle.CompanyProfile is null
-            ? "Chưa gán Công ty/Văn phòng"
-            : string.IsNullOrWhiteSpace(vehicle.CompanyProfile.BranchName)
-                ? vehicle.CompanyProfile.CompanyName
-                : $"{vehicle.CompanyProfile.CompanyName} - {vehicle.CompanyProfile.BranchName}";
+    {
+        var names = vehicle.OfficeVehicles
+            .Where(x => x.IsActive && !x.IsDeleted && x.AssignedTo == null &&
+                        x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
+            .OrderByDescending(x => x.IsPrimary)
+            .ThenBy(x => x.CompanyProfile.CompanyName)
+            .Select(x => string.IsNullOrWhiteSpace(x.CompanyProfile.BranchName)
+                ? x.CompanyProfile.CompanyName
+                : $"{x.CompanyProfile.CompanyName} - {x.CompanyProfile.BranchName}")
+            .Distinct()
+            .ToArray();
+        return names.Length == 0 ? "Chưa gán Công ty/Văn phòng" : string.Join(", ", names);
+    }
 
     private static string Text(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
 }

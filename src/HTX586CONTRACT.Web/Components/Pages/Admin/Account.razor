@@ -51,7 +51,8 @@ else
         using var scope = ScopeFactory.CreateScope();
         var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
         var user = await userManager.Users.AsNoTracking()
-            .Include(x => x.CompanyProfile)
+            .Include(x => x.AdminOffices)
+                .ThenInclude(x => x.CompanyProfile)
             .FirstOrDefaultAsync(x => x.Id == userId && !x.IsDeleted);
         if (user is not null && await userManager.IsInRoleAsync(user, RoleName))
         {
@@ -63,11 +64,15 @@ else
                 PhoneNumber = user.PhoneNumber,
                 Email = user.Email,
                 EmployeeCode = user.EmployeeCode,
-                CompanyName = user.CompanyProfile == null
-                    ? "Chưa được gán"
-                    : (string.IsNullOrWhiteSpace(user.CompanyProfile.BranchName)
-                        ? user.CompanyProfile.CompanyName
-                        : user.CompanyProfile.CompanyName + " - " + user.CompanyProfile.BranchName)
+                CompanyName = string.Join(", ", user.AdminOffices
+                    .Where(x => x.IsActive && !x.IsDeleted && x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
+                    .OrderByDescending(x => x.IsPrimary)
+                    .ThenBy(x => x.CompanyProfile.CompanyName)
+                    .Select(x => string.IsNullOrWhiteSpace(x.CompanyProfile.BranchName)
+                        ? x.CompanyProfile.CompanyName
+                        : x.CompanyProfile.CompanyName + " - " + x.CompanyProfile.BranchName)) is { Length: > 0 } offices
+                            ? offices
+                            : "Chưa được phân quyền"
             };
         }
         _loading = false;

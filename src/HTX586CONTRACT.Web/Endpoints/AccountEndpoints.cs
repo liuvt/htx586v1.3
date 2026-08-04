@@ -82,7 +82,6 @@ public static class AccountEndpoints
         var loginCandidates =
             await userManager.Users
                 .AsNoTracking()
-                .Include(x => x.CompanyProfile)
                 .Where(x =>
                     !x.IsDeleted &&
                     (x.NormalizedUserName == normalizedUserName ||
@@ -130,7 +129,8 @@ public static class AccountEndpoints
          */
         var user =
             await userManager.Users
-                .Include(x => x.CompanyProfile)
+                .Include(x => x.AdminOffices)
+                    .ThenInclude(x => x.CompanyProfile)
                 .FirstOrDefaultAsync(
                     x => x.Id == matchedUser.Id && !x.IsDeleted,
                     httpContext.RequestAborted);
@@ -202,10 +202,11 @@ public static class AccountEndpoints
 
         var isOwner = roles.Contains("Owner", StringComparer.OrdinalIgnoreCase);
         var isAdmin = roles.Contains("Admin", StringComparer.OrdinalIgnoreCase);
-        // Chỉ Admin bắt buộc gán trực tiếp Công ty/Văn phòng.
-        // VehicleOwner xác định phạm vi Công ty/Văn phòng theo từng xe được cấp.
+        // Admin phải có ít nhất một văn phòng đang hoạt động trong AdminOffice.
+        // VehicleOwner nhận phạm vi làm việc qua các xe trong OfficeVehicle.
         if (!isOwner && isAdmin &&
-            (user.CompanyProfile is null || user.CompanyProfile.IsDeleted || !user.CompanyProfile.IsActive))
+            !user.AdminOffices.Any(x => x.IsActive && !x.IsDeleted &&
+                                        x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted))
         {
             await signInManager.SignOutAsync();
             return RedirectToLogin("inactive", returnUrl);

@@ -12,7 +12,7 @@ src/HTX586CONTRACT.Web/appsettings.Production.json
 
 # Runtime uploads are stored outside wwwroot.
 # Keep the folder placeholder but do not commit generated signatures/PDF files.
-HTX586CONTRACT_Data/uploads/*
+src/HTX586CONTRACT_Data/uploads/*
 !HTX586CONTRACT_Data/uploads/.gitkeep
 
 # Logs and temporary files

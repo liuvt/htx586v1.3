@@ -72,6 +72,20 @@ else
                                 }
                             </MudSelect>
                         </MudItem>
+                        <MudItem xs="12">
+                            <MudSelect T="Guid?"
+                                       Value="@_model.CompanyProfileId"
+                                       ValueChanged="OfficeChanged"
+                                       Label="Công ty/Văn phòng thực hiện hợp đồng"
+                                       Required="true"
+                                       Variant="Variant.Outlined"
+                                       Disabled="@(SelectedVehicle is null)">
+                                @foreach (var office in SelectedVehicleOffices)
+                                {
+                                    <MudSelectItem T="Guid?" Value="@((Guid?)office.Id)">@OfficeDisplay(office)</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
                     }
                     <MudItem xs="12" md="8">
                         <div class="driver-contract-summary-item">
@@ -555,9 +569,11 @@ else
                 .OrderByDescending(x => x.LastUsedAt)
                 .ToListAsync();
             _vehicles = await db.Vehicles.AsNoTracking()
-                .Include(x => x.CompanyProfile)
-                .Where(x => x.IsActive && x.AssignedDriverId == _userId &&
-                    x.CompanyProfile != null && x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
+                .Include(x => x.OfficeVehicles)
+                    .ThenInclude(x => x.CompanyProfile)
+                .Where(x => x.IsActive && !x.IsDeleted && x.AssignedDriverId == _userId &&
+                    x.OfficeVehicles.Any(ov => ov.IsActive && !ov.IsDeleted && ov.AssignedTo == null &&
+                                               ov.CompanyProfile.IsActive && !ov.CompanyProfile.IsDeleted))
                 .OrderBy(x => x.PlateNumber)
                 .ToListAsync();
 
@@ -569,7 +585,7 @@ else
                 _model.BusinessType = ContractBusinessType.Passenger;
                 _model.AreaCode = _driver?.AreaCode ?? string.Empty;
                 _model.VehicleId = _vehicles.FirstOrDefault()?.Id;
-                _model.CompanyProfileId = _vehicles.FirstOrDefault()?.CompanyProfileId;
+                _model.CompanyProfileId = PrimaryOfficeId(_vehicles.FirstOrDefault());
                 _model.OperatingDriverName = _driver?.FullName;
                 _model.OperatingDriverPhoneNumber = _driver?.PhoneNumber;
                 _model.OperatingDriverLicenseNumber = _driver?.DriverLicenseNumber;
@@ -611,6 +627,7 @@ else
                 ContractNumber = detail.ContractNumber,
                 BusinessType = detail.BusinessType,
                 ContractTypeId = detail.ContractTypeId,
+                CompanyProfileId = detail.CompanyProfileId,
                 DriverId = detail.DriverId,
                 CustomerId = detail.CustomerId,
                 CustomerName = detail.CustomerName,
@@ -654,7 +671,17 @@ else
     {
         _model.VehicleId = vehicleId;
         var vehicle = _vehicles.FirstOrDefault(x => x.Id == vehicleId);
-        _model.CompanyProfileId = vehicle?.CompanyProfileId;
+        _model.CompanyProfileId = PrimaryOfficeId(vehicle);
+    }
+
+    private void OfficeChanged(Guid? companyProfileId)
+    {
+        if (companyProfileId.HasValue && SelectedVehicleOffices.All(x => x.Id != companyProfileId.Value))
+        {
+            Snackbar.Add("Văn phòng không được gán cho xe đã chọn.", Severity.Error);
+            return;
+        }
+        _model.CompanyProfileId = companyProfileId;
     }
 
     private async Task ReceiveContractAsync()
@@ -684,11 +711,31 @@ else
     }
 
     private static string CompanyName(Vehicle vehicle)
-        => vehicle.CompanyProfile is null
-            ? "Chưa gán Công ty/Văn phòng"
-            : string.IsNullOrWhiteSpace(vehicle.CompanyProfile.BranchName)
-                ? vehicle.CompanyProfile.CompanyName
-                : $"{vehicle.CompanyProfile.CompanyName} - {vehicle.CompanyProfile.BranchName}";
+    {
+        var names = vehicle.OfficeVehicles
+            .Where(x => x.IsActive && !x.IsDeleted && x.AssignedTo == null &&
+                        x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
+            .OrderByDescending(x => x.IsPrimary)
+            .ThenBy(x => x.CompanyProfile.CompanyName)
+            .Select(x => OfficeDisplay(x.CompanyProfile))
+            .Distinct()
+            .ToArray();
+        return names.Length == 0 ? "Chưa gán Công ty/Văn phòng" : string.Join(", ", names);
+    }
+
+    private static Guid? PrimaryOfficeId(Vehicle? vehicle)
+        => vehicle?.OfficeVehicles
+            .Where(x => x.IsActive && !x.IsDeleted && x.AssignedTo == null &&
+                        x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
+            .OrderByDescending(x => x.IsPrimary)
+            .ThenBy(x => x.AssignedFrom)
+            .Select(x => (Guid?)x.CompanyProfileId)
+            .FirstOrDefault();
+
+    private static string OfficeDisplay(CompanyProfile office)
+        => string.IsNullOrWhiteSpace(office.BranchName)
+            ? office.CompanyName
+            : $"{office.CompanyName} - {office.BranchName}";
 
     private void AddPassenger()
         => _model.Passengers.Add(new ContractPassengerDto
@@ -823,9 +870,11 @@ else
     }
     private string CompanyDisplayText => IsFinalLocked && !string.IsNullOrWhiteSpace(_detail?.CompanyName)
         ? _detail.CompanyName
-        : SelectedVehicle is null
-            ? "Chưa chọn xe"
-            : CompanyName(SelectedVehicle);
+        : SelectedOffice is not null
+            ? OfficeDisplay(SelectedOffice)
+            : SelectedVehicle is null
+                ? "Chưa chọn xe"
+                : "Chưa chọn Công ty/Văn phòng";
     private string BusinessTypeDisplayText => _model.BusinessType switch
     {
         ContractBusinessType.Passenger => "HỢP ĐỒNG VẬN CHUYỂN HÀNH KHÁCH",
@@ -855,20 +904,31 @@ else
             return _detail?.VehicleBrand ?? string.Empty;
         }
     }
+    private IEnumerable<CompanyProfile> SelectedVehicleOffices
+        => SelectedVehicle?.OfficeVehicles
+            .Where(x => x.IsActive && !x.IsDeleted && x.AssignedTo == null &&
+                        x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
+            .OrderByDescending(x => x.IsPrimary)
+            .ThenBy(x => x.CompanyProfile.CompanyName)
+            .Select(x => x.CompanyProfile)
+            .DistinctBy(x => x.Id)
+            ?? Enumerable.Empty<CompanyProfile>();
+    private CompanyProfile? SelectedOffice
+        => SelectedVehicleOffices.FirstOrDefault(x => x.Id == _model.CompanyProfileId);
     private int? VehicleSeatCount => SelectedVehicle?.SeatCount ?? _detail?.SeatCount;
     private string OfficeSigner => IsFinalLocked
         ? _detail?.CompanyRepresentativeName ?? "Đại diện văn phòng"
-        : SelectedVehicle?.CompanyProfile?.RepresentativeName ?? "Đại diện văn phòng";
+        : SelectedOffice?.RepresentativeName ?? "Đại diện văn phòng";
     private string OwnerSigner => SelectedVehicle?.OwnerName ?? _detail?.OwnerName ?? "Chủ sở hữu xe";
     private string DriverSigner => IsFinalLocked
         ? _detail?.DriverName ?? "Tài xế"
         : _driver?.FullName ?? "Tài xế";
     private string? FixedOfficeSignatureUrl => IsFinalLocked
         ? _detail?.CompanyRepresentativeSignatureFileUrl
-        : SelectedVehicle?.CompanyProfile?.RepresentativeSignatureFileUrl;
+        : SelectedOffice?.RepresentativeSignatureFileUrl;
     private DateTime? FixedOfficeSignedAt => IsFinalLocked
         ? _detail?.CompanyRepresentativeSignedAt
-        : SelectedVehicle?.CompanyProfile?.RepresentativeSignedAt;
+        : SelectedOffice?.RepresentativeSignedAt;
     private string? FixedOwnerSignatureUrl => IsFinalLocked
         ? _detail?.VehicleOwnerSignatureFileUrl
         : SelectedVehicle?.OwnerSignatureFileUrl;

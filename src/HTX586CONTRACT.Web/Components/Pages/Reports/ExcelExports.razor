@@ -19,10 +19,10 @@ else
         Mỗi file danh mục có 2 sheet <b>Tổng hợp</b> và <b>Chi tiết</b>.
     </MudAlert>
 
-    @if (!_isOwner && !_companyProfileId.HasValue)
+    @if (!_isOwner && _managedCompanyProfileIds.Count == 0)
     {
         <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="mb-4">
-            Tài khoản Admin chưa được gán Công ty/Văn phòng nên chưa thể xuất báo cáo.
+            Tài khoản Admin chưa được phân quyền Công ty/Văn phòng nên chưa thể xuất báo cáo.
         </MudAlert>
     }
 
@@ -155,12 +155,12 @@ else
 @code {
     private bool _loading = true;
     private bool _isOwner;
-    private Guid? _companyProfileId;
+    private HashSet<Guid> _managedCompanyProfileIds = [];
     private string _scopeName = "Đang xác định";
     private DateTime? _fromDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
     private DateTime? _toDate = DateTime.Today;
 
-    private bool ExportDisabled => !_isOwner && !_companyProfileId.HasValue;
+    private bool ExportDisabled => !_isOwner && _managedCompanyProfileIds.Count == 0;
 
     private int RevenueDayCount =>
         _fromDate.HasValue && _toDate.HasValue
@@ -172,7 +172,7 @@ else
         get
         {
             if (ExportDisabled)
-                return "Tài khoản Admin chưa được gán Công ty/Văn phòng.";
+                return "Tài khoản Admin chưa được phân quyền Công ty/Văn phòng.";
             if (!_fromDate.HasValue || !_toDate.HasValue)
                 return "Vui lòng chọn đầy đủ ngày bắt đầu và ngày kết thúc.";
             if (_toDate.Value.Date < _fromDate.Value.Date)
@@ -204,25 +204,25 @@ else
 
             var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
             await using var db = await Factory.CreateDbContextAsync();
-            var admin = await db.Users
-                .AsNoTracking()
-                .Where(x => x.Id == userId && !x.IsDeleted && x.IsActive &&
-                            x.CompanyProfile != null && x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
+            var offices = await db.AdminOffices.AsNoTracking()
+                .Where(x => x.AdminUserId == userId && x.IsActive && !x.IsDeleted &&
+                            x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
+                .OrderByDescending(x => x.IsPrimary)
+                .ThenBy(x => x.CompanyProfile.CompanyName)
                 .Select(x => new
                 {
                     x.CompanyProfileId,
-                    CompanyName = x.CompanyProfile == null
-                        ? string.Empty
-                        : (string.IsNullOrEmpty(x.CompanyProfile.BranchName)
-                            ? x.CompanyProfile.CompanyName
-                            : x.CompanyProfile.CompanyName + " - " + x.CompanyProfile.BranchName)
+                    x.CompanyProfile.CompanyName,
+                    x.CompanyProfile.BranchName
                 })
-                .FirstOrDefaultAsync();
+                .ToListAsync();
 
-            _companyProfileId = admin?.CompanyProfileId;
-            _scopeName = _companyProfileId.HasValue
-                ? admin?.CompanyName ?? "Công ty/Văn phòng được gán"
-                : "Chưa được gán Công ty/Văn phòng";
+            _managedCompanyProfileIds = offices.Select(x => x.CompanyProfileId).ToHashSet();
+            _scopeName = offices.Count > 0
+                ? string.Join(", ", offices.Select(x => string.IsNullOrWhiteSpace(x.BranchName)
+                    ? x.CompanyName
+                    : $"{x.CompanyName} - {x.BranchName}"))
+                : "Chưa được phân quyền Công ty/Văn phòng";
         }
         finally
         {

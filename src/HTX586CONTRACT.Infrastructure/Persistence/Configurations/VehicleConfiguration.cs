@@ -39,13 +39,8 @@ public sealed class VehicleConfiguration : IEntityTypeConfiguration<Vehicle>
         builder.Property(x => x.AssignedDriverId).HasMaxLength(450);
         builder.Property(x => x.RowVersion).IsRowVersion();
 
-        builder.HasOne(x => x.CompanyProfile)
-            .WithMany(x => x.Vehicles)
-            .HasForeignKey(x => x.CompanyProfileId)
-            .OnDelete(DeleteBehavior.Restrict);
-
         builder.HasOne(x => x.AssignedDriver)
-            .WithMany()
+            .WithMany(x => x.OwnedVehicles)
             .HasForeignKey(x => x.AssignedDriverId)
             .OnDelete(DeleteBehavior.Restrict);
 
@@ -54,15 +49,9 @@ public sealed class VehicleConfiguration : IEntityTypeConfiguration<Vehicle>
             .HasFilter("[IsDeleted] = 0")
             .HasDatabaseName("UX_Vehicles_PlateNumber");
 
-        builder.HasIndex(x => x.CompanyProfileId)
-            .HasDatabaseName("IX_Vehicles_CompanyProfileId");
-
         // Một VehicleOwner có nhiều xe. Index này chỉ phục vụ truy vấn, không unique.
         builder.HasIndex(x => x.AssignedDriverId)
             .HasDatabaseName("IX_Vehicles_AssignedVehicleOwnerId");
-
-        builder.HasIndex(x => new { x.AssignedDriverId, x.CompanyProfileId, x.IsActive })
-            .HasDatabaseName("IX_Vehicles_VehicleOwner_Company_Active");
 
         builder.HasIndex(x => x.IsActive).HasDatabaseName("IX_Vehicles_IsActive");
         builder.HasQueryFilter(x => !x.IsDeleted);

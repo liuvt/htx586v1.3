@@ -89,16 +89,6 @@ public sealed class CompanyProfileConfiguration : IEntityTypeConfiguration<Compa
         builder.Property(x => x.DeletedBy)
             .HasMaxLength(450);
 
-        builder.HasMany(x => x.Users)
-            .WithOne(x => x.CompanyProfile)
-            .HasForeignKey(x => x.CompanyProfileId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasMany(x => x.Vehicles)
-            .WithOne(x => x.CompanyProfile)
-            .HasForeignKey(x => x.CompanyProfileId)
-            .OnDelete(DeleteBehavior.Restrict);
-
         builder.HasMany(x => x.Contracts)
             .WithOne(x => x.CompanyProfile)
             .HasForeignKey(x => x.CompanyProfileId)

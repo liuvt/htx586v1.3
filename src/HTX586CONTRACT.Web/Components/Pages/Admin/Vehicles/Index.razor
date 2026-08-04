@@ -1,253 +1,148 @@
 @page "/admin/vehicles"
 @attribute [Authorize(Roles = "Owner,Admin")]
 @inject IDbContextFactory<ApplicationDbContext> Factory
-@inject NavigationManager Navigation
+@inject IOfficeAccessService OfficeAccessService
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
 <PageTitle>Xe và chủ sở hữu</PageTitle>
-<PageHeader Title="Quản lý xe" Subtitle="Danh sách phương tiện và chủ sở hữu xe trong hệ thống." />
+<PageHeader Title="Quản lý xe" Subtitle="Xe thuộc một VehicleOwner và có thể hoạt động tại nhiều Công ty/Văn phòng." />
 
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudGrid>
         <MudItem xs="12" md="8">
-            <MudTextField T="string"
-                          @bind-Value="_keyword"
-                          Placeholder="Tìm biển số, chủ xe, tên hoặc mã tài khoản VehicleOwner..."
-                          Immediate="true"
-                          Clearable="true"
-                          Adornment="Adornment.Start"
-                          AdornmentIcon="@Icons.Material.Filled.Search"
-                          Variant="Variant.Outlined" />
+            <MudTextField T="string" @bind-Value="_keyword" Placeholder="Tìm biển số, chủ xe, VehicleOwner, văn phòng..."
+                          Immediate="true" Clearable="true" Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" />
         </MudItem>
         <MudItem xs="12" md="4" Class="d-flex align-center justify-end">
-            <MudButton Color="Color.Primary"
-                           Variant="Variant.Filled"
-                           StartIcon="@Icons.Material.Filled.Add"
-                           OnClick="@(() => Navigation.NavigateTo("/admin/vehicles/create"))">
-                Thêm xe
-            </MudButton>
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="@(() => Navigation.NavigateTo("/admin/vehicles/create"))">Thêm xe</MudButton>
         </MudItem>
     </MudGrid>
 </MudPaper>
 
-<MudTable T="Vehicle"
-          Items="FilteredItems"
-          Loading="_loading"
-          Hover="true"
-          Striped="true"
-          RowsPerPage="20"
-          Breakpoint="Breakpoint.Sm">
-
+<MudTable T="VehicleRow" Items="FilteredItems" Loading="_loading" Hover="true" Striped="true" RowsPerPage="20" Breakpoint="Breakpoint.Sm">
     <HeaderContent>
-        <MudTh>Biển số</MudTh>
-        <MudTh>Công ty/văn phòng</MudTh>
-        <MudTh>VehicleOwner được cấp xe</MudTh>
-        <MudTh>Nhãn hiệu</MudTh>
-        <MudTh>Số chỗ</MudTh>
-        <MudTh>Chủ sở hữu</MudTh>
-        <MudTh>Chữ ký</MudTh>
-        <MudTh>Trạng thái</MudTh>
-        <MudTh></MudTh>
+        <MudTh>Biển số</MudTh><MudTh>Công ty/Văn phòng</MudTh><MudTh>VehicleOwner</MudTh>
+        <MudTh>Nhãn hiệu</MudTh><MudTh>Số chỗ</MudTh><MudTh>Chủ sở hữu pháp lý</MudTh><MudTh>Trạng thái</MudTh><MudTh></MudTh>
     </HeaderContent>
-
     <RowTemplate>
-        <MudTd DataLabel="Biển số">
-            <b>@context.PlateNumber</b>
-        </MudTd>
-
-        <MudTd DataLabel="Công ty/văn phòng">
-            @(context.CompanyProfile?.CompanyName ?? "Chưa gán")
-        </MudTd>
-
-        <MudTd DataLabel="VehicleOwner">
-            @DriverDisplay(context.AssignedDriver)
-        </MudTd>
-
-        <MudTd DataLabel="Nhãn hiệu">
-            @(context.Brand ?? "—")
-        </MudTd>
-
-        <MudTd DataLabel="Số chỗ">
-            @(context.SeatCount?.ToString() ?? "—")
-        </MudTd>
-
-        <MudTd DataLabel="Chủ sở hữu">
-            @context.OwnerName
-        </MudTd>
-
-        <MudTd DataLabel="Chữ ký">
-            <MudChip T="string"
-                     Size="Size.Small"
-                     Color="@(string.IsNullOrWhiteSpace(context.OwnerSignatureFileUrl) ? Color.Warning : Color.Success)">
-                @(string.IsNullOrWhiteSpace(context.OwnerSignatureFileUrl) ? "Chưa có" : "Đã lưu")
-            </MudChip>
-        </MudTd>
-
-        <MudTd DataLabel="Trạng thái">
-            <MudChip T="string"
-                     Size="Size.Small"
-                     Color="@(context.IsActive ? Color.Success : Color.Default)">
-                @(context.IsActive ? "Hoạt động" : "Ngừng")
-            </MudChip>
-        </MudTd>
-
+        <MudTd DataLabel="Biển số"><b>@context.PlateNumber</b><br /><small>@(context.VehicleCode ?? "—")</small></MudTd>
+        <MudTd DataLabel="Công ty/Văn phòng">@Display(context.OfficeNames)</MudTd>
+        <MudTd DataLabel="VehicleOwner">@Display(context.VehicleOwnerName)</MudTd>
+        <MudTd DataLabel="Nhãn hiệu">@Display(context.Brand)</MudTd>
+        <MudTd DataLabel="Số chỗ">@(context.SeatCount?.ToString() ?? "—")</MudTd>
+        <MudTd DataLabel="Chủ sở hữu">@context.OwnerName</MudTd>
+        <MudTd DataLabel="Trạng thái"><MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">@(context.IsActive ? "Hoạt động" : "Ngừng")</MudChip></MudTd>
         <MudTd>
-            <MudIconButton Icon="@Icons.Material.Filled.Visibility"
-                           Color="Color.Info"
-                           OnClick="@(() => Navigation.NavigateTo($"/admin/vehicles/{context.Id}"))" />
-
-            <MudIconButton Icon="@Icons.Material.Filled.Edit"
-                           Color="Color.Primary"
-                           OnClick="@(() => Navigation.NavigateTo($"/admin/vehicles/{context.Id}/edit"))" />
-            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline"
-                           Color="Color.Error"
-                           OnClick="@(() => DeleteAsync(context.Id))" />
+            <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info" OnClick="@(() => Navigation.NavigateTo($"/admin/vehicles/{context.Id}"))" />
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="@(() => Navigation.NavigateTo($"/admin/vehicles/{context.Id}/edit"))" />
+            @if (_isOwner)
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" OnClick="@(() => DeleteAsync(context.Id))" />
+            }
         </MudTd>
     </RowTemplate>
-
-    <NoRecordsContent>
-        <MudText Class="pa-4">Không tìm thấy xe phù hợp.</MudText>
-    </NoRecordsContent>
-    <PagerContent>
-        <MudTablePager PageSizeOptions="_pageSizeOptions" />
-    </PagerContent>
+    <PagerContent><MudTablePager PageSizeOptions="@(new int[] { 10, 20, 50, 100 })" /></PagerContent>
 </MudTable>
 
 @code {
-    private static readonly int[] _pageSizeOptions = [10, 20, 50, 100];
-    private List<Vehicle> _items = [];
+    private List<VehicleRow> _items = [];
     private string? _keyword;
     private bool _loading;
     private bool _isOwner;
-    private Guid? _adminCompanyProfileId;
+    private string _currentUserId = string.Empty;
+    private HashSet<Guid> _managedOfficeIds = [];
 
-    private IEnumerable<Vehicle> FilteredItems =>
-        string.IsNullOrWhiteSpace(_keyword)
-            ? _items
-            : _items.Where(x =>
-                Contains(x.PlateNumber) ||
-                Contains(x.OwnerName) ||
-                Contains(x.AssignedDriver?.FullName) ||
-                Contains(x.AssignedDriver?.EmployeeCode));
+    private IEnumerable<VehicleRow> FilteredItems => string.IsNullOrWhiteSpace(_keyword) ? _items : _items.Where(x =>
+        Contains(x.PlateNumber) || Contains(x.VehicleCode) || Contains(x.OwnerName) || Contains(x.VehicleOwnerName) || Contains(x.OfficeNames));
 
     protected override async Task OnInitializedAsync()
     {
         var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _currentUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
         _isOwner = auth.User.IsInRole("Owner");
-
-        if (!_isOwner)
-        {
-            var currentUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
-            await using var db = await Factory.CreateDbContextAsync();
-            _adminCompanyProfileId = await db.Users.AsNoTracking()
-                .Where(x => x.Id == currentUserId && !x.IsDeleted && x.IsActive &&
-                            x.CompanyProfile != null && x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
-                .Select(x => x.CompanyProfileId)
-                .FirstOrDefaultAsync();
-        }
-
+        _managedOfficeIds = await OfficeAccessService.GetManagedOfficeIdsAsync(_currentUserId, _isOwner);
         await LoadAsync();
     }
 
     private async Task LoadAsync()
     {
         _loading = true;
-
         try
         {
             await using var db = await Factory.CreateDbContextAsync();
-
-            var query = db.Vehicles.AsNoTracking()
-                .Include(x => x.CompanyProfile)
+            var vehicles = await db.Vehicles.AsNoTracking()
                 .Include(x => x.AssignedDriver)
-                .Where(x => x.CompanyProfile == null || !x.CompanyProfile.IsDeleted)
-                .AsQueryable();
-
-            if (!_isOwner)
-            {
-                query = _adminCompanyProfileId.HasValue
-                    ? query.Where(x => x.CompanyProfileId == _adminCompanyProfileId.Value)
-                    : query.Where(x => false);
-            }
-
-            _items = await query
+                .Include(x => x.OfficeVehicles)
+                    .ThenInclude(x => x.CompanyProfile)
+                .Where(x => x.OfficeVehicles.Any(ov => ov.IsActive && !ov.IsDeleted && ov.AssignedTo == null &&
+                                                       _managedOfficeIds.Contains(ov.CompanyProfileId)))
                 .OrderBy(x => x.PlateNumber)
                 .ToListAsync();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
 
+            _items = vehicles.Select(x => new VehicleRow
+            {
+                Id = x.Id,
+                PlateNumber = x.PlateNumber,
+                VehicleCode = x.VehicleCode,
+                Brand = x.Brand,
+                SeatCount = x.SeatCount,
+                OwnerName = x.OwnerName,
+                VehicleOwnerName = x.AssignedDriver?.FullName,
+                OfficeNames = string.Join(", ", x.OfficeVehicles
+                    .Where(ov => ov.IsActive && !ov.IsDeleted && ov.AssignedTo == null &&
+                                 _managedOfficeIds.Contains(ov.CompanyProfileId))
+                    .OrderByDescending(ov => ov.IsPrimary)
+                    .ThenBy(ov => ov.CompanyProfile.CompanyName)
+                    .Select(ov => string.IsNullOrWhiteSpace(ov.CompanyProfile.BranchName)
+                        ? ov.CompanyProfile.CompanyName
+                        : $"{ov.CompanyProfile.CompanyName} - {ov.CompanyProfile.BranchName}")),
+                IsActive = x.IsActive
+            }).ToList();
+        }
+        finally { _loading = false; }
+    }
 
     private async Task DeleteAsync(Guid id)
     {
         try
         {
-            await using var db = await Factory.CreateDbContextAsync();
-            var query = db.Vehicles
-                .Include(x => x.Contracts)
-                .Where(x => x.Id == id && !x.IsDeleted);
-
             if (!_isOwner)
-            {
-                query = _adminCompanyProfileId.HasValue
-                    ? query.Where(x => x.CompanyProfileId == _adminCompanyProfileId.Value)
-                    : query.Where(_ => false);
-            }
-
-            var vehicle = await query.FirstOrDefaultAsync();
-            if (vehicle is null)
-            {
-                Snackbar.Add("Không tìm thấy xe hoặc xe nằm ngoài phạm vi quản lý.", Severity.Warning);
-                return;
-            }
-
-            var hasOpenContract = vehicle.Contracts.Any(x => !x.IsDeleted &&
-                x.Status is not ContractStatus.Completed
-                    and not ContractStatus.Cancelled
-                    and not ContractStatus.Expired
-                    and not ContractStatus.Invalidated);
-            if (hasOpenContract)
-            {
-                Snackbar.Add("Xe đang có hợp đồng chưa kết thúc. Hãy hoàn thành hoặc hủy hợp đồng trước khi xóa xe.", Severity.Warning);
-                return;
-            }
-
-            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-            var currentUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+                throw new InvalidOperationException("Chỉ tài khoản Owner được phép xóa toàn bộ xe khỏi hệ thống.");
+            if (!await OfficeAccessService.CanManageVehicleAsync(_currentUserId, id, true))
+                throw new InvalidOperationException("Xe nằm ngoài phạm vi quản lý.");
+            await using var db = await Factory.CreateDbContextAsync();
+            var vehicle = await db.Vehicles.Include(x => x.Contracts).FirstOrDefaultAsync(x => x.Id == id);
+            if (vehicle is null) return;
+            var hasOpenContract = vehicle.Contracts.Any(x => x.Status is not ContractStatus.Completed and not ContractStatus.Cancelled and not ContractStatus.Expired and not ContractStatus.Invalidated);
+            if (hasOpenContract) { Snackbar.Add("Xe đang có hợp đồng chưa kết thúc.", Severity.Warning); return; }
             var now = DateTime.UtcNow;
-            vehicle.IsDeleted = true;
-            vehicle.IsActive = false;
-            vehicle.DeletedAt = now;
-            vehicle.DeletedBy = currentUserId;
-            vehicle.AssignedDriverId = null;
-            vehicle.UpdatedAt = now;
-            vehicle.UpdatedBy = currentUserId;
+            vehicle.IsDeleted = true; vehicle.IsActive = false; vehicle.DeletedAt = now; vehicle.DeletedBy = _currentUserId;
+            var links = await db.OfficeVehicles.Where(x => x.VehicleId == id).ToListAsync();
+            foreach (var link in links) { link.IsDeleted = true; link.IsActive = false; link.AssignedTo = now; link.DeletedAt = now; link.DeletedBy = _currentUserId; }
             await db.SaveChangesAsync();
-
-            Snackbar.Add("Đã xóa mềm xe. Dữ liệu hợp đồng lịch sử vẫn được giữ nguyên.", Severity.Success);
+            Snackbar.Add("Đã xóa mềm xe.", Severity.Success);
             await LoadAsync();
         }
-        catch (Exception ex)
-        {
-            Snackbar.Add(ex.Message, Severity.Error);
-        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
     }
 
-    private bool Contains(string? value) =>
-        !string.IsNullOrWhiteSpace(value) &&
-        value.Contains(_keyword!.Trim(), StringComparison.OrdinalIgnoreCase);
+    private bool Contains(string? value) => !string.IsNullOrWhiteSpace(value) && value.Contains(_keyword!.Trim(), StringComparison.OrdinalIgnoreCase);
+    private static string Display(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
 
-    private static string DriverDisplay(ApplicationUser? driver)
+    private sealed class VehicleRow
     {
-        if (driver is null)
-            return "Chưa gán";
-
-        return string.IsNullOrWhiteSpace(driver.EmployeeCode)
-            ? driver.FullName
-            : $"{driver.FullName} ({driver.EmployeeCode})";
+        public Guid Id { get; set; }
+        public string PlateNumber { get; set; } = string.Empty;
+        public string? VehicleCode { get; set; }
+        public string? Brand { get; set; }
+        public int? SeatCount { get; set; }
+        public string OwnerName { get; set; } = string.Empty;
+        public string? VehicleOwnerName { get; set; }
+        public string OfficeNames { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
     }
 }

@@ -33,7 +33,6 @@ public sealed class DriverAccountService(
             EmployeeCode = N(request.EmployeeCode),
             PhoneNumber = phone,
             Email = N(request.Email),
-            CompanyProfileId = null,
             CitizenId = N(request.CitizenId),
             CitizenIdIssuedDate = request.CitizenIdIssuedDate,
             CitizenIdIssuedPlace = N(request.CitizenIdIssuedPlace),
@@ -75,7 +74,6 @@ public sealed class DriverAccountService(
             UserName = request.UserName.Trim(),
             FullName = request.FullName.Trim(),
             PhoneNumber = phone,
-            CompanyProfileId = null,
             RegistrationStatus = "Pending",
             RegistrationRequestedAt = DateTime.UtcNow,
             IsActive = false,
@@ -153,7 +151,6 @@ public sealed class DriverAccountService(
         user.RegistrationStatus = approve ? "Approved" : "Rejected";
         user.IsActive = approve;
         user.MustChangePassword = false;
-        user.CompanyProfileId = null;
         user.RegistrationViewedAt ??= now;
         user.RegistrationViewedByUserId ??= reviewerUserId;
         user.RegistrationReviewedAt = now;
@@ -178,7 +175,6 @@ public sealed class DriverAccountService(
         await EnsureLoginIdentifiersAvailableAsync(user.UserName ?? string.Empty, phone, user.Id, ct);
 
         var activeChanged = user.IsActive != request.IsActive;
-        user.CompanyProfileId = null;
         user.FullName = request.FullName.Trim();
         user.EmployeeCode = N(request.EmployeeCode);
         user.PhoneNumber = phone;
@@ -210,19 +206,31 @@ public sealed class DriverAccountService(
             .FirstOrDefaultAsync(x => x.Id == userId, ct);
         if (user is null) return null;
 
-        var vehicles = await db.Vehicles.AsNoTracking()
+        var vehicleEntities = await db.Vehicles.AsNoTracking()
+            .Include(x => x.OfficeVehicles)
+                .ThenInclude(x => x.CompanyProfile)
             .Where(x => x.AssignedDriverId == userId && !x.IsDeleted)
-            .Select(x => new
-            {
-                x.PlateNumber,
-                x.AccountDriverSignedAt,
-                CompanyName = x.CompanyProfile == null
-                    ? string.Empty
-                    : (string.IsNullOrWhiteSpace(x.CompanyProfile.BranchName)
-                        ? x.CompanyProfile.CompanyName
-                        : x.CompanyProfile.CompanyName + " - " + x.CompanyProfile.BranchName)
-            })
+            .OrderBy(x => x.PlateNumber)
             .ToListAsync(ct);
+        var vehicles = vehicleEntities.Select(x => new
+        {
+            x.PlateNumber,
+            x.AccountDriverSignatureFileUrl,
+            x.AccountDriverSignedAt,
+            CompanyNames = x.OfficeVehicles
+                .Where(ov => ov.IsActive && !ov.IsDeleted && ov.AssignedTo == null &&
+                             ov.CompanyProfile.IsActive && !ov.CompanyProfile.IsDeleted)
+                .Select(ov => string.IsNullOrWhiteSpace(ov.CompanyProfile.BranchName)
+                    ? ov.CompanyProfile.CompanyName
+                    : $"{ov.CompanyProfile.CompanyName} - {ov.CompanyProfile.BranchName}")
+                .Distinct()
+                .ToArray()
+        }).ToList();
+
+        var signedVehicle = vehicles
+            .Where(x => x.AccountDriverSignedAt.HasValue && !string.IsNullOrWhiteSpace(x.AccountDriverSignatureFileUrl))
+            .OrderByDescending(x => x.AccountDriverSignedAt)
+            .FirstOrDefault();
 
         return new DriverAccountDetailDto
         {
@@ -232,8 +240,6 @@ public sealed class DriverAccountService(
             EmployeeCode = user.EmployeeCode,
             PhoneNumber = user.PhoneNumber,
             Email = user.Email,
-            CompanyProfileId = null,
-            CompanyName = null,
             CitizenId = user.CitizenId,
             CitizenIdIssuedDate = user.CitizenIdIssuedDate,
             CitizenIdIssuedPlace = user.CitizenIdIssuedPlace,
@@ -244,13 +250,13 @@ public sealed class DriverAccountService(
             DriverLicenseClass = user.DriverLicenseClass,
             DriverLicenseIssuedDate = user.DriverLicenseIssuedDate,
             DriverLicenseExpiryDate = user.DriverLicenseExpiryDate,
-            DriverSignatureFileUrl = vehicles.FirstOrDefault(x => x.AccountDriverSignedAt != null)?.PlateNumber,
-            DriverSignedAt = vehicles.Where(x => x.AccountDriverSignedAt != null).Max(x => x.AccountDriverSignedAt),
-            DriverSignatureIsActive = vehicles.Any(x => x.AccountDriverSignedAt != null),
+            DriverSignatureFileUrl = signedVehicle?.AccountDriverSignatureFileUrl,
+            DriverSignedAt = signedVehicle?.AccountDriverSignedAt,
+            DriverSignatureIsActive = signedVehicle is not null,
             VehicleCount = vehicles.Count,
             SignedVehicleCount = vehicles.Count(x => x.AccountDriverSignedAt != null),
             VehiclePlates = string.Join(", ", vehicles.Select(x => x.PlateNumber).OrderBy(x => x)),
-            CompanyNames = string.Join(", ", vehicles.Select(x => x.CompanyName).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().OrderBy(x => x)),
+            CompanyNames = string.Join(", ", vehicles.SelectMany(x => x.CompanyNames).Distinct().OrderBy(x => x)),
             IsActive = user.IsActive,
             MustChangePassword = user.MustChangePassword,
             CreatedAt = user.CreatedAt,
@@ -281,9 +287,9 @@ public sealed class DriverAccountService(
         {
             var companyId = filter.CompanyProfileId.Value;
             query = query.Where(x => db.Vehicles.Any(v =>
-                v.AssignedDriverId == x.Id &&
-                !v.IsDeleted &&
-                v.CompanyProfileId == companyId));
+                v.AssignedDriverId == x.Id && !v.IsDeleted &&
+                v.OfficeVehicles.Any(ov => ov.IsActive && !ov.IsDeleted && ov.AssignedTo == null &&
+                                           ov.CompanyProfileId == companyId)));
         }
 
         var page = Math.Max(1, filter.Page);
@@ -295,20 +301,26 @@ public sealed class DriverAccountService(
             .ToListAsync(ct);
 
         var ids = users.Select(x => x.Id).ToArray();
-        var vehicles = await db.Vehicles.AsNoTracking()
+        var vehicleEntities = await db.Vehicles.AsNoTracking()
+            .Include(x => x.OfficeVehicles)
+                .ThenInclude(x => x.CompanyProfile)
             .Where(x => x.AssignedDriverId != null && ids.Contains(x.AssignedDriverId) && !x.IsDeleted)
-            .Select(x => new
-            {
-                UserId = x.AssignedDriverId!,
-                x.PlateNumber,
-                x.AccountDriverSignedAt,
-                CompanyName = x.CompanyProfile == null
-                    ? string.Empty
-                    : (string.IsNullOrWhiteSpace(x.CompanyProfile.BranchName)
-                        ? x.CompanyProfile.CompanyName
-                        : x.CompanyProfile.CompanyName + " - " + x.CompanyProfile.BranchName)
-            })
             .ToListAsync(ct);
+        var vehicles = vehicleEntities.Select(x => new
+        {
+            UserId = x.AssignedDriverId!,
+            x.PlateNumber,
+            x.AccountDriverSignatureFileUrl,
+            x.AccountDriverSignedAt,
+            CompanyNames = x.OfficeVehicles
+                .Where(ov => ov.IsActive && !ov.IsDeleted && ov.AssignedTo == null &&
+                             ov.CompanyProfile.IsActive && !ov.CompanyProfile.IsDeleted)
+                .Select(ov => string.IsNullOrWhiteSpace(ov.CompanyProfile.BranchName)
+                    ? ov.CompanyProfile.CompanyName
+                    : $"{ov.CompanyProfile.CompanyName} - {ov.CompanyProfile.BranchName}")
+                .Distinct()
+                .ToArray()
+        }).ToList();
 
         var byUser = vehicles.GroupBy(x => x.UserId).ToDictionary(x => x.Key, x => x.ToList());
         return users.Select(user =>
@@ -329,7 +341,7 @@ public sealed class DriverAccountService(
                 VehicleCount = assigned.Count,
                 SignedVehicleCount = assigned.Count(x => x.AccountDriverSignedAt != null),
                 VehiclePlates = string.Join(", ", assigned.Select(x => x.PlateNumber).OrderBy(x => x)),
-                CompanyNames = string.Join(", ", assigned.Select(x => x.CompanyName).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().OrderBy(x => x)),
+                CompanyNames = string.Join(", ", assigned.SelectMany(x => x.CompanyNames).Distinct().OrderBy(x => x)),
                 IsActive = user.IsActive,
                 MustChangePassword = user.MustChangePassword,
                 CreatedAt = user.CreatedAt,
@@ -395,7 +407,6 @@ public sealed class DriverAccountService(
 
         var now = DateTime.UtcNow;
         user.IsActive = active && !markDeleted;
-        user.CompanyProfileId = null;
         user.UpdatedAt = now;
         user.UpdatedByUserId = source;
         user.LockoutEnd = null;
@@ -474,8 +485,6 @@ public sealed class DriverAccountService(
             UserName = x.UserName ?? string.Empty,
             FullName = x.FullName,
             PhoneNumber = x.PhoneNumber,
-            CompanyProfileId = null,
-            CompanyName = null,
             RequestedAt = x.RegistrationRequestedAt ?? x.CreatedAt,
             ViewedAt = x.RegistrationViewedAt
         };

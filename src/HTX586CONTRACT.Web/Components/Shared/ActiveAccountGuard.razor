@@ -77,10 +77,8 @@
                 x.IsActive,
                 x.IsDeleted,
                 x.RegistrationStatus,
-                HasActiveCompany = x.CompanyProfileId.HasValue &&
-                                   x.CompanyProfile != null &&
-                                   x.CompanyProfile.IsActive &&
-                                   !x.CompanyProfile.IsDeleted
+                HasActiveCompany = db.AdminOffices.Any(a => a.AdminUserId == x.Id &&
+                    a.IsActive && !a.IsDeleted && a.CompanyProfile.IsActive && !a.CompanyProfile.IsDeleted)
             })
             .FirstOrDefaultAsync(cancellationToken);
 

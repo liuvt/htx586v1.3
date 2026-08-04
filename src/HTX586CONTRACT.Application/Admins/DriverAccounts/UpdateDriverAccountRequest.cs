@@ -2,8 +2,6 @@ namespace HTX586CONTRACT.Application.Admins.DriverAccounts;
 
 public sealed class UpdateDriverAccountRequest
 {
-    // VehicleOwner không thuộc cố định một công ty/văn phòng.
-    public Guid? CompanyProfileId { get; set; }
     public string FullName { get; set; } = string.Empty;
     public string? EmployeeCode { get; set; }
     public string? PhoneNumber { get; set; }

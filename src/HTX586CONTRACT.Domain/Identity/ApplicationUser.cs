@@ -1,25 +1,23 @@
 using HTX586CONTRACT.Domain.Common;
-using HTX586CONTRACT.Domain.Companies;
 using HTX586CONTRACT.Domain.Contracts;
 using HTX586CONTRACT.Domain.Customers;
 using HTX586CONTRACT.Domain.Notifications;
+using HTX586CONTRACT.Domain.Offices;
+using HTX586CONTRACT.Domain.Vehicles;
 using Microsoft.AspNetCore.Identity;
 
 namespace HTX586CONTRACT.Domain.Identity;
 
 /// <summary>
 /// Tài khoản dùng chung cho ba vai trò hệ thống: Owner, Admin và VehicleOwner.
-/// Chỉ Admin được gán trực tiếp vào một Công ty/Văn phòng. VehicleOwner không gán
-/// đơn vị vì một tài khoản có thể sở hữu/khai thác nhiều xe thuộc nhiều đơn vị khác nhau.
+/// Admin được phân quyền nhiều Công ty/Văn phòng qua AdminOffice; VehicleOwner
+/// sở hữu nhiều xe và phạm vi văn phòng được xác định qua OfficeVehicle.
 /// </summary>
 public class ApplicationUser : IdentityUser, ISoftDeletable
 {
     public string FullName { get; set; } = string.Empty;
     public string? EmployeeCode { get; set; }
 
-    // Owner và VehicleOwner luôn để null. Chỉ Admin được gán CompanyProfileId.
-    public Guid? CompanyProfileId { get; set; }
-    public CompanyProfile? CompanyProfile { get; set; }
 
     public string? CitizenId { get; set; }
     public DateTime? CitizenIdIssuedDate { get; set; }
@@ -37,8 +35,8 @@ public class ApplicationUser : IdentityUser, ISoftDeletable
     public string? DriverLicenseFrontUrl { get; set; }
     public string? DriverLicenseBackUrl { get; set; }
 
-    // Các cột chữ ký cũ được giữ để tương thích dữ liệu phiên bản trước.
-    // Phiên bản mới lưu chữ ký tài xế theo từng Vehicle.
+    // Chữ ký cấp tài khoản phục vụ hồ sơ đăng ký. Khi lập hợp đồng,
+    // chữ ký theo từng Vehicle là nguồn dữ liệu ưu tiên.
     public string? DriverSignatureFileUrl { get; set; }
     public string? DriverSignatureHash { get; set; }
     public DateTime? DriverSignedAt { get; set; }
@@ -66,6 +64,8 @@ public class ApplicationUser : IdentityUser, ISoftDeletable
     public string? DeletedBy { get; set; }
 
     public ICollection<Contract> Contracts { get; set; } = [];
+    public ICollection<AdminOffice> AdminOffices { get; set; } = [];
+    public ICollection<Vehicle> OwnedVehicles { get; set; } = [];
     public ICollection<Customer> CreatedCustomers { get; set; } = [];
     public ICollection<DriverNotification> DriverNotifications { get; set; } = [];
 }

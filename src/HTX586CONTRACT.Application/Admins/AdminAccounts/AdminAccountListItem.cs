@@ -8,8 +8,9 @@ public sealed class AdminAccountListItem
     public string? EmployeeCode { get; set; }
     public string? PhoneNumber { get; set; }
     public string? Email { get; set; }
-    public string? CompanyName { get; set; }
-    public string Roles { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
+    public string OfficeNames { get; set; } = string.Empty;
+    public int VehicleCount { get; set; }
     public bool IsActive { get; set; }
     public bool MustChangePassword { get; set; }
 }

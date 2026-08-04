@@ -6,8 +6,6 @@ namespace HTX586CONTRACT.Application.Admins.DriverAccounts;
 /// </summary>
 public sealed class CreateDriverAccountRequest
 {
-    // Giữ nullable để tương thích giao diện/DTO cũ, service phiên bản mới luôn bỏ qua.
-    public Guid? CompanyProfileId { get; set; }
     public string UserName { get; set; } = string.Empty;
     public string Password { get; set; } = "Htx@586";
     public string FullName { get; set; } = string.Empty;

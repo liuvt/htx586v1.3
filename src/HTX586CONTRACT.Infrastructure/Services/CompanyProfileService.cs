@@ -48,9 +48,9 @@ public sealed class CompanyProfileService(
                 RepresentativeName = x.RepresentativeName,
                 RepresentativeSignatureFileUrl = x.RepresentativeSignatureFileUrl,
                 IsActive = x.IsActive,
-                AdminCount = db.Users.Count(u => !u.IsDeleted && u.CompanyProfileId == x.Id && db.UserRoles.Any(ur => ur.UserId == u.Id && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == "Admin"))),
-                DriverCount = db.Vehicles.Where(v => !v.IsDeleted && v.CompanyProfileId == x.Id && v.AssignedDriverId != null).Select(v => v.AssignedDriverId).Distinct().Count(),
-                VehicleCount = db.Vehicles.Count(v => !v.IsDeleted && v.CompanyProfileId == x.Id),
+                AdminCount = db.AdminOffices.Count(a => !a.IsDeleted && a.IsActive && a.CompanyProfileId == x.Id),
+                DriverCount = db.OfficeVehicles.Where(ov => !ov.IsDeleted && ov.IsActive && ov.AssignedTo == null && ov.CompanyProfileId == x.Id && ov.Vehicle.AssignedDriverId != null).Select(ov => ov.Vehicle.AssignedDriverId).Distinct().Count(),
+                VehicleCount = db.OfficeVehicles.Count(ov => !ov.IsDeleted && ov.IsActive && ov.AssignedTo == null && ov.CompanyProfileId == x.Id && !ov.Vehicle.IsDeleted),
                 ContractCount = x.Contracts.Count(c => !c.IsDeleted),
                 CreatedByUserId = x.CreatedByUserId,
                 CreatedAt = x.CreatedAt
@@ -83,9 +83,9 @@ public sealed class CompanyProfileService(
                 RepresentativeSignatureFileUrl = x.RepresentativeSignatureFileUrl,
                 RepresentativeSignedAt = x.RepresentativeSignedAt,
                 IsActive = x.IsActive,
-                AdminCount = db.Users.Count(u => !u.IsDeleted && u.CompanyProfileId == x.Id && db.UserRoles.Any(ur => ur.UserId == u.Id && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == "Admin"))),
-                DriverCount = db.Vehicles.Where(v => !v.IsDeleted && v.CompanyProfileId == x.Id && v.AssignedDriverId != null).Select(v => v.AssignedDriverId).Distinct().Count(),
-                VehicleCount = db.Vehicles.Count(v => !v.IsDeleted && v.CompanyProfileId == x.Id),
+                AdminCount = db.AdminOffices.Count(a => !a.IsDeleted && a.IsActive && a.CompanyProfileId == x.Id),
+                DriverCount = db.OfficeVehicles.Where(ov => !ov.IsDeleted && ov.IsActive && ov.AssignedTo == null && ov.CompanyProfileId == x.Id && ov.Vehicle.AssignedDriverId != null).Select(ov => ov.Vehicle.AssignedDriverId).Distinct().Count(),
+                VehicleCount = db.OfficeVehicles.Count(ov => !ov.IsDeleted && ov.IsActive && ov.AssignedTo == null && ov.CompanyProfileId == x.Id && !ov.Vehicle.IsDeleted),
                 ContractCount = x.Contracts.Count(c => !c.IsDeleted),
                 CreatedByUserId = x.CreatedByUserId,
                 CreatedAt = x.CreatedAt,
@@ -149,13 +149,14 @@ public sealed class CompanyProfileService(
         var entity = await db.CompanyProfiles.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, ct)
             ?? throw new KeyNotFoundException("Không tìm thấy công ty/văn phòng đại diện.");
 
-        var hasActiveAdmin = await db.Users.AnyAsync(x => !x.IsDeleted && x.IsActive && x.CompanyProfileId == id &&
-            db.UserRoles.Any(ur => ur.UserId == x.Id && db.Roles.Any(r => r.Id == ur.RoleId && r.Name == "Admin")), ct);
+        var hasActiveAdmin = await db.AdminOffices.AnyAsync(x => !x.IsDeleted && x.IsActive &&
+            x.CompanyProfileId == id && x.AdminUser.IsActive && !x.AdminUser.IsDeleted, ct);
         if (hasActiveAdmin)
             throw new InvalidOperationException("Đơn vị đang có tài khoản Admin hoạt động. Hãy chuyển hoặc khóa Admin trước khi xóa.");
 
-        if (await db.Vehicles.AnyAsync(x => !x.IsDeleted && x.CompanyProfileId == id, ct))
-            throw new InvalidOperationException("Đơn vị vẫn còn xe. Hãy chuyển hoặc xóa mềm toàn bộ xe trước khi xóa đơn vị.");
+        if (await db.OfficeVehicles.AnyAsync(x => !x.IsDeleted && x.IsActive && x.AssignedTo == null &&
+            x.CompanyProfileId == id && !x.Vehicle.IsDeleted, ct))
+            throw new InvalidOperationException("Đơn vị vẫn còn xe đang được phân công. Hãy gỡ xe khỏi văn phòng trước khi xóa đơn vị.");
 
         var hasOpenContract = await db.Contracts.AnyAsync(x => !x.IsDeleted && x.CompanyProfileId == id &&
             x.Status != ContractStatus.Completed &&

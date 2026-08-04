@@ -1,7 +1,7 @@
 using HTX586CONTRACT.Domain.Common;
-using HTX586CONTRACT.Domain.Companies;
 using HTX586CONTRACT.Domain.Contracts;
 using HTX586CONTRACT.Domain.Identity;
+using HTX586CONTRACT.Domain.Offices;
 
 namespace HTX586CONTRACT.Domain.Vehicles;
 
@@ -28,11 +28,9 @@ public class Vehicle : BaseEntity
     public string? OwnerAddress { get; set; }
     public string? OwnerPhoneNumber { get; set; }
 
-    public Guid? CompanyProfileId { get; set; }
-    public CompanyProfile? CompanyProfile { get; set; }
 
-    // Tên cột/property cũ được giữ để giảm rủi ro nâng cấp database.
-    // Giá trị thực tế là ID tài khoản có role VehicleOwner.
+    // Tài khoản role VehicleOwner sở hữu/được gán xe này.
+    // Một VehicleOwner có thể liên kết nhiều Vehicle.
     public string? AssignedDriverId { get; set; }
     public ApplicationUser? AssignedDriver { get; set; }
 
@@ -50,4 +48,5 @@ public class Vehicle : BaseEntity
 
     public bool IsActive { get; set; } = true;
     public ICollection<Contract> Contracts { get; set; } = [];
+    public ICollection<OfficeVehicle> OfficeVehicles { get; set; } = [];
 }

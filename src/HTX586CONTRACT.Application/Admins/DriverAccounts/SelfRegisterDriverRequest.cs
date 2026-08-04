@@ -6,13 +6,12 @@ namespace HTX586CONTRACT.Application.Admins.DriverAccounts;
 /// </summary>
 public sealed class SelfRegisterDriverRequest
 {
-    public Guid? CompanyProfileId { get; set; }
     public string UserName { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string? PhoneNumber { get; set; }
 
-    // Các trường cũ giữ lại để tương thích binary/source, không bắt buộc và không dùng khi đăng ký.
+    // Thông tin hồ sơ tùy chọn, có thể bổ sung sau khi tài khoản được duyệt.
     public DateTime? DateOfBirth { get; set; }
     public string? AreaCode { get; set; }
     public string? Address { get; set; }

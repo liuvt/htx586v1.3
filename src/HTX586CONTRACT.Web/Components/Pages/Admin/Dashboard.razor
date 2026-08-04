@@ -6,7 +6,7 @@
 
 <PageTitle>Dashboard quản trị đơn vị</PageTitle>
 <PageHeader Title="Tổng quan đơn vị"
-            Subtitle="Bảng điều hành tập trung dành cho Admin, cố định theo Công ty/Văn phòng được phân quyền.">
+            Subtitle="Bảng điều hành tập trung dành cho Admin theo toàn bộ Công ty/Văn phòng được phân quyền.">
     <MudButton Href="/admin/contracts"
                Color="Color.Primary"
                Variant="Variant.Filled"
@@ -15,10 +15,10 @@
     </MudButton>
 </PageHeader>
 
-@if (!_companyProfileId.HasValue)
+@if (_companyProfileIds.Count == 0)
 {
     <MudAlert Severity="Severity.Error" Variant="Variant.Filled">
-        Tài khoản Admin chưa được gán Công ty/Văn phòng nên chưa thể xem dashboard.
+        Tài khoản Admin chưa được phân quyền Công ty/Văn phòng nên chưa thể xem dashboard.
     </MudAlert>
 }
 else
@@ -80,11 +80,19 @@ else
                 </div>
             </MudItem>
             <MudItem xs="12" sm="6" md="4">
-                <MudTextField Value="@_companyName"
-                              Label="Công ty/Văn phòng"
-                              Margin="Margin.Dense"
-                              Variant="Variant.Outlined"
-                              Disabled="true" />
+                <MudSelect T="Guid?"
+                           Value="@_selectedCompanyProfileId"
+                           ValueChanged="ChangeCompany"
+                           Label="Công ty/Văn phòng"
+                           Margin="Margin.Dense"
+                           Variant="Variant.Outlined"
+                           Clearable="true"
+                           HelperText="Để trống để xem tổng tất cả văn phòng được phân quyền">
+                    @foreach (var company in _companies)
+                    {
+                        <MudSelectItem T="Guid?" Value="@((Guid?)company.Id)">@CompanyDisplay(company)</MudSelectItem>
+                    }
+                </MudSelect>
             </MudItem>
             <MudItem xs="12" sm="6" md="3">
                 <MudDatePicker Date="@_month"
@@ -225,9 +233,9 @@ else
                             <div class="quick-action-icon"><MudIcon Icon="@Icons.Material.Filled.DirectionsCar" /></div>
                             <div><strong>Phương tiện</strong><span>Xe, chủ sở hữu và tài xế được gán</span></div>
                         </a>
-                        <a class="quick-action" href="/admin/driver-accounts">
+                        <a class="quick-action" href="/admin/account-registrations">
                             <div class="quick-action-icon"><MudIcon Icon="@Icons.Material.Filled.Badge" /></div>
-                            <div><strong>Tài khoản tài xế</strong><span>Hồ sơ, chữ ký và mật khẩu</span></div>
+                            <div><strong>Yêu cầu đăng ký</strong><span>Duyệt tài khoản VehicleOwner</span></div>
                         </a>
                         <a class="quick-action" href="/admin/customers">
                             <div class="quick-action-icon"><MudIcon Icon="@Icons.Material.Filled.Groups" /></div>
@@ -242,7 +250,9 @@ else
 
 @code {
     private string _currentUserId = string.Empty;
-    private Guid? _companyProfileId;
+    private HashSet<Guid> _companyProfileIds = [];
+    private List<CompanyProfile> _companies = [];
+    private Guid? _selectedCompanyProfileId;
     private string _companyName = string.Empty;
     private DateTime? _month = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
     private bool _loading;
@@ -260,25 +270,27 @@ else
         _currentUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
 
         await using var db = await Factory.CreateDbContextAsync();
-        var adminInfo = await db.Users.AsNoTracking()
-            .Where(x => x.Id == _currentUserId && !x.IsDeleted && x.IsActive &&
-                            x.CompanyProfile != null && x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
-            .Select(x => new
-            {
-                x.CompanyProfileId,
-                CompanyName = x.CompanyProfile == null
-                    ? string.Empty
-                    : (string.IsNullOrEmpty(x.CompanyProfile.BranchName)
-                        ? x.CompanyProfile.CompanyName
-                        : x.CompanyProfile.CompanyName + " - " + x.CompanyProfile.BranchName)
-            })
-            .FirstOrDefaultAsync();
+        _companies = await db.AdminOffices.AsNoTracking()
+            .Where(x => x.AdminUserId == _currentUserId && x.IsActive && !x.IsDeleted &&
+                        x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
+            .OrderByDescending(x => x.IsPrimary)
+            .ThenBy(x => x.CompanyProfile.CompanyName)
+            .ThenBy(x => x.CompanyProfile.BranchName)
+            .Select(x => x.CompanyProfile)
+            .ToListAsync();
+        _companyProfileIds = _companies.Select(x => x.Id).ToHashSet();
+        _selectedCompanyProfileId = _companies.Count == 1 ? _companies[0].Id : null;
+        UpdateCompanyName();
 
-        _companyProfileId = adminInfo?.CompanyProfileId;
-        _companyName = adminInfo?.CompanyName ?? string.Empty;
-
-        if (_companyProfileId.HasValue)
+        if (_companyProfileIds.Count > 0)
             await LoadStatsAsync();
+    }
+
+    private async Task ChangeCompany(Guid? value)
+    {
+        _selectedCompanyProfileId = value;
+        UpdateCompanyName();
+        await LoadStatsAsync();
     }
 
     private async Task ChangeMonth(DateTime? value)
@@ -289,7 +301,7 @@ else
 
     private async Task LoadStatsAsync()
     {
-        if (!_companyProfileId.HasValue)
+        if (_companyProfileIds.Count == 0)
             return;
 
         _loading = true;
@@ -298,21 +310,25 @@ else
             var selectedMonth = _month ?? DateTime.Today;
             var from = new DateTime(selectedMonth.Year, selectedMonth.Month, 1);
             var to = from.AddMonths(1);
-            var companyId = _companyProfileId.Value;
+            var selectedOfficeIds = _selectedCompanyProfileId.HasValue
+                ? new HashSet<Guid> { _selectedCompanyProfileId.Value }
+                : _companyProfileIds;
 
             await using var db = await Factory.CreateDbContextAsync();
             var contractQuery = db.Contracts.AsNoTracking()
-                .Where(x => x.CompanyProfileId == companyId &&
+                .Where(x => selectedOfficeIds.Contains(x.CompanyProfileId) &&
                             (x.StartTime ?? x.CreatedAt) >= from &&
                             (x.StartTime ?? x.CreatedAt) < to);
             var completedQuery = contractQuery.Where(x => x.Status == ContractStatus.Completed);
 
-            var driverCount = await db.Vehicles.AsNoTracking()
-                .Where(x => x.IsActive && !x.IsDeleted && x.CompanyProfileId == companyId &&
-                            x.AssignedDriverId != null && x.AssignedDriver != null &&
-                            x.AssignedDriver.IsActive && !x.AssignedDriver.IsDeleted &&
-                            x.AssignedDriver.RegistrationStatus == "Approved")
-                .Select(x => x.AssignedDriverId)
+            var driverCount = await db.OfficeVehicles.AsNoTracking()
+                .Where(x => x.IsActive && !x.IsDeleted && x.AssignedTo == null &&
+                            selectedOfficeIds.Contains(x.CompanyProfileId) &&
+                            x.Vehicle.IsActive && !x.Vehicle.IsDeleted &&
+                            x.Vehicle.AssignedDriverId != null && x.Vehicle.AssignedDriver != null &&
+                            x.Vehicle.AssignedDriver.IsActive && !x.Vehicle.AssignedDriver.IsDeleted &&
+                            x.Vehicle.AssignedDriver.RegistrationStatus == "Approved")
+                .Select(x => x.Vehicle.AssignedDriverId)
                 .Distinct()
                 .CountAsync();
 
@@ -325,12 +341,18 @@ else
                     x.Status == ContractStatus.WaitingCustomerSignature ||
                     x.Status == ContractStatus.CustomerSigned ||
                     x.Status == ContractStatus.WaitingDriverConfirmation),
-                VehicleCount = await db.Vehicles.AsNoTracking()
-                    .CountAsync(x => x.IsActive && !x.IsDeleted && x.CompanyProfileId == companyId),
+                VehicleCount = await db.OfficeVehicles.AsNoTracking()
+                    .Where(x => x.IsActive && !x.IsDeleted && x.AssignedTo == null &&
+                                selectedOfficeIds.Contains(x.CompanyProfileId) &&
+                                x.Vehicle.IsActive && !x.Vehicle.IsDeleted)
+                    .Select(x => x.VehicleId)
+                    .Distinct()
+                    .CountAsync(),
                 DriverCount = driverCount,
                 CustomerCount = await db.Customers.AsNoTracking().CountAsync(x =>
                     !x.IsDeleted && !x.PhoneNumber.StartsWith("PEND") &&
-                    (x.CreatedByDriverId == _currentUserId || x.Contracts.Any(c => c.CompanyProfileId == companyId)))
+                    (x.CreatedByDriverId == _currentUserId ||
+                     x.Contracts.Any(c => selectedOfficeIds.Contains(c.CompanyProfileId))))
             };
         }
         catch (Exception ex)
@@ -342,6 +364,25 @@ else
             _loading = false;
         }
     }
+
+    private void UpdateCompanyName()
+    {
+        if (_selectedCompanyProfileId.HasValue)
+        {
+            var selected = _companies.FirstOrDefault(x => x.Id == _selectedCompanyProfileId.Value);
+            _companyName = selected is null ? "Công ty/Văn phòng được phân quyền" : CompanyDisplay(selected);
+            return;
+        }
+
+        _companyName = _companies.Count == 1
+            ? CompanyDisplay(_companies[0])
+            : $"Tổng hợp {_companies.Count} Công ty/Văn phòng";
+    }
+
+    private static string CompanyDisplay(CompanyProfile company)
+        => string.IsNullOrWhiteSpace(company.BranchName)
+            ? company.CompanyName
+            : $"{company.CompanyName} - {company.BranchName}";
 
     private sealed class DashboardStats
     {

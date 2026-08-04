@@ -43,8 +43,8 @@ public sealed class ExcelReportService(IDbContextFactory<ApplicationDbContext> f
             .Include(x => x.Vehicle)
             .AsQueryable();
 
-        if (scope.CompanyProfileId.HasValue)
-            query = query.Where(x => x.CompanyProfileId == scope.CompanyProfileId.Value);
+        if (scope.OfficeIds is not null)
+            query = query.Where(x => scope.OfficeIds.Contains(x.CompanyProfileId));
 
         var contracts = await query
             .OrderByDescending(x => x.StartTime ?? x.CreatedAt)
@@ -78,11 +78,12 @@ public sealed class ExcelReportService(IDbContextFactory<ApplicationDbContext> f
             .AsNoTracking()
             .Where(x => !x.IsDeleted && driverIdsQuery.Contains(x.Id));
 
-        if (scope.CompanyProfileId.HasValue)
+        if (scope.OfficeIds is not null)
         {
-            var companyId = scope.CompanyProfileId.Value;
             query = query.Where(x => db.Vehicles.Any(v =>
-                !v.IsDeleted && v.CompanyProfileId == companyId && v.AssignedDriverId == x.Id));
+                !v.IsDeleted && v.AssignedDriverId == x.Id &&
+                v.OfficeVehicles.Any(ov => ov.IsActive && !ov.IsDeleted && ov.AssignedTo == null &&
+                                           scope.OfficeIds.Contains(ov.CompanyProfileId))));
         }
 
         var drivers = await query
@@ -92,27 +93,26 @@ public sealed class ExcelReportService(IDbContextFactory<ApplicationDbContext> f
 
         var driverIds = drivers.Select(x => x.Id).ToList();
 
-        var assignedVehicleRows = await db.Vehicles
+        var assignedVehicleEntities = await db.Vehicles
             .AsNoTracking()
-            .Include(x => x.CompanyProfile)
-            .Where(x => !x.IsDeleted && x.AssignedDriverId != null && driverIds.Contains(x.AssignedDriverId) &&
-                        (!scope.CompanyProfileId.HasValue || x.CompanyProfileId == scope.CompanyProfileId.Value))
+            .Include(x => x.OfficeVehicles)
+                .ThenInclude(x => x.CompanyProfile)
+            .Where(x => x.AssignedDriverId != null && driverIds.Contains(x.AssignedDriverId) &&
+                        (scope.OfficeIds == null || x.OfficeVehicles.Any(ov => ov.IsActive && !ov.IsDeleted &&
+                            ov.AssignedTo == null && scope.OfficeIds.Contains(ov.CompanyProfileId))))
             .OrderBy(x => x.PlateNumber)
-            .Select(x => new
-            {
-                DriverId = x.AssignedDriverId!,
-                x.PlateNumber,
-                x.VehicleCode,
-                x.Brand,
-                x.Model,
-                x.IsActive,
-                CompanyName = x.CompanyProfile == null
-                    ? string.Empty
-                    : (string.IsNullOrEmpty(x.CompanyProfile.BranchName)
-                        ? x.CompanyProfile.CompanyName
-                        : x.CompanyProfile.CompanyName + " - " + x.CompanyProfile.BranchName)
-            })
             .ToListAsync(cancellationToken);
+
+        var assignedVehicleRows = assignedVehicleEntities.Select(x => new
+        {
+            DriverId = x.AssignedDriverId!,
+            x.PlateNumber,
+            x.VehicleCode,
+            x.Brand,
+            x.Model,
+            x.IsActive,
+            CompanyName = CompanyDisplay(x, scope.OfficeIds)
+        }).ToList();
 
         var assignedVehicles = assignedVehicleRows
             .GroupBy(x => x.DriverId)
@@ -131,8 +131,8 @@ public sealed class ExcelReportService(IDbContextFactory<ApplicationDbContext> f
             .AsNoTracking()
             .Where(x => driverIds.Contains(x.DriverId));
 
-        if (scope.CompanyProfileId.HasValue)
-            driverContractQuery = driverContractQuery.Where(x => x.CompanyProfileId == scope.CompanyProfileId.Value);
+        if (scope.OfficeIds is not null)
+            driverContractQuery = driverContractQuery.Where(x => scope.OfficeIds.Contains(x.CompanyProfileId));
 
         var contractStats = await driverContractQuery
             .GroupBy(x => x.DriverId)
@@ -162,16 +162,17 @@ public sealed class ExcelReportService(IDbContextFactory<ApplicationDbContext> f
 
         var query = db.Vehicles
             .AsNoTracking()
-            .Include(x => x.CompanyProfile)
+            .Include(x => x.OfficeVehicles)
+                .ThenInclude(x => x.CompanyProfile)
             .Include(x => x.AssignedDriver)
             .AsQueryable();
 
-        if (scope.CompanyProfileId.HasValue)
-            query = query.Where(x => x.CompanyProfileId == scope.CompanyProfileId.Value);
+        if (scope.OfficeIds is not null)
+            query = query.Where(x => x.OfficeVehicles.Any(ov => ov.IsActive && !ov.IsDeleted &&
+                ov.AssignedTo == null && scope.OfficeIds.Contains(ov.CompanyProfileId)));
 
         var vehicles = await query
-            .OrderBy(x => x.CompanyProfile == null ? string.Empty : x.CompanyProfile.CompanyName)
-            .ThenBy(x => x.PlateNumber)
+            .OrderBy(x => x.PlateNumber)
             .ToListAsync(cancellationToken);
 
         var vehicleIds = vehicles.Select(x => x.Id).ToList();
@@ -179,8 +180,8 @@ public sealed class ExcelReportService(IDbContextFactory<ApplicationDbContext> f
             .AsNoTracking()
             .Where(x => x.VehicleId.HasValue && vehicleIds.Contains(x.VehicleId.Value));
 
-        if (scope.CompanyProfileId.HasValue)
-            vehicleContractQuery = vehicleContractQuery.Where(x => x.CompanyProfileId == scope.CompanyProfileId.Value);
+        if (scope.OfficeIds is not null)
+            vehicleContractQuery = vehicleContractQuery.Where(x => scope.OfficeIds.Contains(x.CompanyProfileId));
 
         var contractStats = await vehicleContractQuery
             .GroupBy(x => x.VehicleId!.Value)
@@ -222,8 +223,8 @@ public sealed class ExcelReportService(IDbContextFactory<ApplicationDbContext> f
                         (x.StartTime ?? x.CreatedAt) >= from &&
                         (x.StartTime ?? x.CreatedAt) < toExclusive);
 
-        if (scope.CompanyProfileId.HasValue)
-            query = query.Where(x => x.CompanyProfileId == scope.CompanyProfileId.Value);
+        if (scope.OfficeIds is not null)
+            query = query.Where(x => scope.OfficeIds.Contains(x.CompanyProfileId));
 
         var contracts = await query
             .OrderBy(x => x.StartTime ?? x.CreatedAt)
@@ -444,7 +445,7 @@ public sealed class ExcelReportService(IDbContextFactory<ApplicationDbContext> f
             WriteRow(ws, row++,
             [
                 index++, vehicle.PlateNumber, vehicle.VehicleCode, vehicle.Brand, vehicle.Model, vehicle.VehicleType, vehicle.SeatCount,
-                CompanyDisplay(vehicle), vehicle.OwnerName, vehicle.OwnerPhoneNumber, vehicle.AssignedDriver?.FullName,
+                CompanyDisplay(vehicle, scope.OfficeIds), vehicle.OwnerName, vehicle.OwnerPhoneNumber, vehicle.AssignedDriver?.FullName,
                 vehicle.IsActive ? "Đang hoạt động" : "Ngừng hoạt động", OwnerSignatureStatusText(vehicle),
                 vehicleStats?.TotalContracts ?? 0, vehicleStats?.CompletedContracts ?? 0, vehicleStats?.CompletedRevenue ?? 0,
                 vehicle.CreatedAt
@@ -483,7 +484,7 @@ public sealed class ExcelReportService(IDbContextFactory<ApplicationDbContext> f
             [
                 index++, vehicle.Id.ToString(), vehicle.PlateNumber, vehicle.VehicleCode, vehicle.Brand, vehicle.Model,
                 vehicle.VehicleType, vehicle.SeatCount, vehicle.Color, vehicle.ChassisNumber, vehicle.EngineNumber,
-                CompanyDisplay(vehicle), vehicle.OwnerName, vehicle.OwnerCitizenId, vehicle.OwnerCitizenIdIssuedDate,
+                CompanyDisplay(vehicle, scope.OfficeIds), vehicle.OwnerName, vehicle.OwnerCitizenId, vehicle.OwnerCitizenIdIssuedDate,
                 vehicle.OwnerCitizenIdIssuedPlace, vehicle.OwnerAddress, vehicle.OwnerPhoneNumber, vehicle.AssignedDriver?.FullName,
                 vehicle.AssignedDriver?.EmployeeCode, vehicle.AssignedDriver?.PhoneNumber,
                 vehicle.IsActive ? "Đang hoạt động" : "Ngừng hoạt động", OwnerSignatureStatusText(vehicle), vehicle.OwnerSignedAt,
@@ -864,22 +865,20 @@ public sealed class ExcelReportService(IDbContextFactory<ApplicationDbContext> f
     private static string OwnerSignatureStatusText(Vehicle vehicle)
         => string.IsNullOrWhiteSpace(vehicle.OwnerSignatureFileUrl) ? "Chưa có chữ ký" : "Đã xác nhận";
 
-    private static string CompanyDisplay(ApplicationUser user)
+    private static string CompanyDisplay(Vehicle vehicle, HashSet<Guid>? officeIds = null)
     {
-        if (user.CompanyProfile is null)
-            return string.Empty;
-        return string.IsNullOrWhiteSpace(user.CompanyProfile.BranchName)
-            ? user.CompanyProfile.CompanyName
-            : $"{user.CompanyProfile.CompanyName} - {user.CompanyProfile.BranchName}";
-    }
-
-    private static string CompanyDisplay(Vehicle vehicle)
-    {
-        if (vehicle.CompanyProfile is null)
-            return string.Empty;
-        return string.IsNullOrWhiteSpace(vehicle.CompanyProfile.BranchName)
-            ? vehicle.CompanyProfile.CompanyName
-            : $"{vehicle.CompanyProfile.CompanyName} - {vehicle.CompanyProfile.BranchName}";
+        var names = vehicle.OfficeVehicles
+            .Where(x => x.IsActive && !x.IsDeleted && x.AssignedTo == null &&
+                        x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted &&
+                        (officeIds == null || officeIds.Contains(x.CompanyProfileId)))
+            .OrderByDescending(x => x.IsPrimary)
+            .ThenBy(x => x.CompanyProfile.CompanyName)
+            .Select(x => string.IsNullOrWhiteSpace(x.CompanyProfile.BranchName)
+                ? x.CompanyProfile.CompanyName
+                : $"{x.CompanyProfile.CompanyName} - {x.CompanyProfile.BranchName}")
+            .Distinct()
+            .ToArray();
+        return string.Join(", ", names);
     }
 
     private static string CompanyDisplay(Contract contract)
@@ -920,28 +919,30 @@ public sealed class ExcelReportService(IDbContextFactory<ApplicationDbContext> f
         if (isOwner)
             return new ExportScope(null, "Toàn bộ Công ty/Văn phòng", "ToanHeThong");
 
-        var admin = await db.Users
-            .AsNoTracking()
-            .Where(x => x.Id == currentUserId && !x.IsDeleted && x.IsActive &&
-                            x.CompanyProfile != null && x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
+        var offices = await db.AdminOffices.AsNoTracking()
+            .Where(x => x.AdminUserId == currentUserId && x.IsActive && !x.IsDeleted &&
+                        x.AdminUser.IsActive && !x.AdminUser.IsDeleted &&
+                        x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
+            .OrderByDescending(x => x.IsPrimary)
+            .ThenBy(x => x.CompanyProfile.CompanyName)
             .Select(x => new
             {
                 x.CompanyProfileId,
-                CompanyName = x.CompanyProfile == null
-                    ? string.Empty
-                    : (string.IsNullOrEmpty(x.CompanyProfile.BranchName)
-                        ? x.CompanyProfile.CompanyName
-                        : x.CompanyProfile.CompanyName + " - " + x.CompanyProfile.BranchName)
+                x.CompanyProfile.CompanyName,
+                x.CompanyProfile.BranchName
             })
-            .FirstOrDefaultAsync(cancellationToken);
+            .ToListAsync(cancellationToken);
 
-        if (admin?.CompanyProfileId is null)
-            throw new InvalidOperationException("Tài khoản Admin chưa được gán Công ty/Văn phòng nên không thể xuất báo cáo.");
+        if (offices.Count == 0)
+            throw new InvalidOperationException("Tài khoản Admin chưa được phân quyền Công ty/Văn phòng nên không thể xuất báo cáo.");
 
-        return new ExportScope(admin.CompanyProfileId, admin.CompanyName, "CongTyDuocGan");
+        var displayName = string.Join(", ", offices.Select(x => string.IsNullOrWhiteSpace(x.BranchName)
+            ? x.CompanyName
+            : $"{x.CompanyName} - {x.BranchName}"));
+        return new ExportScope(offices.Select(x => x.CompanyProfileId).ToHashSet(), displayName, "VanPhongDuocPhanQuyen");
     }
 
-    private sealed record ExportScope(Guid? CompanyProfileId, string DisplayName, string FileScope);
+    private sealed record ExportScope(HashSet<Guid>? OfficeIds, string DisplayName, string FileScope);
     private sealed record DriverVehicleInfo(string DriverId, string PlateNumber, string? VehicleCode, string? Brand, string? Model, bool IsActive, string CompanyNames);
     private sealed record DriverContractStats(string DriverId, int TotalContracts, int CompletedContracts, decimal CompletedRevenue);
     private sealed record VehicleContractStats(Guid VehicleId, int TotalContracts, int CompletedContracts, decimal CompletedRevenue);

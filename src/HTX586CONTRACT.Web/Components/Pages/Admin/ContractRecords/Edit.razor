@@ -34,11 +34,19 @@ else
             <MudText Typo="Typo.h6" Class="mb-3">1. Thông tin hợp đồng</MudText>
             <MudGrid>
                 <MudItem xs="12" md="4">
-                    <MudTextField Value="@CompanyDisplayText"
-                                  Label="Công ty/Văn phòng"
-                                  HelperText="Cố định theo tài khoản Admin đang đăng nhập."
-                                  Variant="Variant.Outlined"
-                                  Disabled="true" />
+                    <MudSelect T="Guid?"
+                               Value="@_model.CompanyProfileId"
+                               ValueChanged="SelectCompany"
+                               Label="Công ty/Văn phòng"
+                               HelperText="@CompanyHelperText"
+                               Variant="Variant.Outlined"
+                               Required="true"
+                               Clearable="true">
+                        @foreach (var company in CompanyOptions)
+                        {
+                            <MudSelectItem T="Guid?" Value="@((Guid?)company.Id)">@CompanyDisplay(company)</MudSelectItem>
+                        }
+                    </MudSelect>
                 </MudItem>
                 <MudItem xs="12" md="4">
                     <MudSelect T="ContractBusinessType"
@@ -398,7 +406,7 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
     private string _currentUserId = string.Empty;
     private string _vehicleSearch = string.Empty;
     private string _customerSearch = string.Empty;
-    private Guid? _currentCompanyProfileId;
+    private HashSet<Guid> _managedCompanyProfileIds = [];
     private SaveContractRequest _model = new() { Passengers = [] };
     private bool IsHistoryLocked => _model.Status is ContractStatus.Completed
         or ContractStatus.Cancelled
@@ -421,23 +429,21 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
         var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         _currentUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
         await using var db = await Factory.CreateDbContextAsync();
-        _currentCompanyProfileId = await db.Users.AsNoTracking()
-            .Where(x => x.Id == _currentUserId && !x.IsDeleted && x.IsActive &&
-                            x.CompanyProfile != null && x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
+        _managedCompanyProfileIds = await db.AdminOffices.AsNoTracking()
+            .Where(x => x.AdminUserId == _currentUserId && x.IsActive && !x.IsDeleted &&
+                        x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
             .Select(x => x.CompanyProfileId)
-            .FirstOrDefaultAsync();
+            .ToHashSetAsync();
 
-        if (!_currentCompanyProfileId.HasValue)
+        if (_managedCompanyProfileIds.Count == 0)
         {
-            Snackbar.Add("Tài khoản Admin chưa được gán Công ty/Văn phòng.", Severity.Error);
+            Snackbar.Add("Tài khoản Admin chưa được phân quyền Công ty/Văn phòng.", Severity.Error);
             Navigation.NavigateTo("/admin/contracts");
             return;
         }
 
-        var companyQuery = db.CompanyProfiles.AsNoTracking()
-            .Where(x => x.IsActive && !x.IsDeleted && x.Id == _currentCompanyProfileId.Value);
-
-        _companies = await companyQuery
+        _companies = await db.CompanyProfiles.AsNoTracking()
+            .Where(x => x.IsActive && !x.IsDeleted && _managedCompanyProfileIds.Contains(x.Id))
             .OrderBy(x => x.CompanyName)
             .ThenBy(x => x.BranchName)
             .ToListAsync();
@@ -454,16 +460,20 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
 
         var vehicleQuery = db.Vehicles.AsNoTracking()
             .Include(x => x.AssignedDriver)
-            .Where(x => x.IsActive && x.CompanyProfileId != null && x.AssignedDriverId != null);
-
-        vehicleQuery = vehicleQuery.Where(x => x.CompanyProfileId == _currentCompanyProfileId.Value);
+            .Include(x => x.OfficeVehicles)
+            .Where(x => x.IsActive && x.AssignedDriverId != null &&
+                        x.OfficeVehicles.Any(ov => ov.IsActive && ov.AssignedTo == null &&
+                                                   _managedCompanyProfileIds.Contains(ov.CompanyProfileId)));
 
         _vehicles = await vehicleQuery
             .OrderBy(x => x.PlateNumber)
             .ToListAsync();
 
         _assignedVehicles = await db.Vehicles.AsNoTracking()
-            .Where(x => x.AssignedDriverId != null)
+            .Include(x => x.OfficeVehicles)
+            .Where(x => x.AssignedDriverId != null && !x.IsDeleted &&
+                        x.OfficeVehicles.Any(ov => ov.IsActive && ov.AssignedTo == null &&
+                                                   _managedCompanyProfileIds.Contains(ov.CompanyProfileId)))
             .OrderBy(x => x.PlateNumber)
             .ToListAsync();
 
@@ -473,10 +483,10 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
             .Where(x => !x.PhoneNumber.StartsWith("PEND"));
 
         customerQuery = customerQuery.Where(x =>
-            x.CreatedByDriver.CompanyProfileId == _currentCompanyProfileId.Value ||
-            x.Contracts.Any(c => c.CompanyProfileId == _currentCompanyProfileId.Value) ||
-            db.Vehicles.Any(v => !v.IsDeleted && v.CompanyProfileId == _currentCompanyProfileId.Value &&
-                                     v.AssignedDriverId == x.CreatedByDriverId));
+            x.Contracts.Any(c => _managedCompanyProfileIds.Contains(c.CompanyProfileId)) ||
+            db.Vehicles.Any(v => !v.IsDeleted && v.AssignedDriverId == x.CreatedByDriverId &&
+                v.OfficeVehicles.Any(ov => ov.IsActive && ov.AssignedTo == null &&
+                                           _managedCompanyProfileIds.Contains(ov.CompanyProfileId))));
 
         _customers = await customerQuery
             .OrderByDescending(x => x.LastUsedAt ?? x.CreatedAt)
@@ -485,7 +495,7 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
         if (!Id.HasValue)
         {
             _detail = null;
-            var defaultCompanyId = _currentCompanyProfileId;
+            Guid? defaultCompanyId = _companies.Count == 1 ? _companies[0].Id : null;
 
             _model = new SaveContractRequest
             {
@@ -511,7 +521,7 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
             return;
         }
 
-        if (detail.CompanyProfileId != _currentCompanyProfileId)
+        if (!_managedCompanyProfileIds.Contains(detail.CompanyProfileId))
         {
             Snackbar.Add("Admin chỉ được truy cập hợp đồng thuộc Công ty/Văn phòng được gán.", Severity.Error);
             Navigation.NavigateTo("/admin/contracts");
@@ -590,11 +600,11 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
             return;
         }
 
-        if (_model.CompanyProfileId != vehicle.CompanyProfileId)
+        if (!_model.CompanyProfileId.HasValue || !VehicleBelongsToOffice(vehicle, _model.CompanyProfileId.Value))
         {
             _model.VehicleId = null;
             _model.DriverId = string.Empty;
-            Snackbar.Add("Xe không thuộc Công ty/Văn phòng đã chọn.", Severity.Error);
+            Snackbar.Add("Xe không được phân công hoạt động tại Công ty/Văn phòng đã chọn.", Severity.Error);
             return;
         }
 
@@ -710,7 +720,7 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
             return Task.FromResult(Enumerable.Empty<Vehicle>());
 
         var companyId = _model.CompanyProfileId.Value;
-        IEnumerable<Vehicle> result = _vehicles.Where(x => x.CompanyProfileId == companyId);
+        IEnumerable<Vehicle> result = _vehicles.Where(x => VehicleBelongsToOffice(x, companyId));
         var search = value?.Trim();
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -800,9 +810,6 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
     private CompanyProfile? SelectedCompany
         => _companies.FirstOrDefault(x => x.Id == _model.CompanyProfileId);
 
-    private string CompanyDisplayText
-        => SelectedCompany is null ? "Chưa được gán Công ty/Văn phòng" : CompanyDisplay(SelectedCompany);
-
     private ApplicationUser? SelectedDriver
         => _drivers.FirstOrDefault(x => x.Id == _model.DriverId);
 
@@ -823,7 +830,7 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
                 return Enumerable.Empty<Vehicle>();
 
             var companyId = _model.CompanyProfileId.Value;
-            IEnumerable<Vehicle> result = _vehicles.Where(x => x.CompanyProfileId == companyId);
+            IEnumerable<Vehicle> result = _vehicles.Where(x => VehicleBelongsToOffice(x, companyId));
             var search = _vehicleSearch?.Trim();
 
             if (!string.IsNullOrWhiteSpace(search))
@@ -836,7 +843,7 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
             }
 
             var selected = SelectedVehicle;
-            if (selected is not null && selected.CompanyProfileId == companyId && result.All(x => x.Id != selected.Id))
+            if (selected is not null && VehicleBelongsToOffice(selected, companyId) && result.All(x => x.Id != selected.Id))
                 result = result.Append(selected);
 
             return result.OrderBy(x => x.PlateNumber);
@@ -879,11 +886,15 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
             return false;
 
         var companyId = _model.CompanyProfileId.Value;
-        return customer.CreatedByDriver?.CompanyProfileId == companyId ||
-               customer.Contracts.Any(x => x.CompanyProfileId == companyId) ||
-               _assignedVehicles.Any(x => x.CompanyProfileId == companyId &&
-                                           x.AssignedDriverId == customer.CreatedByDriverId);
+        return customer.Contracts.Any(x => x.CompanyProfileId == companyId) ||
+               _assignedVehicles.Any(x => x.AssignedDriverId == customer.CreatedByDriverId &&
+                                          VehicleBelongsToOffice(x, companyId));
     }
+
+
+    private static bool VehicleBelongsToOffice(Vehicle vehicle, Guid companyProfileId)
+        => vehicle.OfficeVehicles.Any(x => x.IsActive && x.AssignedTo == null &&
+                                           x.CompanyProfileId == companyProfileId);
 
     private bool DriverSelectionLocked
         => !string.IsNullOrWhiteSpace(SelectedVehicle?.AssignedDriverId);
@@ -893,7 +904,7 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
     private bool CustomerFieldsDisabled => true;
 
     private string CompanyHelperText
-        => "Công ty/Văn phòng được lấy theo phân quyền của tài khoản Admin.";
+        => "Chỉ hiển thị các Công ty/Văn phòng được Owner phân quyền cho tài khoản Admin.";
 
     private string DriverHelperText
         => SelectedVehicle is null

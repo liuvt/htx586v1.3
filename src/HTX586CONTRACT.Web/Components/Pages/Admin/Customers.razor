@@ -63,7 +63,7 @@
     private string _currentUserId = string.Empty;
     private string _currentUserName = string.Empty;
     private bool _isOwner;
-    private Guid? _companyProfileId;
+    private HashSet<Guid> _managedCompanyProfileIds = [];
     private string _creatorName = string.Empty;
     private List<CustomerRow> _items = [];
     private Customer _model = NewModel();
@@ -81,15 +81,22 @@
         {
             var currentUser = await db.Users.AsNoTracking()
                 .Where(x => x.Id == _currentUserId && !x.IsDeleted && x.IsActive)
-                .Select(x => new { x.FullName, x.CompanyProfileId })
+                .Select(x => new { x.FullName })
                 .FirstOrDefaultAsync();
 
             _currentUserName = currentUser?.FullName ?? auth.User.Identity?.Name ?? "Tài khoản hiện tại";
-            _companyProfileId = currentUser?.CompanyProfileId;
+            if (!_isOwner)
+            {
+                _managedCompanyProfileIds = await db.AdminOffices.AsNoTracking()
+                    .Where(x => x.AdminUserId == _currentUserId && x.IsActive && !x.IsDeleted &&
+                                x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
+                    .Select(x => x.CompanyProfileId)
+                    .ToHashSetAsync();
+            }
         }
 
-        if (!_isOwner && !_companyProfileId.HasValue)
-            Snackbar.Add("Tài khoản Admin chưa được gán Công ty/Văn phòng.", Severity.Warning);
+        if (!_isOwner && _managedCompanyProfileIds.Count == 0)
+            Snackbar.Add("Tài khoản Admin chưa được phân quyền Công ty/Văn phòng.", Severity.Warning);
 
         await LoadAsync();
     }
@@ -232,16 +239,15 @@
         if (_isOwner)
             return query;
 
-        if (!_companyProfileId.HasValue)
+        if (_managedCompanyProfileIds.Count == 0)
             return query.Where(_ => false);
 
-        var companyId = _companyProfileId.Value;
         return query.Where(x =>
             x.CreatedByDriverId == _currentUserId ||
-            x.CreatedByDriver.CompanyProfileId == companyId ||
-            x.Contracts.Any(c => c.CompanyProfileId == companyId) ||
-            db.Vehicles.Any(v => !v.IsDeleted && v.CompanyProfileId == companyId &&
-                                     v.AssignedDriverId == x.CreatedByDriverId));
+            x.Contracts.Any(c => _managedCompanyProfileIds.Contains(c.CompanyProfileId)) ||
+            db.Vehicles.Any(v => !v.IsDeleted && v.AssignedDriverId == x.CreatedByDriverId &&
+                v.OfficeVehicles.Any(ov => ov.IsActive && !ov.IsDeleted && ov.AssignedTo == null &&
+                                           _managedCompanyProfileIds.Contains(ov.CompanyProfileId))));
     }
 
     private bool Contains(string? value) => !string.IsNullOrWhiteSpace(value) && value.Contains(_keyword!.Trim(), StringComparison.OrdinalIgnoreCase);

@@ -1,118 +1,89 @@
 @page "/admin/accounts"
 @attribute [Authorize(Roles = "Owner")]
-@inject IAdminAccountService AdminAccountService
+@inject IAdminAccountService AccountService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
 
-<PageTitle>Admin</PageTitle>
-<PageHeader Title="Admin" Subtitle="Quản lý thông tin và quyền hạn của các tài khoản Admin trong hệ thống." />
+<PageTitle>Quản lý tài khoản</PageTitle>
+<PageHeader Title="Quản lý tài khoản" Subtitle="Quản lý chung tài khoản Admin và VehicleOwner, vai trò và phạm vi Công ty/Văn phòng." />
 
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudGrid>
-        <MudItem xs="12" md="8">
-            <MudTextField T="string"
-                          @bind-Value="_keyword"
-                          Placeholder="Tìm Admin, họ tên, mã nhân viên, công ty..."
-                          Immediate="true"
-                          Clearable="true"
-                          Variant="Variant.Outlined"
-                          Adornment="Adornment.Start"
-                          AdornmentIcon="@Icons.Material.Filled.Search" />
+        <MudItem xs="12" md="6">
+            <MudTextField T="string" @bind-Value="_keyword" Placeholder="Tìm tài khoản, họ tên, điện thoại, văn phòng..."
+                          Immediate="true" Clearable="true" Variant="Variant.Outlined"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
         </MudItem>
-
-        <MudItem xs="12" md="4" Class="d-flex align-center justify-end">
-            <MudButton Color="Color.Primary"
-                       Variant="Variant.Filled"
-                       StartIcon="@Icons.Material.Filled.Add"
+        <MudItem xs="12" md="3">
+            <MudSelect T="string" @bind-Value="_roleFilter" Label="Vai trò" Variant="Variant.Outlined" Clearable="true">
+                <MudSelectItem T="string" Value="@("Admin")">Admin</MudSelectItem>
+                <MudSelectItem T="string" Value="@("VehicleOwner")">VehicleOwner</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" md="3" Class="d-flex align-center justify-end">
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.PersonAdd"
                        OnClick="@(() => Navigation.NavigateTo("/admin/accounts/create"))">
-                Tạo Admin
+                Thêm tài khoản
             </MudButton>
         </MudItem>
     </MudGrid>
 </MudPaper>
 
-<MudTable T="AdminAccountListItem"
-          Items="FilteredItems"
-          Loading="_loading"
-          Hover="true"
-          Striped="true"
-          Breakpoint="Breakpoint.Sm">
+<MudTable T="AdminAccountListItem" Items="FilteredItems" Loading="_loading" Hover="true" Striped="true"
+          RowsPerPage="20" Breakpoint="Breakpoint.Sm">
     <HeaderContent>
         <MudTh>Tài khoản</MudTh>
-        <MudTh>Quyền</MudTh>
+        <MudTh>Vai trò</MudTh>
         <MudTh>Họ tên</MudTh>
-        <MudTh>Công ty/văn phòng</MudTh>
-        <MudTh>Điện thoại</MudTh>
-        <MudTh>Email</MudTh>
+        <MudTh>Công ty/Văn phòng</MudTh>
+        <MudTh>Xe sở hữu</MudTh>
+        <MudTh>Liên hệ</MudTh>
         <MudTh>Trạng thái</MudTh>
         <MudTh></MudTh>
     </HeaderContent>
-
     <RowTemplate>
-        <MudTd DataLabel="Tài khoản">@context.UserName</MudTd>
-        <MudTd DataLabel="Quyền">@(context.Roles ?? "—")</MudTd>
-        <MudTd DataLabel="Họ tên">
-            @context.FullName<br />
-            <small>@(context.EmployeeCode ?? "—")</small>
+        <MudTd DataLabel="Tài khoản"><b>@context.UserName</b><br /><small>@(context.EmployeeCode ?? "—")</small></MudTd>
+        <MudTd DataLabel="Vai trò">
+            <MudChip T="string" Size="Size.Small" Color="@(context.Role == "Admin" ? Color.Primary : Color.Info)">@context.Role</MudChip>
         </MudTd>
-        <MudTd DataLabel="Công ty/văn phòng">@(context.CompanyName ?? "—")</MudTd>
-        <MudTd DataLabel="Điện thoại">@(context.PhoneNumber ?? "—")</MudTd>
-        <MudTd DataLabel="Email">@(context.Email ?? "—")</MudTd>
+        <MudTd DataLabel="Họ tên">@context.FullName</MudTd>
+        <MudTd DataLabel="Công ty/Văn phòng">@(string.IsNullOrWhiteSpace(context.OfficeNames) ? "—" : context.OfficeNames)</MudTd>
+        <MudTd DataLabel="Xe sở hữu">@context.VehicleCount</MudTd>
+        <MudTd DataLabel="Liên hệ">@(context.PhoneNumber ?? "—")<br /><small>@(context.Email ?? "—")</small></MudTd>
         <MudTd DataLabel="Trạng thái">
-            <MudChip T="string"
-                     Size="Size.Small"
-                     Color="@(context.IsActive ? Color.Success : Color.Error)">
+            <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Error)">
                 @(context.IsActive ? "Hoạt động" : "Đã khóa")
             </MudChip>
         </MudTd>
         <MudTd>
-            <MudIconButton Icon="@Icons.Material.Filled.Visibility"
-                           Color="Color.Info"
+            <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info"
                            OnClick="@(() => Navigation.NavigateTo($"/admin/accounts/{context.Id}"))" />
-
-            <MudIconButton Icon="@Icons.Material.Filled.Edit"
-                           Color="Color.Primary"
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary"
                            OnClick="@(() => Navigation.NavigateTo($"/admin/accounts/{context.Id}/edit"))" />
         </MudTd>
     </RowTemplate>
+    <PagerContent><MudTablePager PageSizeOptions="@(new int[] { 10, 20, 50, 100 })" /></PagerContent>
 </MudTable>
 
 @code {
     private bool _loading;
     private string? _keyword;
+    private string? _roleFilter;
     private IReadOnlyList<AdminAccountListItem> _items = [];
 
-    private IEnumerable<AdminAccountListItem> FilteredItems =>
-        string.IsNullOrWhiteSpace(_keyword)
-            ? _items
-            : _items.Where(x =>
-                Contains(x.UserName) ||
-                Contains(x.FullName) ||
-                Contains(x.EmployeeCode) ||
-                Contains(x.PhoneNumber) ||
-                Contains(x.Email) ||
-                Contains(x.CompanyName) ||
-                Contains(x.Roles));
+    private IEnumerable<AdminAccountListItem> FilteredItems => _items.Where(x =>
+        (string.IsNullOrWhiteSpace(_roleFilter) || string.Equals(x.Role, _roleFilter, StringComparison.OrdinalIgnoreCase)) &&
+        (string.IsNullOrWhiteSpace(_keyword) || Contains(x.UserName) || Contains(x.FullName) ||
+         Contains(x.EmployeeCode) || Contains(x.PhoneNumber) || Contains(x.Email) || Contains(x.OfficeNames)));
 
     protected override async Task OnInitializedAsync()
     {
         _loading = true;
-
-        try
-        {
-            _items = await AdminAccountService.GetAccountsAsync();
-        }
-        catch (Exception ex)
-        {
-            Snackbar.Add(ex.Message, Severity.Error);
-        }
-        finally
-        {
-            _loading = false;
-        }
+        try { _items = await AccountService.GetAccountsAsync(); }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _loading = false; }
     }
 
-    private bool Contains(string? value) =>
-        !string.IsNullOrWhiteSpace(value) &&
+    private bool Contains(string? value) => !string.IsNullOrWhiteSpace(value) &&
         value.Contains(_keyword!.Trim(), StringComparison.OrdinalIgnoreCase);
 }

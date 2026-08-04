@@ -223,7 +223,7 @@ public sealed class ContractService(
 
         var vehicle = assignment.Vehicle!;
         var vehicleOwner = assignment.VehicleOwner!;
-        var company = vehicle.CompanyProfile!;
+        var company = assignment.CompanyProfile!;
 
         var type = await ResolveTypeAsync(db, request, ct);
         if (type is null)
@@ -345,7 +345,7 @@ public sealed class ContractService(
 
         var access = await GetAccessAsync(db, currentUserId, ct);
         var canManage = access.IsOwner || access.IsAdmin;
-        if (access.IsAdmin && !access.IsOwner && entity.CompanyProfileId != access.CompanyProfileId)
+        if (access.IsAdmin && !access.IsOwner && !access.OfficeIds.Contains(entity.CompanyProfileId))
             return new(false, id, "Admin chỉ được cập nhật hợp đồng thuộc Công ty/Văn phòng được gán.");
         if (!canManage && (!access.IsVehicleOwner || !string.Equals(entity.DriverId, currentUserId, StringComparison.Ordinal)))
             return new(false, id, "Bạn không có quyền cập nhật hợp đồng này.");
@@ -366,7 +366,7 @@ public sealed class ContractService(
 
         var vehicle = assignment.Vehicle!;
         var vehicleOwner = assignment.VehicleOwner!;
-        var company = vehicle.CompanyProfile!;
+        var company = assignment.CompanyProfile!;
         var type = await ResolveTypeAsync(db, request, ct);
         if (type is null)
             return new(false, id, "Chưa cấu hình loại hợp đồng đang hoạt động.");
@@ -582,7 +582,7 @@ public sealed class ContractService(
 
         var access = await GetAccessAsync(db, currentUserId, ct);
         var canManage = access.IsOwner || access.IsAdmin;
-        if (access.IsAdmin && !access.IsOwner && entity.CompanyProfileId != access.CompanyProfileId)
+        if (access.IsAdmin && !access.IsOwner && !access.OfficeIds.Contains(entity.CompanyProfileId))
             return new(false, id, "Admin chỉ được hủy hợp đồng thuộc Công ty/Văn phòng được gán.");
         if (!canManage && !string.Equals(entity.DriverId, currentUserId, StringComparison.Ordinal))
             return new(false, id, "Bạn không có quyền hủy hợp đồng này.");
@@ -626,7 +626,7 @@ public sealed class ContractService(
 
         var access = await GetAccessAsync(db, currentUserId, ct);
         var canManage = access.IsOwner || access.IsAdmin;
-        if (access.IsAdmin && !access.IsOwner && entity.CompanyProfileId != access.CompanyProfileId)
+        if (access.IsAdmin && !access.IsOwner && !access.OfficeIds.Contains(entity.CompanyProfileId))
             return false;
         if (!canManage && !string.Equals(entity.DriverId, currentUserId, StringComparison.Ordinal))
             return false;
@@ -667,13 +667,13 @@ public sealed class ContractService(
 
         if (entity.IsSelfCreated)
         {
-            var access = new UserAccess(false, false, true, null);
+            var access = new UserAccess(false, false, true, []);
             var assignment = await ResolveAssignmentAsync(db, request, currentUserId, access, ct);
             if (assignment.Error is not null)
                 return new(false, entity.Id, assignment.Error);
             vehicle = assignment.Vehicle;
             vehicleOwner = assignment.VehicleOwner;
-            company = vehicle!.CompanyProfile;
+            company = assignment.CompanyProfile;
 
             CustomerResolution customerResult;
             try
@@ -702,14 +702,16 @@ public sealed class ContractService(
         else
         {
             vehicle = await db.Vehicles
-                .Include(x => x.CompanyProfile)
+                .Include(x => x.OfficeVehicles)
                 .FirstOrDefaultAsync(x => x.Id == entity.VehicleId && x.IsActive && !x.IsDeleted, ct);
             vehicleOwner = await db.Users.FirstOrDefaultAsync(x => x.Id == currentUserId, ct);
             customer = await db.Customers.FirstOrDefaultAsync(x => x.Id == entity.CustomerId && !x.IsDeleted, ct)
                 ?? throw new InvalidOperationException("Không tìm thấy khách hàng của hợp đồng.");
-            company = vehicle?.CompanyProfile;
-            if (vehicle is null || company is null || vehicleOwner is null || vehicle.AssignedDriverId != currentUserId)
-                return new(false, entity.Id, "Xe của hợp đồng không còn hợp lệ hoặc không còn được gán cho tài khoản.");
+            company = await db.CompanyProfiles.FirstOrDefaultAsync(x => x.Id == entity.CompanyProfileId && x.IsActive && !x.IsDeleted, ct);
+            var vehicleStillAssignedToOffice = vehicle?.OfficeVehicles.Any(x => x.IsActive && !x.IsDeleted &&
+                x.AssignedTo == null && x.CompanyProfileId == entity.CompanyProfileId) == true;
+            if (vehicle is null || company is null || vehicleOwner is null || vehicle.AssignedDriverId != currentUserId || !vehicleStillAssignedToOffice)
+                return new(false, entity.Id, "Xe của hợp đồng không còn hợp lệ, không còn thuộc văn phòng hợp đồng hoặc không còn được gán cho tài khoản.");
         }
 
         var passengerCount = CountPassengers(request.Passengers, request.CustomerTravelsWithGroup);
@@ -757,7 +759,7 @@ public sealed class ContractService(
         bool IsOwner,
         bool IsAdmin,
         bool IsVehicleOwner,
-        Guid? CompanyProfileId);
+        HashSet<Guid> OfficeIds);
 
     private sealed record CustomerResolution(Customer Customer, bool CreatedNew, bool IsProvisional);
 
@@ -767,27 +769,33 @@ public sealed class ContractService(
         CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(userId))
-            return new(false, false, false, null);
+            return new(false, false, false, []);
 
         var user = await db.Users.AsNoTracking()
-            .Include(x => x.CompanyProfile)
             .FirstOrDefaultAsync(x => x.Id == userId && x.IsActive && !x.IsDeleted, ct);
         if (user is null)
-            return new(false, false, false, null);
+            return new(false, false, false, []);
 
         var isOwner = await userManager.IsInRoleAsync(user, "Owner");
         var isAdmin = await userManager.IsInRoleAsync(user, "Admin");
         var isVehicleOwner = await userManager.IsInRoleAsync(user, "VehicleOwner");
 
-        if (isAdmin && !isOwner &&
-            (!user.CompanyProfileId.HasValue || user.CompanyProfile is null ||
-             !user.CompanyProfile.IsActive || user.CompanyProfile.IsDeleted))
-            return new(false, false, false, null);
+        var officeIds = isAdmin && !isOwner
+            ? (await db.AdminOffices.AsNoTracking()
+                .Where(x => x.AdminUserId == userId && x.IsActive && !x.IsDeleted &&
+                            x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
+                .Select(x => x.CompanyProfileId)
+                .Distinct()
+                .ToListAsync(ct)).ToHashSet()
+            : new HashSet<Guid>();
+
+        if (isAdmin && !isOwner && officeIds.Count == 0)
+            isAdmin = false;
 
         if (isVehicleOwner && !string.Equals(user.RegistrationStatus, "Approved", StringComparison.OrdinalIgnoreCase))
             isVehicleOwner = false;
 
-        return new(isOwner, isAdmin, isVehicleOwner, user.CompanyProfileId);
+        return new(isOwner, isAdmin, isVehicleOwner, officeIds);
     }
 
     private static async Task<string> GetUserDisplayNameAsync(
@@ -840,10 +848,10 @@ public sealed class ContractService(
             if (!isOwner)
             {
                 query = query.Where(x =>
-                    x.CreatedByDriver.CompanyProfileId == companyProfileId ||
                     x.Contracts.Any(c => c.CompanyProfileId == companyProfileId) ||
-                    db.Vehicles.Any(v => !v.IsDeleted && v.CompanyProfileId == companyProfileId &&
-                                             v.AssignedDriverId == x.CreatedByDriverId));
+                    db.Vehicles.Any(v => !v.IsDeleted && v.AssignedDriverId == x.CreatedByDriverId &&
+                        v.OfficeVehicles.Any(ov => ov.IsActive && !ov.IsDeleted && ov.AssignedTo == null &&
+                                                   ov.CompanyProfileId == companyProfileId)));
             }
 
             var selected = await query.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, ct);
@@ -1014,7 +1022,7 @@ public sealed class ContractService(
         return finalCustomer;
     }
 
-    private async Task<(Vehicle? Vehicle, ApplicationUser? VehicleOwner, string? Error)> ResolveAssignmentAsync(
+    private async Task<(Vehicle? Vehicle, ApplicationUser? VehicleOwner, CompanyProfile? CompanyProfile, string? Error)> ResolveAssignmentAsync(
         ApplicationDbContext db,
         SaveContractRequest request,
         string currentUserId,
@@ -1026,37 +1034,57 @@ public sealed class ContractService(
         if (request.VehicleId.HasValue)
         {
             vehicle = await db.Vehicles
-                .Include(x => x.CompanyProfile)
                 .Include(x => x.AssignedDriver)
+                .Include(x => x.OfficeVehicles)
+                    .ThenInclude(x => x.CompanyProfile)
                 .FirstOrDefaultAsync(x => x.Id == request.VehicleId.Value && x.IsActive && !x.IsDeleted, ct);
         }
         else if (!string.IsNullOrWhiteSpace(request.VehiclePlate))
         {
             var plate = request.VehiclePlate.Trim().ToUpperInvariant();
             vehicle = await db.Vehicles
-                .Include(x => x.CompanyProfile)
                 .Include(x => x.AssignedDriver)
+                .Include(x => x.OfficeVehicles)
+                    .ThenInclude(x => x.CompanyProfile)
                 .FirstOrDefaultAsync(x => x.PlateNumber == plate && x.IsActive && !x.IsDeleted, ct);
         }
 
         if (vehicle is null)
-            return (null, null, "Vui lòng chọn xe đang hoạt động.");
-        if (vehicle.CompanyProfile is null || !vehicle.CompanyProfile.IsActive || vehicle.CompanyProfile.IsDeleted)
-            return (vehicle, null, "Xe chưa thuộc Công ty/Văn phòng đang hoạt động.");
-        if (access.IsAdmin && !access.IsOwner && vehicle.CompanyProfileId != access.CompanyProfileId)
-            return (vehicle, null, "Admin chỉ được chọn xe thuộc Công ty/Văn phòng được gán.");
+            return (null, null, null, "Vui lòng chọn xe đang hoạt động.");
+
+        var activeOfficeLinks = vehicle.OfficeVehicles
+            .Where(x => x.IsActive && !x.IsDeleted && x.AssignedTo == null &&
+                        x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
+            .ToList();
+        if (activeOfficeLinks.Count == 0)
+            return (vehicle, null, null, "Xe chưa được gán Công ty/Văn phòng đang hoạt động.");
+
+        var allowedOfficeLinks = access.IsOwner
+            ? activeOfficeLinks
+            : access.IsAdmin
+                ? activeOfficeLinks.Where(x => access.OfficeIds.Contains(x.CompanyProfileId)).ToList()
+                : activeOfficeLinks;
+        if (allowedOfficeLinks.Count == 0)
+            return (vehicle, null, null, "Xe không thuộc Công ty/Văn phòng trong phạm vi quản lý.");
+
+        var requestedOfficeId = request.CompanyProfileId;
+        var selectedOfficeLink = requestedOfficeId.HasValue
+            ? allowedOfficeLinks.FirstOrDefault(x => x.CompanyProfileId == requestedOfficeId.Value)
+            : allowedOfficeLinks.OrderByDescending(x => x.IsPrimary).ThenBy(x => x.AssignedFrom).FirstOrDefault();
+        if (selectedOfficeLink is null)
+            return (vehicle, null, null, "Công ty/Văn phòng đã chọn không được gán cho xe hoặc nằm ngoài phạm vi quản lý.");
 
         string vehicleOwnerId;
         if (canManage)
         {
             if (string.IsNullOrWhiteSpace(vehicle.AssignedDriverId))
-                return (vehicle, null, "Xe chưa được gán tài khoản VehicleOwner. Hãy gán tại Quản lý Xe và chủ sở hữu trước khi phát hợp đồng.");
+                return (vehicle, null, selectedOfficeLink.CompanyProfile, "Xe chưa được gán tài khoản VehicleOwner. Hãy gán tại Quản lý Xe và chủ sở hữu trước khi phát hợp đồng.");
             vehicleOwnerId = vehicle.AssignedDriverId;
             if (!string.IsNullOrWhiteSpace(request.DriverId) &&
                 !string.Equals(request.DriverId, vehicleOwnerId, StringComparison.Ordinal))
             {
                 var assignedName = vehicle.AssignedDriver?.FullName ?? vehicleOwnerId;
-                return (vehicle, null, $"Xe {vehicle.PlateNumber} đang được gán cho {assignedName}. Không thể phát cho tài khoản khác.");
+                return (vehicle, null, selectedOfficeLink.CompanyProfile, $"Xe {vehicle.PlateNumber} đang được gán cho {assignedName}. Không thể phát cho tài khoản khác.");
             }
         }
         else
@@ -1065,7 +1093,7 @@ public sealed class ContractService(
             if (!string.Equals(vehicle.AssignedDriverId, currentUserId, StringComparison.Ordinal))
             {
                 var assignedName = vehicle.AssignedDriver?.FullName;
-                return (vehicle, null, string.IsNullOrWhiteSpace(assignedName)
+                return (vehicle, null, selectedOfficeLink.CompanyProfile, string.IsNullOrWhiteSpace(assignedName)
                     ? "Bạn chỉ được chọn xe đang được gán cho tài khoản của mình."
                     : $"Xe {vehicle.PlateNumber} đang được gán cho {assignedName}.");
             }
@@ -1075,9 +1103,9 @@ public sealed class ContractService(
         if (vehicleOwner is null || !vehicleOwner.IsActive || vehicleOwner.IsDeleted ||
             !string.Equals(vehicleOwner.RegistrationStatus, "Approved", StringComparison.OrdinalIgnoreCase) ||
             !await userManager.IsInRoleAsync(vehicleOwner, "VehicleOwner"))
-            return (vehicle, null, "Tài khoản được gán xe không hoạt động, chưa được duyệt hoặc không có role VehicleOwner.");
+            return (vehicle, null, selectedOfficeLink.CompanyProfile, "Tài khoản được gán xe không hoạt động, chưa được duyệt hoặc không có role VehicleOwner.");
 
-        return (vehicle, vehicleOwner, null);
+        return (vehicle, vehicleOwner, selectedOfficeLink.CompanyProfile, null);
     }
 
     private static void ApplyImmutableSnapshot(ContractDetailDto detail, ContractSnapshotData snapshot)

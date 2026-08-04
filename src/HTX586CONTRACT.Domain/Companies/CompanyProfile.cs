@@ -1,13 +1,12 @@
 using HTX586CONTRACT.Domain.Common;
 using HTX586CONTRACT.Domain.Contracts;
-using HTX586CONTRACT.Domain.Identity;
-using HTX586CONTRACT.Domain.Vehicles;
+using HTX586CONTRACT.Domain.Offices;
 
 namespace HTX586CONTRACT.Domain.Companies;
 
 /// <summary>
-/// Công ty/Văn phòng do Owner quản lý. Admin được gán trực tiếp vào một đơn vị;
-/// VehicleOwner truy cập đơn vị gián tiếp qua chiếc xe được chọn.
+/// Công ty/Văn phòng do Owner quản lý. Admin liên kết qua AdminOffice;
+/// xe liên kết qua OfficeVehicle.
 /// </summary>
 public class CompanyProfile : ISoftDeletable
 {
@@ -41,7 +40,7 @@ public class CompanyProfile : ISoftDeletable
     public DateTime? DeletedAt { get; set; }
     public string? DeletedBy { get; set; }
 
-    public ICollection<ApplicationUser> Users { get; set; } = [];
-    public ICollection<Vehicle> Vehicles { get; set; } = [];
+    public ICollection<AdminOffice> AdminOffices { get; set; } = [];
+    public ICollection<OfficeVehicle> OfficeVehicles { get; set; } = [];
     public ICollection<Contract> Contracts { get; set; } = [];
 }

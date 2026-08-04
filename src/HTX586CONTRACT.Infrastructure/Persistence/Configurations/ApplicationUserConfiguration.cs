@@ -8,10 +8,7 @@ public sealed class ApplicationUserConfiguration : IEntityTypeConfiguration<Appl
 {
     public void Configure(EntityTypeBuilder<ApplicationUser> builder)
     {
-        // AspNetUsers có trigger TR_AspNetUsers_ReleaseAssignedVehicle.
-        // SQL Server không cho phép EF Core dùng OUTPUT trực tiếp trên bảng có trigger,
-        // vì vậy phải chuyển SaveChanges sang cơ chế tương thích trigger.
-        builder.ToTable("AspNetUsers", table => table.UseSqlOutputClause(false));
+        builder.ToTable("AspNetUsers");
 
         builder.Property(x => x.FullName)
             .HasMaxLength(200)
@@ -76,15 +73,6 @@ public sealed class ApplicationUserConfiguration : IEntityTypeConfiguration<Appl
 
         builder.Property(x => x.DriverSignedAt)
             .HasColumnType("datetime2");
-
-        // Chỉ Admin được gán CompanyProfile; Owner và VehicleOwner luôn để null.
-        builder.HasOne(x => x.CompanyProfile)
-            .WithMany(x => x.Users)
-            .HasForeignKey(x => x.CompanyProfileId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        builder.HasIndex(x => x.CompanyProfileId)
-            .HasDatabaseName("IX_AspNetUsers_CompanyProfileId");
 
         builder.HasIndex(x => x.EmployeeCode)
             .IsUnique()

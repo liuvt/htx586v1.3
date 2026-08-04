@@ -291,17 +291,21 @@
 
             var contractQuery = db.Contracts.AsNoTracking()
                 .Where(x => (x.StartTime ?? x.CreatedAt) >= from && (x.StartTime ?? x.CreatedAt) < to);
-            var vehicleQuery = db.Vehicles.AsNoTracking().Where(x => x.IsActive && !x.IsDeleted && (x.CompanyProfile == null || !x.CompanyProfile.IsDeleted));
-            var vehicleOwnerQuery = db.Vehicles.AsNoTracking()
-                .Where(x => x.IsActive && !x.IsDeleted && x.AssignedDriverId != null &&
-                            x.AssignedDriver != null && x.AssignedDriver.IsActive && !x.AssignedDriver.IsDeleted &&
-                            x.AssignedDriver.RegistrationStatus == "Approved");
+            var officeVehicleQuery = db.OfficeVehicles.AsNoTracking()
+                .Where(x => x.IsActive && !x.IsDeleted && x.AssignedTo == null &&
+                            x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted &&
+                            x.Vehicle.IsActive && !x.Vehicle.IsDeleted);
+            var vehicleOwnerQuery = officeVehicleQuery
+                .Where(x => x.Vehicle.AssignedDriverId != null &&
+                            x.Vehicle.AssignedDriver != null && x.Vehicle.AssignedDriver.IsActive &&
+                            !x.Vehicle.AssignedDriver.IsDeleted &&
+                            x.Vehicle.AssignedDriver.RegistrationStatus == "Approved");
 
             if (_companyProfileId.HasValue)
             {
                 var companyId = _companyProfileId.Value;
                 contractQuery = contractQuery.Where(x => x.CompanyProfileId == companyId);
-                vehicleQuery = vehicleQuery.Where(x => x.CompanyProfileId == companyId);
+                officeVehicleQuery = officeVehicleQuery.Where(x => x.CompanyProfileId == companyId);
                 vehicleOwnerQuery = vehicleOwnerQuery.Where(x => x.CompanyProfileId == companyId);
             }
 
@@ -315,8 +319,8 @@
                     x.Status == ContractStatus.WaitingCustomerSignature ||
                     x.Status == ContractStatus.CustomerSigned ||
                     x.Status == ContractStatus.WaitingDriverConfirmation),
-                VehicleCount = await vehicleQuery.CountAsync(),
-                DriverCount = await vehicleOwnerQuery.Select(x => x.AssignedDriverId).Distinct().CountAsync(),
+                VehicleCount = await officeVehicleQuery.Select(x => x.VehicleId).Distinct().CountAsync(),
+                DriverCount = await vehicleOwnerQuery.Select(x => x.Vehicle.AssignedDriverId).Distinct().CountAsync(),
                 CustomerCount = await db.Customers.AsNoTracking().CountAsync(x =>
                     !x.IsDeleted && !x.PhoneNumber.StartsWith("PEND") &&
                     (!_companyProfileId.HasValue || x.Contracts.Any(c => c.CompanyProfileId == _companyProfileId.Value)))

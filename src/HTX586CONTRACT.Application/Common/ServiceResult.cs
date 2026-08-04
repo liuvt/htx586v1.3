@@ -25,6 +25,7 @@ public sealed class ServiceResult
         return new ServiceResult
         {
             Succeeded = false,
+            Message = error,
             Errors = [error]
         };
     }
@@ -32,10 +33,12 @@ public sealed class ServiceResult
     public static ServiceResult Failure(
         IEnumerable<string> errors)
     {
+        var values = errors.ToArray();
         return new ServiceResult
         {
             Succeeded = false,
-            Errors = errors.ToArray()
+            Message = values.FirstOrDefault(),
+            Errors = values
         };
     }
 }
