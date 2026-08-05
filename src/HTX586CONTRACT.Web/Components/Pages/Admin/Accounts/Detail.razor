@@ -76,7 +76,10 @@ else
         try
         {
             var result = await AccountService.SetActiveAsync(UserId, !_detail.IsActive);
-            Snackbar.Add(result.Message, result.Succeeded ? Severity.Success : Severity.Error);
+            var message = result.Message ?? (result.Succeeded
+                ? "Đã cập nhật trạng thái tài khoản."
+                : "Không thể cập nhật trạng thái tài khoản.");
+            Snackbar.Add(message, result.Succeeded ? Severity.Success : Severity.Error);
             if (result.Succeeded) await LoadAsync();
         }
         finally { _working = false; }
@@ -90,7 +93,10 @@ else
             var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
             var actor = auth.User.FindFirstValue(ClaimTypes.NameIdentifier);
             var result = await AccountService.DeleteAsync(UserId, actor);
-            Snackbar.Add(result.Message, result.Succeeded ? Severity.Success : Severity.Error);
+            var message = result.Message ?? (result.Succeeded
+                ? "Đã xóa tài khoản."
+                : "Không thể xóa tài khoản.");
+            Snackbar.Add(message, result.Succeeded ? Severity.Success : Severity.Error);
             if (result.Succeeded) Navigation.NavigateTo("/admin/accounts");
         }
         finally { _working = false; }

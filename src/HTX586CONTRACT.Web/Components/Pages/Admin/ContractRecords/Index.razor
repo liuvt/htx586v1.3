@@ -122,7 +122,7 @@
                 return;
             }
 
-            var officeIds = _selectedCompanyProfileId.HasValue
+            IEnumerable<Guid> officeIds = _selectedCompanyProfileId.HasValue
                 ? new[] { _selectedCompanyProfileId.Value }
                 : _managedCompanyProfileIds;
             var rows = new List<ContractListItemDto>();

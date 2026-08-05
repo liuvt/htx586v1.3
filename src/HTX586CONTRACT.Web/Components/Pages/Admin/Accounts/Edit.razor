@@ -137,7 +137,10 @@ else
         try
         {
             var result = await AccountService.UpdateAccountAsync(_model);
-            Snackbar.Add(result.Message, result.Succeeded ? Severity.Success : Severity.Error);
+            var message = result.Message ?? (result.Succeeded
+                ? "Đã cập nhật tài khoản."
+                : "Không thể cập nhật tài khoản.");
+            Snackbar.Add(message, result.Succeeded ? Severity.Success : Severity.Error);
             if (result.Succeeded) Navigation.NavigateTo($"/admin/accounts/{UserId}");
         }
         catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
@@ -150,7 +153,10 @@ else
         try
         {
             var result = await AccountService.ResetPasswordToDefaultAsync(UserId);
-            Snackbar.Add(result.Message, result.Succeeded ? Severity.Success : Severity.Error);
+            var message = result.Message ?? (result.Succeeded
+                ? "Đã đặt lại mật khẩu mặc định."
+                : "Không thể đặt lại mật khẩu.");
+            Snackbar.Add(message, result.Succeeded ? Severity.Success : Severity.Error);
         }
         finally { _saving = false; }
     }

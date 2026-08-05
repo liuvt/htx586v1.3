@@ -671,6 +671,9 @@ public sealed class ContractService(
             var assignment = await ResolveAssignmentAsync(db, request, currentUserId, access, ct);
             if (assignment.Error is not null)
                 return new(false, entity.Id, assignment.Error);
+            if (assignment.Vehicle is null || assignment.VehicleOwner is null || assignment.CompanyProfile is null)
+                return new(false, entity.Id, "Không thể xác định đầy đủ xe, chủ xe và Công ty/Văn phòng.");
+
             vehicle = assignment.Vehicle;
             vehicleOwner = assignment.VehicleOwner;
             company = assignment.CompanyProfile;
@@ -684,7 +687,7 @@ public sealed class ContractService(
                     currentUserId,
                     canManage: false,
                     isOwner: false,
-                    company!.Id,
+                    company.Id,
                     entity.CustomerId,
                     ct);
             }
