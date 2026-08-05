@@ -3,12 +3,13 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IServiceScopeFactory ScopeFactory
 @inject IDbContextFactory<ApplicationDbContext> Factory
+@inject MasterSignatureService MasterSignatureService
 @inject ISnackbar Snackbar
 
-<PageTitle>Tài khoản VehicleOwner</PageTitle>
+<PageTitle>Tài khoản Chủ xe</PageTitle>
 <PageHeader Title="Tài khoản cá nhân" Subtitle="Cập nhật thông tin liên hệ và kiểm tra toàn bộ xe được cấp cho tài khoản.">
     <MudButton Href="/vehicle-owner/vehicles" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.DirectionsCar">
-        Xe và chữ ký theo xe
+        Xe và chữ ký tài xế theo xe
     </MudButton>
 </PageHeader>
 
@@ -18,7 +19,7 @@
 }
 else if (_model is null)
 {
-    <MudAlert Severity="Severity.Error">Không tìm thấy tài khoản VehicleOwner.</MudAlert>
+    <MudAlert Severity="Severity.Error">Không tìm thấy tài khoản Chủ xe.</MudAlert>
 }
 else
 {
@@ -28,12 +29,30 @@ else
                 <MudText Typo="Typo.h6" Class="mb-3">Thông tin tài khoản</MudText>
                 <MudGrid>
                     <MudItem xs="12" md="6"><MudTextField Value="@_model.UserName" Label="ID đăng nhập" Disabled="true" Variant="Variant.Outlined" /></MudItem>
-                    <MudItem xs="12" md="6"><MudTextField T="string" Value="@RoleName" Label="Role" Disabled="true" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12" md="6"><MudTextField T="string" Value="@RoleDisplayName" Label="Vai trò" Disabled="true" Variant="Variant.Outlined" /></MudItem>
                     <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.FullName" Label="Họ tên" Required="true" Variant="Variant.Outlined" /></MudItem>
                     <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.PhoneNumber" Label="Số điện thoại" Required="true" HelperText="@VietnamPhoneNumber.ValidationMessage" Variant="Variant.Outlined" /></MudItem>
                     <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.Email" Label="Email" Variant="Variant.Outlined" /></MudItem>
-                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.CitizenId" Label="CCCD" Variant="Variant.Outlined" /></MudItem>
-                    <MudItem xs="12"><MudTextField @bind-Value="_model.Address" Label="Địa chỉ" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.CitizenId" Label="CCCD" Required="true" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12" md="6"><MudDatePicker @bind-Date="_model.CitizenIdIssuedDate" Label="Ngày cấp CCCD" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Culture="@AppCulture.Vietnamese" Required="true" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.CitizenIdIssuedPlace" Label="Nơi cấp CCCD" Required="true" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12"><MudTextField @bind-Value="_model.Address" Label="Địa chỉ chủ xe" Required="true" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Info" Variant="Variant.Text">
+                            Khi lưu, thông tin pháp lý trên sẽ được đồng bộ ngay sang toàn bộ xe đang thuộc tài khoản này.
+                        </MudAlert>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudText Typo="Typo.subtitle1">Chân ký Chủ xe</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            Mỗi hợp đồng mới sẽ tự động chụp chân ký này. Có thể ký trực tiếp hoặc upload file PNG.
+                        </MudText>
+                        <SignaturePad ExistingSignatureUrl="@SignatureUrl"
+                                      SignerName="@_model.FullName"
+                                      SignedAt="@_model.VehicleOwnerSignedAt"
+                                      OnSignatureSaved="SaveVehicleOwnerSignatureAsync"
+                                      ConfirmationButtonText="Lưu chân ký Chủ xe" />
+                    </MudItem>
                 </MudGrid>
 
                 <MudStack Row="true" Class="mt-4" Justify="Justify.FlexEnd">
@@ -80,12 +99,16 @@ else
 
 @code {
     private const string RoleName = "VehicleOwner";
+    private const string RoleDisplayName = "Chủ xe";
     private const string ResetPassword = "Htx@586";
     private AccountModel? _model;
     private List<VehicleRow> _vehicles = [];
     private bool _loading = true;
     private bool _saving;
     private bool _resetting;
+    private string? SignatureUrl => string.IsNullOrWhiteSpace(_model?.VehicleOwnerSignatureFileUrl)
+        ? null
+        : $"{_model.VehicleOwnerSignatureFileUrl}?v={_model.VehicleOwnerSignedAt?.Ticks ?? 0}";
 
     protected override async Task OnInitializedAsync()
     {
@@ -111,7 +134,11 @@ else
                     PhoneNumber = user.PhoneNumber,
                     Email = user.Email,
                     CitizenId = user.CitizenId,
-                    Address = user.Address
+                    CitizenIdIssuedDate = user.CitizenIdIssuedDate,
+                    CitizenIdIssuedPlace = user.CitizenIdIssuedPlace,
+                    Address = user.Address,
+                    VehicleOwnerSignatureFileUrl = user.VehicleOwnerSignatureFileUrl,
+                    VehicleOwnerSignedAt = user.VehicleOwnerSignedAt
                 };
             }
         }
@@ -137,6 +164,25 @@ else
         _loading = false;
     }
 
+    private async Task SaveVehicleOwnerSignatureAsync(string dataUrl)
+    {
+        if (_model is null)
+            return;
+
+        try
+        {
+            var url = await MasterSignatureService.SaveVehicleOwnerAccountSignatureAsync(_model.Id, dataUrl);
+            _model.VehicleOwnerSignatureFileUrl = url;
+            _model.VehicleOwnerSignedAt = DateTime.UtcNow;
+            Snackbar.Add("Đã lưu chân ký Chủ xe và đồng bộ sang toàn bộ xe đang sở hữu.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            throw;
+        }
+    }
+
     private async Task SaveAsync()
     {
         if (_model is null || string.IsNullOrWhiteSpace(_model.FullName))
@@ -149,6 +195,14 @@ else
             Snackbar.Add(VietnamPhoneNumber.ValidationMessage, Severity.Warning);
             return;
         }
+        if (string.IsNullOrWhiteSpace(_model.CitizenId) ||
+            !_model.CitizenIdIssuedDate.HasValue ||
+            string.IsNullOrWhiteSpace(_model.CitizenIdIssuedPlace) ||
+            string.IsNullOrWhiteSpace(_model.Address))
+        {
+            Snackbar.Add("Vui lòng nhập đầy đủ CCCD, ngày cấp, nơi cấp và địa chỉ chủ xe.", Severity.Warning);
+            return;
+        }
 
         _saving = true;
         try
@@ -157,7 +211,7 @@ else
             var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
             var user = await userManager.FindByIdAsync(_model.Id);
             if (user is null || user.IsDeleted || !await userManager.IsInRoleAsync(user, RoleName))
-                throw new InvalidOperationException("Không tìm thấy tài khoản VehicleOwner.");
+                throw new InvalidOperationException("Không tìm thấy tài khoản Chủ xe.");
 
             var duplicate = await userManager.Users.AsNoTracking().AnyAsync(x =>
                 x.Id != user.Id && !x.IsDeleted && x.PhoneNumber == phone);
@@ -168,6 +222,8 @@ else
             user.PhoneNumber = phone;
             user.Email = N(_model.Email);
             user.CitizenId = N(_model.CitizenId);
+            user.CitizenIdIssuedDate = _model.CitizenIdIssuedDate?.Date;
+            user.CitizenIdIssuedPlace = N(_model.CitizenIdIssuedPlace);
             user.Address = N(_model.Address);
             user.UpdatedAt = DateTime.UtcNow;
             user.UpdatedByUserId = user.Id;
@@ -175,7 +231,33 @@ else
             if (!result.Succeeded)
                 throw new InvalidOperationException(string.Join("; ", result.Errors.Select(x => x.Description)));
 
-            Snackbar.Add("Đã cập nhật tài khoản.", Severity.Success);
+            await using (var db = await Factory.CreateDbContextAsync())
+            {
+                var vehicles = await db.Vehicles
+                    .Where(x => x.AssignedDriverId == user.Id && !x.IsDeleted)
+                    .ToListAsync();
+                var now = DateTime.UtcNow;
+                foreach (var vehicle in vehicles)
+                {
+                    vehicle.OwnerName = user.FullName.Trim();
+                    vehicle.OwnerPhoneNumber = N(user.PhoneNumber);
+                    vehicle.OwnerCitizenId = N(user.CitizenId);
+                    vehicle.OwnerCitizenIdIssuedDate = user.CitizenIdIssuedDate?.Date;
+                    vehicle.OwnerCitizenIdIssuedPlace = N(user.CitizenIdIssuedPlace);
+                    vehicle.OwnerAddress = N(user.Address);
+                    vehicle.OwnerSignatureFileUrl = user.VehicleOwnerSignatureFileUrl;
+                    vehicle.OwnerSignatureHash = user.VehicleOwnerSignatureHash;
+                    vehicle.OwnerSignedAt = user.VehicleOwnerSignedAt;
+                    vehicle.UpdatedAt = now;
+                    vehicle.UpdatedBy = user.Id;
+                }
+                await db.SaveChangesAsync();
+            }
+
+            foreach (var vehicle in _vehicles)
+                vehicle.OwnerName = user.FullName;
+
+            Snackbar.Add("Đã cập nhật hồ sơ Chủ xe và đồng bộ thông tin pháp lý sang các xe đang sở hữu.", Severity.Success);
         }
         catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
         finally { _saving = false; }
@@ -230,7 +312,11 @@ else
         public string? PhoneNumber { get; set; }
         public string? Email { get; set; }
         public string? CitizenId { get; set; }
+        public DateTime? CitizenIdIssuedDate { get; set; }
+        public string? CitizenIdIssuedPlace { get; set; }
         public string? Address { get; set; }
+        public string? VehicleOwnerSignatureFileUrl { get; set; }
+        public DateTime? VehicleOwnerSignedAt { get; set; }
     }
 
     private sealed class VehicleRow

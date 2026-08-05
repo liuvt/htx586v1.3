@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -23,6 +23,72 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_AspNetRoles", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "AspNetUsers",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    FullName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    EmployeeCode = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
+                    CitizenId = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
+                    CitizenIdIssuedDate = table.Column<DateTime>(type: "date", nullable: true),
+                    CitizenIdIssuedPlace = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
+                    DateOfBirth = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    Address = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    AreaCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
+                    AvatarUrl = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    CitizenIdFrontUrl = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    CitizenIdBackUrl = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    DriverLicenseNumber = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
+                    DriverLicenseClass = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
+                    DriverLicenseIssuedDate = table.Column<DateTime>(type: "date", nullable: true),
+                    DriverLicenseExpiryDate = table.Column<DateTime>(type: "date", nullable: true),
+                    DriverLicenseFrontUrl = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    DriverLicenseBackUrl = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    DriverSignatureFileUrl = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    DriverSignatureHash = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: true),
+                    DriverSignedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DriverSignatureIsActive = table.Column<bool>(type: "bit", nullable: false),
+                    DriverSignatureInactiveAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    VehicleOwnerSignatureFileUrl = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
+                    VehicleOwnerSignatureHash = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: true),
+                    VehicleOwnerSignedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    RegistrationStatus = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    RegistrationRequestedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    RegistrationViewedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    RegistrationViewedByUserId = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: true),
+                    RegistrationReviewedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    RegistrationReviewedByUserId = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: true),
+                    RegistrationReviewNote = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    MustChangePassword = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedByUserId = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedByUserId = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: true),
+                    UserName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
+                    NormalizedUserName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
+                    Email = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
+                    NormalizedEmail = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
+                    EmailConfirmed = table.Column<bool>(type: "bit", nullable: false),
+                    PasswordHash = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    SecurityStamp = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    ConcurrencyStamp = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    PhoneNumber = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    PhoneNumberConfirmed = table.Column<bool>(type: "bit", nullable: false),
+                    TwoFactorEnabled = table.Column<bool>(type: "bit", nullable: false),
+                    LockoutEnd = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
+                    LockoutEnabled = table.Column<bool>(type: "bit", nullable: false),
+                    AccessFailedCount = table.Column<int>(type: "int", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AspNetUsers", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -108,103 +174,6 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         principalTable: "AspNetRoles",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "AspNetUsers",
-                columns: table => new
-                {
-                    Id = table.Column<string>(type: "nvarchar(450)", nullable: false),
-                    FullName = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
-                    EmployeeCode = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
-                    CitizenId = table.Column<string>(type: "nvarchar(30)", maxLength: 30, nullable: true),
-                    CitizenIdIssuedDate = table.Column<DateTime>(type: "date", nullable: true),
-                    CitizenIdIssuedPlace = table.Column<string>(type: "nvarchar(300)", maxLength: 300, nullable: true),
-                    DateOfBirth = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    Address = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
-                    AreaCode = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
-                    AvatarUrl = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
-                    CitizenIdFrontUrl = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
-                    CitizenIdBackUrl = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
-                    DriverLicenseNumber = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: true),
-                    DriverLicenseClass = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
-                    DriverLicenseIssuedDate = table.Column<DateTime>(type: "date", nullable: true),
-                    DriverLicenseExpiryDate = table.Column<DateTime>(type: "date", nullable: true),
-                    DriverLicenseFrontUrl = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
-                    DriverLicenseBackUrl = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
-                    DriverSignatureFileUrl = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: true),
-                    DriverSignatureHash = table.Column<string>(type: "nvarchar(128)", maxLength: 128, nullable: true),
-                    DriverSignedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    DriverSignatureIsActive = table.Column<bool>(type: "bit", nullable: false),
-                    DriverSignatureInactiveAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    RegistrationStatus = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
-                    RegistrationRequestedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    RegistrationViewedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    RegistrationViewedByUserId = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: true),
-                    RegistrationReviewedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    RegistrationReviewedByUserId = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: true),
-                    RegistrationReviewNote = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
-                    IsActive = table.Column<bool>(type: "bit", nullable: false),
-                    MustChangePassword = table.Column<bool>(type: "bit", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    CreatedByUserId = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    UpdatedByUserId = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: true),
-                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
-                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    DeletedBy = table.Column<string>(type: "nvarchar(450)", maxLength: 450, nullable: true),
-                    UserName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
-                    NormalizedUserName = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
-                    Email = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
-                    NormalizedEmail = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: true),
-                    EmailConfirmed = table.Column<bool>(type: "bit", nullable: false),
-                    PasswordHash = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    SecurityStamp = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    ConcurrencyStamp = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    PhoneNumber = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    PhoneNumberConfirmed = table.Column<bool>(type: "bit", nullable: false),
-                    TwoFactorEnabled = table.Column<bool>(type: "bit", nullable: false),
-                    LockoutEnd = table.Column<DateTimeOffset>(type: "datetimeoffset", nullable: true),
-                    LockoutEnabled = table.Column<bool>(type: "bit", nullable: false),
-                    AccessFailedCount = table.Column<int>(type: "int", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AspNetUsers", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ContractTemplates",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    ContractTypeId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    Name = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
-                    Version = table.Column<int>(type: "int", nullable: false),
-                    HtmlContent = table.Column<string>(type: "nvarchar(max)", nullable: false),
-                    CssContent = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    VariablesJson = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    IsActive = table.Column<bool>(type: "bit", nullable: false),
-                    EffectiveFrom = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    EffectiveTo = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
-                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    DeletedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
-                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ContractTemplates", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_ContractTemplates_ContractTypes_ContractTypeId",
-                        column: x => x.ContractTypeId,
-                        principalTable: "ContractTypes",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -443,6 +412,40 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         name: "FK_AdminOffices_CompanyProfiles_CompanyProfileId",
                         column: x => x.CompanyProfileId,
                         principalTable: "CompanyProfiles",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ContractTemplates",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    ContractTypeId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    Version = table.Column<int>(type: "int", nullable: false),
+                    HtmlContent = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    CssContent = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    VariablesJson = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    EffectiveFrom = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    EffectiveTo = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CreatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    UpdatedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    IsDeleted = table.Column<bool>(type: "bit", nullable: false),
+                    DeletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    DeletedBy = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    RowVersion = table.Column<byte[]>(type: "rowversion", rowVersion: true, nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ContractTemplates", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_ContractTemplates_ContractTypes_ContractTypeId",
+                        column: x => x.ContractTypeId,
+                        principalTable: "ContractTypes",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -745,6 +748,18 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                 });
 
             migrationBuilder.CreateIndex(
+                name: "IX_AdminOffices_Office_Active",
+                table: "AdminOffices",
+                columns: new[] { "CompanyProfileId", "IsActive" });
+
+            migrationBuilder.CreateIndex(
+                name: "UX_AdminOffices_Admin_Office",
+                table: "AdminOffices",
+                columns: new[] { "AdminUserId", "CompanyProfileId" },
+                unique: true,
+                filter: "[IsDeleted] = 0");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_AspNetRoleClaims_RoleId",
                 table: "AspNetRoleClaims",
                 column: "RoleId");
@@ -968,18 +983,6 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                 column: "IsDeleted");
 
             migrationBuilder.CreateIndex(
-                name: "IX_AdminOffices_Office_Active",
-                table: "AdminOffices",
-                columns: new[] { "CompanyProfileId", "IsActive" });
-
-            migrationBuilder.CreateIndex(
-                name: "UX_AdminOffices_Admin_Office",
-                table: "AdminOffices",
-                columns: new[] { "AdminUserId", "CompanyProfileId" },
-                unique: true,
-                filter: "[IsDeleted] = 0");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_OfficeVehicles_Office_Active",
                 table: "OfficeVehicles",
                 columns: new[] { "CompanyProfileId", "IsActive" });
@@ -1013,6 +1016,9 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
+                name: "AdminOffices");
+
+            migrationBuilder.DropTable(
                 name: "AspNetRoleClaims");
 
             migrationBuilder.DropTable(
@@ -1043,22 +1049,22 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                 name: "DriverNotifications");
 
             migrationBuilder.DropTable(
+                name: "OfficeVehicles");
+
+            migrationBuilder.DropTable(
                 name: "AspNetRoles");
 
             migrationBuilder.DropTable(
                 name: "Contracts");
 
             migrationBuilder.DropTable(
+                name: "CompanyProfiles");
+
+            migrationBuilder.DropTable(
                 name: "ContractTemplates");
 
             migrationBuilder.DropTable(
                 name: "Customers");
-
-            migrationBuilder.DropTable(
-                name: "AdminOffices");
-
-            migrationBuilder.DropTable(
-                name: "OfficeVehicles");
 
             migrationBuilder.DropTable(
                 name: "Vehicles");
@@ -1068,9 +1074,6 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
 
             migrationBuilder.DropTable(
                 name: "AspNetUsers");
-
-            migrationBuilder.DropTable(
-                name: "CompanyProfiles");
         }
     }
 }

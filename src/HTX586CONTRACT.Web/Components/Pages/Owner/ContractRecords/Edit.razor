@@ -335,7 +335,7 @@ else
         <MudText Typo="Typo.h6" Class="mb-3">Thông tin chữ ký hợp đồng</MudText>
         <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3">
 Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố định nếu đã được lưu trong danh mục.
-            Owner/Admin chỉ được xem chữ ký. Chỉ tài khoản VehicleOwner được ghi nhận chữ ký khách hàng và chốt hợp đồng hoàn tất.
+            Chủ hệ thống/Quản lý chỉ được xem chữ ký. Chỉ tài khoản Chủ xe được ghi nhận chữ ký khách hàng và chốt hợp đồng hoàn tất.
         </MudAlert>
         <MudGrid>
             <MudItem xs="12" md="3">
@@ -371,7 +371,7 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
                 else
                 {
                     <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
-                        Chưa có chữ ký khách hàng. Chỉ tài khoản VehicleOwner được thao tác chân ký này.
+                        Chưa có chữ ký khách hàng. Chỉ tài khoản Chủ xe được thao tác phần ký này.
                     </MudAlert>
                 }
             </MudItem>
@@ -590,7 +590,7 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
         {
             _model.VehicleId = null;
             _model.DriverId = string.Empty;
-            Snackbar.Add("Xe chưa được gán tài khoản VehicleOwner. Hãy gán tại Quản lý Xe trước.", Severity.Warning);
+            Snackbar.Add("Xe chưa được gán tài khoản Chủ xe. Hãy gán tại Quản lý xe trước.", Severity.Warning);
             return;
         }
 
@@ -888,7 +888,7 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
         => SelectedVehicle is null
             ? "Chọn xe trước."
             : string.IsNullOrWhiteSpace(SelectedVehicle.AssignedDriverId)
-                ? "Xe chưa được gán tài khoản VehicleOwner."
+                ? "Xe chưa được gán tài khoản Chủ xe."
                 : "Tài khoản nhận hợp đồng được lấy cố định theo xe; một tài khoản có thể nhận nhiều xe.";
 
     private static string CompanyDisplay(CompanyProfile company)
@@ -903,7 +903,7 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
 
         var brand = string.IsNullOrWhiteSpace(vehicle.Brand) ? string.Empty : $" - {vehicle.Brand}";
         var owner = string.IsNullOrWhiteSpace(vehicle.OwnerName) ? string.Empty : $" - Chủ xe: {vehicle.OwnerName}";
-        var assignment = string.IsNullOrWhiteSpace(vehicle.AssignedDriverId) ? " (chưa gán VehicleOwner)" : string.Empty;
+        var assignment = string.IsNullOrWhiteSpace(vehicle.AssignedDriverId) ? " (chưa gán Chủ xe)" : string.Empty;
         return $"{vehicle.PlateNumber}{brand}{owner}{assignment}";
     }
 
@@ -932,7 +932,9 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
         => SelectedCompany?.RepresentativeName ?? "Đại diện văn phòng";
 
     private string OwnerSigner
-        => SelectedVehicle?.OwnerName ?? "Chủ sở hữu xe";
+        => Id.HasValue
+            ? _detail?.OwnerName ?? SelectedVehicle?.OwnerName ?? "Chủ sở hữu xe"
+            : SelectedVehicle?.OwnerName ?? "Chủ sở hữu xe";
 
     private string DriverSigner
         => SelectedDriver?.FullName ?? "Tài xế";
@@ -944,10 +946,14 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
         => SelectedCompany?.RepresentativeSignedAt;
 
     private string? FixedOwnerSignatureUrl
-        => SelectedVehicle?.OwnerSignatureFileUrl;
+        => Id.HasValue
+            ? _detail?.VehicleOwnerSignatureFileUrl ?? SelectedVehicle?.OwnerSignatureFileUrl
+            : SelectedVehicle?.OwnerSignatureFileUrl;
 
     private DateTime? FixedOwnerSignedAt
-        => SelectedVehicle?.OwnerSignedAt;
+        => Id.HasValue
+            ? _detail?.VehicleOwnerSignedAt ?? SelectedVehicle?.OwnerSignedAt
+            : SelectedVehicle?.OwnerSignedAt;
 
     private string? FixedDriverSignatureUrl
         => SelectedVehicle?.AccountDriverSignatureFileUrl;

@@ -232,14 +232,14 @@
 
 <MudTable T="CompanyProfileListItemDto" Items="FilteredItems" Loading="_loading" Hover="true" Striped="true" Breakpoint="Breakpoint.Sm">
     <HeaderContent>
-        <MudTh>Đơn vị</MudTh><MudTh>Mã số thuế</MudTh><MudTh>Người đại diện</MudTh><MudTh>Admin</MudTh><MudTh>VehicleOwner</MudTh><MudTh>Xe</MudTh><MudTh>Hợp đồng</MudTh><MudTh>Trạng thái</MudTh><MudTh></MudTh>
+        <MudTh>Đơn vị</MudTh><MudTh>Mã số thuế</MudTh><MudTh>Người đại diện</MudTh><MudTh>Quản lý</MudTh><MudTh>Chủ xe</MudTh><MudTh>Xe</MudTh><MudTh>Hợp đồng</MudTh><MudTh>Trạng thái</MudTh><MudTh></MudTh>
     </HeaderContent>
     <RowTemplate>
         <MudTd DataLabel="Đơn vị"><b>@context.CompanyName</b><br /><small>@context.BranchName</small></MudTd>
         <MudTd DataLabel="Mã số thuế">@context.TaxCode</MudTd>
         <MudTd DataLabel="Người đại diện">@context.RepresentativeName</MudTd>
-        <MudTd DataLabel="Admin">@context.AdminCount</MudTd>
-        <MudTd DataLabel="VehicleOwner">@context.DriverCount</MudTd>
+        <MudTd DataLabel="Quản lý">@context.AdminCount</MudTd>
+        <MudTd DataLabel="Chủ xe">@context.DriverCount</MudTd>
         <MudTd DataLabel="Xe">@context.VehicleCount</MudTd>
         <MudTd DataLabel="Hợp đồng">@context.ContractCount</MudTd>
         <MudTd DataLabel="Trạng thái"><MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">@(context.IsActive ? "Hoạt động" : "Ngừng")</MudChip></MudTd>

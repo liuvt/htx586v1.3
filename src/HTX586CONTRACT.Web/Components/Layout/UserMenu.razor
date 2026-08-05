@@ -60,8 +60,8 @@
 
     private static string RoleName(ClaimsPrincipal user)
         => user.IsInRole("Owner") ? "Chủ hệ thống"
-         : user.IsInRole("Admin") ? "Quản trị đơn vị"
-         : user.IsInRole("VehicleOwner") ? "Chủ xe / VehicleOwner"
+         : user.IsInRole("Admin") ? "Quản lý"
+         : user.IsInRole("VehicleOwner") ? "Chủ xe"
          : "Người dùng";
 
     private static string Initials(ClaimsPrincipal user)

@@ -25,7 +25,7 @@
             Vận hành toàn hệ thống từ một góc nhìn thống nhất.
         </MudText>
         <MudText Typo="Typo.body1" Class="dashboard-hero-description">
-            Tổng hợp dữ liệu hợp đồng, phương tiện, VehicleOwner, khách hàng và doanh thu theo từng Công ty/Văn phòng trong @_selectedMonthText.
+            Tổng hợp dữ liệu hợp đồng, phương tiện, Chủ xe, khách hàng và doanh thu theo từng Công ty/Văn phòng trong @_selectedMonthText.
         </MudText>
         <div class="dashboard-hero-actions">
             <MudButton Href="/owner/contracts"
@@ -155,7 +155,7 @@
     <MudItem xs="12" sm="6" xl="3">
         <StatCard Title="Nguồn lực vận hành"
                   Value="@($"{_stats.VehicleCount:N0} xe")"
-                  Hint="@($"{_stats.DriverCount:N0} VehicleOwner đang hoạt động")"
+                  Hint="@($"{_stats.DriverCount:N0} Chủ xe đang hoạt động")"
                   Badge="@($"{_driverCoverage:0.#}%")"
                   Icon="@Icons.Material.Filled.DirectionsCarFilled"
                   Color="Color.Info" />
@@ -191,7 +191,7 @@
 
                 <div class="health-row">
                     <div class="health-row-top">
-                        <span>Mức phủ VehicleOwner / phương tiện</span>
+                        <span>Mức phủ Chủ xe / phương tiện</span>
                         <strong>@_driverCoverage.ToString("0.#")%</strong>
                     </div>
                     <div class="health-track"><div class="health-fill" style="@($"width:{_driverCoverage:0.#}%")"></div></div>

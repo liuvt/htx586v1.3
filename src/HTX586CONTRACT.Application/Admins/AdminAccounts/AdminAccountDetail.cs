@@ -17,10 +17,8 @@ public sealed class AdminAccountDetail
     public DateTime? DateOfBirth { get; set; }
     public string? Address { get; set; }
     public string? AreaCode { get; set; }
-    public string? DriverLicenseNumber { get; set; }
-    public string? DriverLicenseClass { get; set; }
-    public DateTime? DriverLicenseIssuedDate { get; set; }
-    public DateTime? DriverLicenseExpiryDate { get; set; }
+    public string? VehicleOwnerSignatureFileUrl { get; set; }
+    public DateTime? VehicleOwnerSignedAt { get; set; }
     public int VehicleCount { get; set; }
     public string VehiclePlates { get; set; } = string.Empty;
     public bool IsActive { get; set; }

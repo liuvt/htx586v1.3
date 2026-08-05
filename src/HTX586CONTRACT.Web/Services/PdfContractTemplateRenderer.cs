@@ -417,7 +417,9 @@ public sealed class PdfContractTemplateRenderer(
                 : contract.CompanyProfile?.RepresentativeSignatureFileUrl),
             ["SIG_OWNER"] = StoredSignaturePath(snapshot is not null
                 ? snapshot.Vehicle.OwnerSignatureFileUrl
-                : contract.Vehicle?.OwnerSignatureFileUrl),
+                : First(
+                    contract.Driver?.VehicleOwnerSignatureFileUrl,
+                    contract.Vehicle?.OwnerSignatureFileUrl)),
             ["SIG_DRIVER"] = StoredSignaturePath(snapshot is not null
                 ? snapshot.Driver.SignatureFileUrl
                 : First(

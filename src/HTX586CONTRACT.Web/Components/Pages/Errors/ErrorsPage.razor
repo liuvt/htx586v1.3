@@ -93,7 +93,7 @@
             <div class="system-error-help">
                 <MudIcon Icon="@Icons.Material.Filled.SupportAgent" Size="Size.Small" />
                 <span>
-                    Nếu bạn cần truy cập chức năng này, hãy liên hệ Owner hoặc Admin để kiểm tra lại quyền tài khoản.
+                    Nếu bạn cần truy cập chức năng này, hãy liên hệ Chủ hệ thống hoặc Quản lý để kiểm tra lại quyền tài khoản.
                 </span>
             </div>
         </div>
@@ -259,7 +259,7 @@
             }
             else if (user.IsInRole("Admin"))
             {
-                _roleName = "Admin";
+                _roleName = "Quản lý";
                 _roleHomeUrl = "/admin/dashboard";
             }
             else if (user.IsInRole("VehicleOwner"))

@@ -6,8 +6,8 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject ISnackbar Snackbar
 
-<PageTitle>Dashboard VehicleOwner</PageTitle>
-<PageHeader Title="Dashboard VehicleOwner"
+<PageTitle>Dashboard Chủ xe</PageTitle>
+<PageHeader Title="Dashboard Chủ xe"
             Subtitle="Theo dõi doanh thu, tiến độ hợp đồng, phương tiện được giao và thông báo mới của bạn.">
     <MudButton Href="/vehicle-owner/contracts/create"
                Color="Color.Primary"
@@ -71,7 +71,7 @@
 @if (!_hasAssignedVehicle)
 {
     <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
-        Tài khoản chưa được gán phương tiện đang hoạt động nên chưa thể tự tạo hợp đồng. Khi Owner/Admin gán xe, hệ thống sẽ tự cập nhật và gửi thông báo cho bạn.
+        Tài khoản chưa được gán phương tiện đang hoạt động nên chưa thể tự tạo hợp đồng. Khi Chủ hệ thống/Quản lý gán xe, hệ thống sẽ tự cập nhật và gửi thông báo cho bạn.
     </MudAlert>
 }
 

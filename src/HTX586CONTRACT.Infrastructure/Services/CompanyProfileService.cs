@@ -152,7 +152,7 @@ public sealed class CompanyProfileService(
         var hasActiveAdmin = await db.AdminOffices.AnyAsync(x => !x.IsDeleted && x.IsActive &&
             x.CompanyProfileId == id && x.AdminUser.IsActive && !x.AdminUser.IsDeleted, ct);
         if (hasActiveAdmin)
-            throw new InvalidOperationException("Đơn vị đang có tài khoản Admin hoạt động. Hãy chuyển hoặc khóa Admin trước khi xóa.");
+            throw new InvalidOperationException("Đơn vị đang có tài khoản Quản lý hoạt động. Hãy chuyển hoặc khóa tài khoản Quản lý trước khi xóa.");
 
         if (await db.OfficeVehicles.AnyAsync(x => !x.IsDeleted && x.IsActive && x.AssignedTo == null &&
             x.CompanyProfileId == id && !x.Vehicle.IsDeleted, ct))

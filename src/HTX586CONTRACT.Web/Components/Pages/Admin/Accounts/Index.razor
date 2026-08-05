@@ -1,82 +1,119 @@
 @page "/admin/accounts"
 @attribute [Authorize(Roles = "Owner")]
 @inject IAdminAccountService AccountService
+@inject AccountExcelImportService AccountImportService
+@inject AuthenticationStateProvider AuthenticationStateProvider
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
 
 <PageTitle>Quản lý tài khoản</PageTitle>
-<PageHeader Title="Quản lý tài khoản" Subtitle="Quản lý chung tài khoản Admin và VehicleOwner, vai trò và phạm vi Công ty/Văn phòng." />
+<PageHeader Title="Quản lý tài khoản" Subtitle="Quản lý chung tài khoản Quản lý và Chủ xe, vai trò và phạm vi Công ty/Văn phòng." />
 
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudGrid>
-        <MudItem xs="12" md="6">
+        <MudItem xs="12" md="5">
             <MudTextField T="string" @bind-Value="_keyword" Placeholder="Tìm tài khoản, họ tên, điện thoại, văn phòng..."
                           Immediate="true" Clearable="true" Variant="Variant.Outlined"
                           Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
         </MudItem>
-        <MudItem xs="12" md="3">
+        <MudItem xs="12" md="2">
             <MudSelect T="string" @bind-Value="_roleFilter" Label="Vai trò" Variant="Variant.Outlined" Clearable="true">
-                <MudSelectItem T="string" Value="@("Admin")">Admin</MudSelectItem>
-                <MudSelectItem T="string" Value="@("VehicleOwner")">VehicleOwner</MudSelectItem>
+                <MudSelectItem T="string" Value="@SystemRoleDisplay.AdminRole">Quản lý</MudSelectItem>
+                <MudSelectItem T="string" Value="@SystemRoleDisplay.VehicleOwnerRole">Chủ xe</MudSelectItem>
             </MudSelect>
         </MudItem>
-        <MudItem xs="12" md="3" Class="d-flex align-center justify-end">
-            <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.PersonAdd"
-                       OnClick="@(() => Navigation.NavigateTo("/admin/accounts/create"))">
-                Thêm tài khoản
-            </MudButton>
+        <MudItem xs="12" md="5">
+            <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="2" Justify="Justify.FlexEnd" AlignItems="AlignItems.Center">
+                <MudButton Href="/templates/Template_Import_Account_HTX586.xlsx"
+                           download="Template_Import_Account_HTX586.xlsx"
+                           Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download"
+                           Disabled="@(_readingImportFile || _importing)">Tải mẫu</MudButton>
+                <MudFileUpload @ref="_fileUpload" T="IBrowserFile"
+                               Accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                               FilesChanged="ReadImportFileAsync" MaximumFileCount="1"
+                               Disabled="@(_readingImportFile || _importing)">
+                    <CustomContent Context="upload">
+                        <MudButton Color="Color.Success" Variant="Variant.Outlined"
+                                   Disabled="@(_readingImportFile || _importing)"
+                                   OnClick="@upload.OpenFilePickerAsync"
+                                   StartIcon="@Icons.Material.Filled.UploadFile">
+                            @(_readingImportFile ? "Đang đọc..." : "Import Excel")
+                        </MudButton>
+                    </CustomContent>
+                </MudFileUpload>
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.PersonAdd"
+                           Disabled="@(_readingImportFile || _importing)"
+                           OnClick="@(() => Navigation.NavigateTo("/admin/accounts/create"))">Thêm tài khoản</MudButton>
+            </MudStack>
         </MudItem>
     </MudGrid>
 </MudPaper>
 
-<MudTable T="AdminAccountListItem" Items="FilteredItems" Loading="_loading" Hover="true" Striped="true"
-          RowsPerPage="20" Breakpoint="Breakpoint.Sm">
-    <HeaderContent>
-        <MudTh>Tài khoản</MudTh>
-        <MudTh>Vai trò</MudTh>
-        <MudTh>Họ tên</MudTh>
-        <MudTh>Công ty/Văn phòng</MudTh>
-        <MudTh>Xe sở hữu</MudTh>
-        <MudTh>Liên hệ</MudTh>
-        <MudTh>Trạng thái</MudTh>
-        <MudTh></MudTh>
-    </HeaderContent>
+@if (_importPreview is not null)
+{
+    <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+            <div><MudText Typo="Typo.h6">Kiểm tra import tài khoản</MudText><MudText Typo="Typo.body2" Color="Color.Secondary">@_importPreview.FileName</MudText></div>
+            <MudSpacer /><MudIconButton Icon="@Icons.Material.Filled.Close" Disabled="_importing" OnClick="CancelImport" />
+        </MudStack>
+        <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="2" Class="mb-3">
+            <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined">Tổng @_importPreview.TotalRows</MudChip>
+            <MudChip T="string" Color="Color.Success">Hợp lệ @_importPreview.ValidRows</MudChip>
+            <MudChip T="string" Color="@(_importPreview.InvalidRows > 0 ? Color.Error : Color.Default)" Variant="Variant.Outlined">Lỗi @_importPreview.InvalidRows</MudChip>
+        </MudStack>
+        <MudAlert Severity="@(_importPreview.InvalidRows > 0 ? Severity.Warning : Severity.Success)" Variant="Variant.Outlined" Class="mb-3">
+            @(_importPreview.InvalidRows > 0 ? "Chỉ các dòng hợp lệ được import. Xem cột lỗi để sửa các dòng còn lại." : "Toàn bộ dữ liệu hợp lệ, có thể xác nhận import.")
+        </MudAlert>
+        <MudTable T="AccountImportRowPreview" Items="_importPreview.Rows" Dense="true" Hover="true" Striped="true" RowsPerPage="10" Loading="_importing">
+            <HeaderContent><MudTh>Dòng</MudTh><MudTh>Vai trò</MudTh><MudTh>Tài khoản</MudTh><MudTh>Họ tên</MudTh><MudTh>Điện thoại</MudTh><MudTh>MST văn phòng</MudTh><MudTh>Trạng thái</MudTh><MudTh>Lỗi</MudTh></HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.RowNumber</MudTd><MudTd>@context.RoleDisplay</MudTd><MudTd>@context.Data.UserName</MudTd>
+                <MudTd>@context.Data.FullName</MudTd><MudTd>@context.Data.PhoneNumber</MudTd><MudTd>@string.Join("; ", context.OfficeTaxCodes)</MudTd>
+                <MudTd><MudChip T="string" Size="Size.Small" Color="@(context.IsValid ? Color.Success : Color.Error)">@(context.IsValid ? "Hợp lệ" : "Lỗi")</MudChip></MudTd>
+                <MudTd><MudText Typo="Typo.caption" Color="Color.Error">@context.ErrorMessage</MudText></MudTd>
+            </RowTemplate>
+            <PagerContent><MudTablePager PageSizeOptions="@(new int[] { 10, 20, 50, 100 })" /></PagerContent>
+        </MudTable>
+        <MudStack Row="true" Class="mt-4"><MudButton Variant="Variant.Outlined" Disabled="_importing" OnClick="CancelImport">Hủy</MudButton><MudSpacer />
+            <MudButton Color="Color.Success" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Publish"
+                       Disabled="@(_importing || _importPreview.ValidRows == 0)" OnClick="ConfirmImportAsync">
+                @(_importing ? "Đang import..." : $"Import {_importPreview.ValidRows} dòng")
+            </MudButton>
+        </MudStack>
+    </MudPaper>
+}
+
+<MudTable T="AdminAccountListItem" Items="FilteredItems" Loading="_loading" Hover="true" Striped="true" RowsPerPage="20" Breakpoint="Breakpoint.Sm">
+    <HeaderContent><MudTh>Tài khoản</MudTh><MudTh>Vai trò</MudTh><MudTh>Họ tên</MudTh><MudTh>Công ty/Văn phòng</MudTh><MudTh>Xe sở hữu</MudTh><MudTh>Liên hệ</MudTh><MudTh>Trạng thái</MudTh><MudTh></MudTh></HeaderContent>
     <RowTemplate>
         <MudTd DataLabel="Tài khoản"><b>@context.UserName</b><br /><small>@(context.EmployeeCode ?? "—")</small></MudTd>
-        <MudTd DataLabel="Vai trò">
-            <MudChip T="string" Size="Size.Small" Color="@(context.Role == "Admin" ? Color.Primary : Color.Info)">@context.Role</MudChip>
-        </MudTd>
-        <MudTd DataLabel="Họ tên">@context.FullName</MudTd>
-        <MudTd DataLabel="Công ty/Văn phòng">@(string.IsNullOrWhiteSpace(context.OfficeNames) ? "—" : context.OfficeNames)</MudTd>
-        <MudTd DataLabel="Xe sở hữu">@context.VehicleCount</MudTd>
-        <MudTd DataLabel="Liên hệ">@(context.PhoneNumber ?? "—")<br /><small>@(context.Email ?? "—")</small></MudTd>
-        <MudTd DataLabel="Trạng thái">
-            <MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Error)">
-                @(context.IsActive ? "Hoạt động" : "Đã khóa")
-            </MudChip>
-        </MudTd>
-        <MudTd>
-            <MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info"
-                           OnClick="@(() => Navigation.NavigateTo($"/admin/accounts/{context.Id}"))" />
-            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary"
-                           OnClick="@(() => Navigation.NavigateTo($"/admin/accounts/{context.Id}/edit"))" />
-        </MudTd>
+        <MudTd DataLabel="Vai trò"><MudChip T="string" Size="Size.Small" Color="@(context.Role == "Admin" ? Color.Primary : Color.Info)">@SystemRoleDisplay.Name(context.Role)</MudChip></MudTd>
+        <MudTd DataLabel="Họ tên">@context.FullName</MudTd><MudTd DataLabel="Công ty/Văn phòng">@(string.IsNullOrWhiteSpace(context.OfficeNames) ? "—" : context.OfficeNames)</MudTd>
+        <MudTd DataLabel="Xe sở hữu">@context.VehicleCount</MudTd><MudTd DataLabel="Liên hệ">@(context.PhoneNumber ?? "—")<br /><small>@(context.Email ?? "—")</small></MudTd>
+        <MudTd DataLabel="Trạng thái"><MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Error)">@(context.IsActive ? "Hoạt động" : "Đã khóa")</MudChip></MudTd>
+        <MudTd><MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info" OnClick="@(() => Navigation.NavigateTo($"/admin/accounts/{context.Id}"))" />
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="@(() => Navigation.NavigateTo($"/admin/accounts/{context.Id}/edit"))" /></MudTd>
     </RowTemplate>
     <PagerContent><MudTablePager PageSizeOptions="@(new int[] { 10, 20, 50, 100 })" /></PagerContent>
 </MudTable>
 
 @code {
     private bool _loading;
+    private bool _readingImportFile;
+    private bool _importing;
     private string? _keyword;
     private string? _roleFilter;
     private IReadOnlyList<AdminAccountListItem> _items = [];
+    private AccountImportPreview? _importPreview;
+    private MudFileUpload<IBrowserFile>? _fileUpload;
 
     private IEnumerable<AdminAccountListItem> FilteredItems => _items.Where(x =>
         (string.IsNullOrWhiteSpace(_roleFilter) || string.Equals(x.Role, _roleFilter, StringComparison.OrdinalIgnoreCase)) &&
-        (string.IsNullOrWhiteSpace(_keyword) || Contains(x.UserName) || Contains(x.FullName) ||
-         Contains(x.EmployeeCode) || Contains(x.PhoneNumber) || Contains(x.Email) || Contains(x.OfficeNames)));
+        (string.IsNullOrWhiteSpace(_keyword) || Contains(x.UserName) || Contains(x.FullName) || Contains(x.EmployeeCode) || Contains(x.PhoneNumber) || Contains(x.Email) || Contains(x.OfficeNames)));
 
-    protected override async Task OnInitializedAsync()
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
     {
         _loading = true;
         try { _items = await AccountService.GetAccountsAsync(); }
@@ -84,6 +121,47 @@
         finally { _loading = false; }
     }
 
-    private bool Contains(string? value) => !string.IsNullOrWhiteSpace(value) &&
-        value.Contains(_keyword!.Trim(), StringComparison.OrdinalIgnoreCase);
+    private async Task ReadImportFileAsync(IBrowserFile? file)
+    {
+        if (_readingImportFile || _importing) return;
+        _readingImportFile = true; _importPreview = null;
+        try
+        {
+            if (file is null) return;
+            await using var stream = file.OpenReadStream(AccountExcelImportService.MaximumFileSize);
+            using var memory = new MemoryStream(); await stream.CopyToAsync(memory); memory.Position = 0;
+            _importPreview = await AccountImportService.PreviewAsync(memory, file.Name);
+            Snackbar.Add($"Đã kiểm tra {_importPreview.TotalRows} dòng: {_importPreview.ValidRows} hợp lệ, {_importPreview.InvalidRows} lỗi.", _importPreview.InvalidRows == 0 ? Severity.Success : Severity.Warning);
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { if (_fileUpload is not null) await _fileUpload.ClearAsync(); _readingImportFile = false; }
+    }
+
+    private async Task ConfirmImportAsync()
+    {
+        if (_importPreview is null || _importPreview.ValidRows == 0 || _importing) return;
+        _importing = true;
+        try
+        {
+            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new InvalidOperationException("Không xác định được tài khoản Owner.");
+            var original = _importPreview;
+            var result = await AccountImportService.ImportAsync(original.Rows, userId);
+            var failedRows = result.Errors.Select(x => x.RowNumber).ToHashSet();
+            foreach (var error in result.Errors)
+            {
+                var row = original.Rows.FirstOrDefault(x => x.RowNumber == error.RowNumber);
+                if (row is not null) ExcelImportUtility.AddError(row.Errors, error.Error);
+            }
+            original.Rows = original.Rows.Where(x => !x.IsValid || failedRows.Contains(x.RowNumber)).ToList();
+            if (result.ImportedCount > 0) await LoadAsync();
+            Snackbar.Add($"Đã import {result.ImportedCount} tài khoản; {result.FailedCount} dòng lỗi khi lưu.", result.FailedCount == 0 ? Severity.Success : Severity.Warning);
+            if (original.Rows.Count == 0) CancelImport();
+        }
+        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
+        finally { _importing = false; }
+    }
+
+    private void CancelImport() => _importPreview = null;
+    private bool Contains(string? value) => !string.IsNullOrWhiteSpace(value) && value.Contains(_keyword!.Trim(), StringComparison.OrdinalIgnoreCase);
 }

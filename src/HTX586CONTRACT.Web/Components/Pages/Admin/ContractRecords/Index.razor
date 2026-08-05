@@ -8,12 +8,12 @@
 @inject IDbContextFactory<ApplicationDbContext> Factory
 
 <PageTitle>Hợp đồng</PageTitle>
-<PageHeader Title="Hợp đồng" Subtitle="Admin quản lý hợp đồng thuộc Công ty/Văn phòng được phân quyền." />
+<PageHeader Title="Hợp đồng" Subtitle="Tài khoản Quản lý quản lý hợp đồng thuộc Công ty/Văn phòng được phân quyền." />
 
 @if (_managedCompanyProfileIds.Count == 0 && !_loading)
 {
     <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
-        Tài khoản Admin chưa được phân quyền Công ty/Văn phòng nên chưa thể quản lý hợp đồng.
+        Tài khoản Quản lý chưa được phân quyền Công ty/Văn phòng nên chưa thể quản lý hợp đồng.
     </MudAlert>
 }
 
@@ -52,7 +52,7 @@
         <HeaderContent>
             <MudTh>Số hợp đồng</MudTh>
             <MudTh>Khách hàng</MudTh>
-            <MudTh>VehicleOwner</MudTh>
+            <MudTh>Chủ xe</MudTh>
             <MudTh>Biển số</MudTh>
             <MudTh>Khởi hành</MudTh>
             <MudTh>Giá trị</MudTh>
@@ -64,7 +64,7 @@
                 <MudLink Href="@($"/admin/contracts/{context.Id}")">@context.ContractNumber</MudLink>
             </MudTd>
             <MudTd DataLabel="Khách hàng">@context.CustomerName</MudTd>
-            <MudTd DataLabel="VehicleOwner">@context.DriverName</MudTd>
+            <MudTd DataLabel="Chủ xe">@context.DriverName</MudTd>
             <MudTd DataLabel="Biển số">@context.VehiclePlate</MudTd>
             <MudTd DataLabel="Khởi hành">@context.StartTime?.ToString("dd/MM/yyyy HH:mm")</MudTd>
             <MudTd DataLabel="Giá trị">@context.ContractValue?.ToString("N0")</MudTd>

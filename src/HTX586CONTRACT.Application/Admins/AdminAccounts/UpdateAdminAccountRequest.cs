@@ -15,10 +15,6 @@ public sealed class UpdateAdminAccountRequest
     public DateTime? DateOfBirth { get; set; }
     public string? Address { get; set; }
     public string? AreaCode { get; set; }
-    public string? DriverLicenseNumber { get; set; }
-    public string? DriverLicenseClass { get; set; }
-    public DateTime? DriverLicenseIssuedDate { get; set; }
-    public DateTime? DriverLicenseExpiryDate { get; set; }
     public bool IsActive { get; set; } = true;
     public bool MustChangePassword { get; set; }
     public string? UpdatedByUserId { get; set; }

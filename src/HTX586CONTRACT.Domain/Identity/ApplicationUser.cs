@@ -43,6 +43,12 @@ public class ApplicationUser : IdentityUser, ISoftDeletable
     public bool DriverSignatureIsActive { get; set; }
     public DateTime? DriverSignatureInactiveAt { get; set; }
 
+    // Chân ký pháp lý của tài khoản Chủ xe. Chữ ký được quản lý tại hồ sơ
+    // tài khoản, đồng bộ sang các xe đang sở hữu và chụp snapshot theo từng HĐ.
+    public string? VehicleOwnerSignatureFileUrl { get; set; }
+    public string? VehicleOwnerSignatureHash { get; set; }
+    public DateTime? VehicleOwnerSignedAt { get; set; }
+
     // Trạng thái đăng ký VehicleOwner: Approved, Pending hoặc Rejected.
     public string RegistrationStatus { get; set; } = "Approved";
     public DateTime? RegistrationRequestedAt { get; set; }

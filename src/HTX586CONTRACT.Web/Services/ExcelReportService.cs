@@ -149,7 +149,7 @@ public sealed class ExcelReportService(IDbContextFactory<ApplicationDbContext> f
 
         return SaveWorkbook(
             workbook,
-            $"BaoCao_VehicleOwner_{scope.FileScope}_{DateTime.Now:yyyyMMddHHmmss}.xlsx");
+            $"BaoCao_ChuXe_{scope.FileScope}_{DateTime.Now:yyyyMMddHHmmss}.xlsx");
     }
 
     public async Task<ExcelExportFile> ExportVehiclesAsync(
@@ -934,7 +934,7 @@ public sealed class ExcelReportService(IDbContextFactory<ApplicationDbContext> f
             .ToListAsync(cancellationToken);
 
         if (offices.Count == 0)
-            throw new InvalidOperationException("Tài khoản Admin chưa được phân quyền Công ty/Văn phòng nên không thể xuất báo cáo.");
+            throw new InvalidOperationException("Tài khoản Quản lý chưa được phân quyền Công ty/Văn phòng nên không thể xuất báo cáo.");
 
         var displayName = string.Join(", ", offices.Select(x => string.IsNullOrWhiteSpace(x.BranchName)
             ? x.CompanyName

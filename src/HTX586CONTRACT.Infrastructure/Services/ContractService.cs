@@ -211,7 +211,7 @@ public sealed class ContractService(
         if (!Enum.IsDefined(request.BusinessType))
             return new(false, null, "Loại hợp đồng không hợp lệ.");
         if (access.IsVehicleOwner && request.BusinessType != ContractBusinessType.Passenger)
-            return new(false, null, "VehicleOwner chỉ được tự tạo Hợp đồng vận chuyển hành khách.");
+            return new(false, null, "Chủ xe chỉ được tự tạo Hợp đồng vận chuyển hành khách.");
 
         var passengerCount = CountPassengers(request.Passengers, request.CustomerTravelsWithGroup);
         if (request.BusinessType == ContractBusinessType.Passenger && passengerCount > 20)
@@ -319,7 +319,7 @@ public sealed class ContractService(
             true,
             entity.Id,
             canManage
-                ? "Đã tạo và phát hợp đồng cho tài khoản VehicleOwner. Dữ liệu công ty, xe, chủ xe và khách hàng đã được chụp snapshot."
+                ? "Đã tạo và phát hợp đồng cho tài khoản Chủ xe. Dữ liệu công ty, xe, chủ xe và khách hàng đã được chụp snapshot."
                 : customerResult.CreatedNew
                     ? "Đã tạo hợp đồng. Hồ sơ khách hàng mới đang ở trạng thái tạm và chỉ được lưu chính thức khi hoàn thành hợp đồng."
                     : "Đã tạo hợp đồng và sử dụng lại hồ sơ khách hàng cá nhân theo số điện thoại.");
@@ -343,15 +343,18 @@ public sealed class ContractService(
         if (entity.Signatures.Any(x => !x.IsDeleted && x.Party == SignatureParty.Customer))
             return new(false, id, "Khách hàng đã ký nên nội dung hợp đồng không thể thay đổi.");
 
+        var originalVehicleOwnerId = entity.DriverId;
+        var existingSnapshot = ContractSnapshotData.FromJson(entity.ContractDataJson);
+
         var access = await GetAccessAsync(db, currentUserId, ct);
         var canManage = access.IsOwner || access.IsAdmin;
         if (access.IsAdmin && !access.IsOwner && !access.OfficeIds.Contains(entity.CompanyProfileId))
-            return new(false, id, "Admin chỉ được cập nhật hợp đồng thuộc Công ty/Văn phòng được gán.");
+            return new(false, id, "Quản lý chỉ được cập nhật hợp đồng thuộc Công ty/Văn phòng được gán.");
         if (!canManage && (!access.IsVehicleOwner || !string.Equals(entity.DriverId, currentUserId, StringComparison.Ordinal)))
             return new(false, id, "Bạn không có quyền cập nhật hợp đồng này.");
 
         if (!canManage && request.BusinessType != ContractBusinessType.Passenger)
-            return new(false, id, "VehicleOwner chỉ được tự tạo Hợp đồng vận chuyển hành khách.");
+            return new(false, id, "Chủ xe chỉ được tự tạo Hợp đồng vận chuyển hành khách.");
 
         var passengerCount = CountPassengers(request.Passengers, request.CustomerTravelsWithGroup);
         if (request.BusinessType == ContractBusinessType.Passenger && passengerCount > 20)
@@ -411,12 +414,20 @@ public sealed class ContractService(
         entity.ReceivedAt = null;
         Apply(entity, request);
         ApplySnapshots(entity, vehicleOwner, company, customerResult.Customer, vehicle);
-        entity.ContractDataJson = ContractSnapshotData.Capture(
+        var updatedSnapshot = ContractSnapshotData.Capture(
             company,
             vehicleOwner,
             customerResult.Customer,
             vehicle,
-            now).ToJson();
+            now);
+
+        // Chân ký Chủ xe là snapshot theo từng HĐ. Khi chỉ sửa nội dung hoặc
+        // đổi xe nhưng vẫn cùng Chủ xe, giữ nguyên ảnh đã chụp lúc tạo HĐ.
+        // Nếu đổi sang Chủ xe khác, dùng chân ký hiện tại của Chủ xe mới.
+        if (string.Equals(originalVehicleOwnerId, vehicleOwner.Id, StringComparison.Ordinal))
+            PreserveVehicleOwnerSignature(existingSnapshot, updatedSnapshot);
+
+        entity.ContractDataJson = updatedSnapshot.ToJson();
         db.ContractPassengers.RemoveRange(entity.Passengers);
         AddPassengers(entity, request.Passengers, currentUserId);
         entity.UpdatedAt = now;
@@ -444,7 +455,7 @@ public sealed class ContractService(
         });
 
         await db.SaveChangesAsync(ct);
-        return new(true, id, "Đã cập nhật và phát lại hợp đồng cho VehicleOwner.");
+        return new(true, id, "Đã cập nhật và phát lại hợp đồng cho Chủ xe.");
     }
 
     public async Task<SaveContractResult> ReceiveAsync(
@@ -459,7 +470,7 @@ public sealed class ContractService(
         if (entity is null)
             return new(false, null, "Không tìm thấy hợp đồng.");
         if (!string.Equals(entity.DriverId, currentUserId, StringComparison.Ordinal))
-            return new(false, id, "Chỉ tài khoản VehicleOwner được phát hợp đồng mới được nhận.");
+            return new(false, id, "Chỉ tài khoản Chủ xe được phát hợp đồng mới được nhận.");
         if (IsFinal(entity.Status))
             return new(false, id, "Hợp đồng đã bị khóa.");
         if (entity.IsSelfCreated)
@@ -504,7 +515,7 @@ public sealed class ContractService(
         if (entity is null)
             return new(false, null, "Không tìm thấy hợp đồng.");
         if (!string.Equals(entity.DriverId, currentUserId, StringComparison.Ordinal))
-            return new(false, id, "Chỉ VehicleOwner của hợp đồng được hoàn thành hợp đồng.");
+            return new(false, id, "Chỉ Chủ xe của hợp đồng được hoàn thành hợp đồng.");
         if (IsFinal(entity.Status))
             return new(false, id, "Hợp đồng đã bị khóa.");
         if (!entity.IsSelfCreated && entity.Status != ContractStatus.Received)
@@ -512,17 +523,23 @@ public sealed class ContractService(
         if (entity.IsSelfCreated && entity.Status is not ContractStatus.Created and not ContractStatus.Assigned and not ContractStatus.Received)
             return new(false, id, "Hợp đồng tự tạo không ở trạng thái cho phép hoàn thành.");
         if (entity.CompanyProfile is null || entity.Driver is null || entity.Customer is null || entity.Vehicle is null)
-            return new(false, id, "Dữ liệu Công ty/Văn phòng, VehicleOwner, khách hàng hoặc xe của hợp đồng không còn đầy đủ.");
+            return new(false, id, "Dữ liệu Công ty/Văn phòng, Chủ xe, khách hàng hoặc xe của hợp đồng không còn đầy đủ.");
+
+        var existingSnapshot = ContractSnapshotData.FromJson(entity.ContractDataJson);
+
         if (entity.Vehicle.AssignedDriverId != currentUserId)
             return new(false, id, "Xe của hợp đồng không còn được gán cho tài khoản này.");
         if (string.IsNullOrWhiteSpace(entity.OperatingDriverName))
             return new(false, id, "Vui lòng nhập họ tên tài xế trực tiếp điều khiển xe.");
         if (string.IsNullOrWhiteSpace(entity.CompanyProfile.RepresentativeSignatureFileUrl))
             return new(false, id, "Công ty/Văn phòng chưa có chữ ký đại diện cố định.");
-        if (string.IsNullOrWhiteSpace(entity.Vehicle.OwnerSignatureFileUrl))
-            return new(false, id, "Xe chưa có chữ ký chủ sở hữu cố định.");
+        var vehicleOwnerSignatureUrl = existingSnapshot?.Vehicle.OwnerSignatureFileUrl
+            ?? entity.Driver.VehicleOwnerSignatureFileUrl
+            ?? entity.Vehicle.OwnerSignatureFileUrl;
+        if (string.IsNullOrWhiteSpace(vehicleOwnerSignatureUrl))
+            return new(false, id, "Tài khoản Chủ xe chưa có chân ký cố định.");
         if (string.IsNullOrWhiteSpace(entity.Vehicle.AccountDriverSignatureFileUrl))
-            return new(false, id, "Xe chưa có chữ ký tài xế của tài khoản VehicleOwner.");
+            return new(false, id, "Xe chưa có chữ ký của tài khoản Chủ xe.");
         if (!entity.Signatures.Any(x => !x.IsDeleted && x.Party == SignatureParty.Customer))
             return new(false, id, "Khách hàng chưa ký xác nhận hợp đồng.");
 
@@ -541,6 +558,20 @@ public sealed class ContractService(
             completedCustomer,
             entity.Vehicle,
             now);
+
+        // Giữ nguyên các ảnh chữ ký đã chụp tại thời điểm lập HĐ. Việc tài khoản
+        // hoặc Công ty/Văn phòng ký lại chỉ áp dụng cho HĐ tạo sau đó.
+        if (existingSnapshot is not null)
+        {
+            completedSnapshot.Company.RepresentativeSignatureFileUrl = existingSnapshot.Company.RepresentativeSignatureFileUrl;
+            completedSnapshot.Company.RepresentativeSignatureHash = existingSnapshot.Company.RepresentativeSignatureHash;
+            completedSnapshot.Company.RepresentativeSignedAt = existingSnapshot.Company.RepresentativeSignedAt;
+            PreserveVehicleOwnerSignature(existingSnapshot, completedSnapshot);
+            completedSnapshot.Driver.SignatureFileUrl = existingSnapshot.Driver.SignatureFileUrl;
+            completedSnapshot.Driver.SignatureHash = existingSnapshot.Driver.SignatureHash;
+            completedSnapshot.Driver.SignedAt = existingSnapshot.Driver.SignedAt;
+        }
+
         completedSnapshot.Driver.FullName = entity.OperatingDriverName.Trim();
         completedSnapshot.Driver.PhoneNumber = N(entity.OperatingDriverPhoneNumber);
         completedSnapshot.Driver.DriverLicenseNumber = N(entity.OperatingDriverLicenseNumber);
@@ -583,7 +614,7 @@ public sealed class ContractService(
         var access = await GetAccessAsync(db, currentUserId, ct);
         var canManage = access.IsOwner || access.IsAdmin;
         if (access.IsAdmin && !access.IsOwner && !access.OfficeIds.Contains(entity.CompanyProfileId))
-            return new(false, id, "Admin chỉ được hủy hợp đồng thuộc Công ty/Văn phòng được gán.");
+            return new(false, id, "Quản lý chỉ được hủy hợp đồng thuộc Công ty/Văn phòng được gán.");
         if (!canManage && !string.Equals(entity.DriverId, currentUserId, StringComparison.Ordinal))
             return new(false, id, "Bạn không có quyền hủy hợp đồng này.");
 
@@ -648,7 +679,9 @@ public sealed class ContractService(
         CancellationToken ct)
     {
         if (entity.Status is not ContractStatus.Created and not ContractStatus.Assigned and not ContractStatus.Received)
-            return new(false, entity.Id, "Hợp đồng không còn ở trạng thái cho phép VehicleOwner cập nhật.");
+            return new(false, entity.Id, "Hợp đồng không còn ở trạng thái cho phép Chủ xe cập nhật.");
+
+        var existingSnapshot = ContractSnapshotData.FromJson(entity.ContractDataJson);
 
         // Hợp đồng được Owner/Admin phát xuống giữ nguyên xe và khách hàng.
         if (!entity.IsSelfCreated)
@@ -656,7 +689,7 @@ public sealed class ContractService(
             if (request.VehicleId.HasValue && request.VehicleId != entity.VehicleId)
                 return new(false, entity.Id, "Không được đổi xe của hợp đồng đã được phát xuống.");
             if (DriverChangedCustomer(entity, request))
-                return new(false, entity.Id, "Không được thay đổi khách hàng của hợp đồng do Owner/Admin phát xuống.");
+                return new(false, entity.Id, "Không được thay đổi khách hàng của hợp đồng do Chủ hệ thống/Quản lý phát xuống.");
         }
 
         Vehicle? vehicle;
@@ -725,13 +758,15 @@ public sealed class ContractService(
         ApplySnapshots(entity, vehicleOwner!, company!, customer, vehicle!);
         if (customerIsProvisional)
             ApplyCustomerSnapshotsFromRequest(entity, request);
-        entity.ContractDataJson = CaptureSnapshot(
+        var updatedSnapshot = CaptureSnapshot(
             company!,
             vehicleOwner!,
             customer,
             vehicle!,
             DateTime.UtcNow,
-            customerIsProvisional ? request : null).ToJson();
+            customerIsProvisional ? request : null);
+        PreserveVehicleOwnerSignature(existingSnapshot, updatedSnapshot);
+        entity.ContractDataJson = updatedSnapshot.ToJson();
         db.ContractPassengers.RemoveRange(entity.Passengers);
         AddPassengers(entity, request.Passengers, currentUserId);
 
@@ -841,7 +876,7 @@ public sealed class ContractService(
         if (canManage)
         {
             if (!request.CustomerId.HasValue)
-                throw new InvalidOperationException("Owner/Admin phải chọn khách hàng có sẵn. Hãy tạo khách hàng tại Quản lý Khách hàng trước.");
+                throw new InvalidOperationException("Chủ hệ thống/Quản lý phải chọn khách hàng có sẵn. Hãy tạo khách hàng tại Quản lý khách hàng trước.");
 
             var id = request.CustomerId.Value;
             var query = db.Customers
@@ -876,7 +911,7 @@ public sealed class ContractService(
                 x.Id == requestedCustomerId.Value && !x.IsDeleted && x.CreatedByDriverId == currentUserId,
                 ct);
             if (selectedCustomer is null)
-                throw new InvalidOperationException("VehicleOwner chỉ được chọn khách hàng do chính tài khoản đã tạo.");
+                throw new InvalidOperationException("Chủ xe chỉ được chọn khách hàng do chính tài khoản đã tạo.");
 
             if (!IsProvisionalCustomer(selectedCustomer))
             {
@@ -1081,7 +1116,7 @@ public sealed class ContractService(
         if (canManage)
         {
             if (string.IsNullOrWhiteSpace(vehicle.AssignedDriverId))
-                return (vehicle, null, selectedOfficeLink.CompanyProfile, "Xe chưa được gán tài khoản VehicleOwner. Hãy gán tại Quản lý Xe và chủ sở hữu trước khi phát hợp đồng.");
+                return (vehicle, null, selectedOfficeLink.CompanyProfile, "Xe chưa được gán tài khoản Chủ xe. Hãy gán tại Quản lý xe và chủ sở hữu trước khi phát hợp đồng.");
             vehicleOwnerId = vehicle.AssignedDriverId;
             if (!string.IsNullOrWhiteSpace(request.DriverId) &&
                 !string.Equals(request.DriverId, vehicleOwnerId, StringComparison.Ordinal))
@@ -1106,9 +1141,25 @@ public sealed class ContractService(
         if (vehicleOwner is null || !vehicleOwner.IsActive || vehicleOwner.IsDeleted ||
             !string.Equals(vehicleOwner.RegistrationStatus, "Approved", StringComparison.OrdinalIgnoreCase) ||
             !await userManager.IsInRoleAsync(vehicleOwner, "VehicleOwner"))
-            return (vehicle, null, selectedOfficeLink.CompanyProfile, "Tài khoản được gán xe không hoạt động, chưa được duyệt hoặc không có role VehicleOwner.");
+            return (vehicle, null, selectedOfficeLink.CompanyProfile, "Tài khoản được gán xe không hoạt động, chưa được duyệt hoặc không có vai trò Chủ xe.");
+
+        if (string.IsNullOrWhiteSpace(vehicleOwner.VehicleOwnerSignatureFileUrl))
+            return (vehicle, null, selectedOfficeLink.CompanyProfile,
+                $"Tài khoản Chủ xe {vehicleOwner.FullName} chưa có chân ký. Hãy cập nhật tại Tài khoản Quản lý/Chủ xe trước khi lập hợp đồng.");
 
         return (vehicle, vehicleOwner, selectedOfficeLink.CompanyProfile, null);
+    }
+
+    private static void PreserveVehicleOwnerSignature(
+        ContractSnapshotData? source,
+        ContractSnapshotData target)
+    {
+        if (source is null || string.IsNullOrWhiteSpace(source.Vehicle.OwnerSignatureFileUrl))
+            return;
+
+        target.Vehicle.OwnerSignatureFileUrl = source.Vehicle.OwnerSignatureFileUrl;
+        target.Vehicle.OwnerSignatureHash = source.Vehicle.OwnerSignatureHash;
+        target.Vehicle.OwnerSignedAt = source.Vehicle.OwnerSignedAt;
     }
 
     private static void ApplyImmutableSnapshot(ContractDetailDto detail, ContractSnapshotData snapshot)

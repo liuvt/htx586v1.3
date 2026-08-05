@@ -34,7 +34,8 @@ public class Vehicle : BaseEntity
     public string? AssignedDriverId { get; set; }
     public ApplicationUser? AssignedDriver { get; set; }
 
-    // Chữ ký cố định của chủ sở hữu pháp lý của xe.
+    // Bản sao chân ký từ tài khoản Chủ xe để tương thích màn hình xe và mẫu HĐ.
+    // Nguồn dữ liệu gốc nằm tại ApplicationUser.VehicleOwnerSignature*.
     public string? OwnerSignatureFileUrl { get; set; }
     public string? OwnerSignatureHash { get; set; }
     public DateTime? OwnerSignedAt { get; set; }

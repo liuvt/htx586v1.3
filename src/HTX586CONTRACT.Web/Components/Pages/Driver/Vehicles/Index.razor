@@ -23,7 +23,7 @@
 else if (_vehicles.Count == 0)
 {
     <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
-        Tài khoản chưa được gán xe. Vui lòng liên hệ Owner/Admin.
+        Tài khoản chưa được gán xe. Vui lòng liên hệ Chủ hệ thống/Quản lý.
     </MudAlert>
 }
 else
@@ -59,14 +59,14 @@ else
                     </MudSimpleTable>
 
                     <MudDivider Class="my-4" />
-                    <MudText Typo="Typo.subtitle2" Class="mb-2">Chữ ký chủ sở hữu xe</MudText>
-                    @if (!string.IsNullOrWhiteSpace(vehicle.OwnerSignatureFileUrl))
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">Chân ký Chủ xe từ tài khoản</MudText>
+                    @if (!string.IsNullOrWhiteSpace(_vehicleOwnerSignatureUrl))
                     {
-                        <img src="@vehicle.OwnerSignatureFileUrl" alt="Chữ ký chủ xe" style="max-width:100%;height:90px;object-fit:contain;border:1px solid var(--mud-palette-lines-default);border-radius:8px" />
+                        <img src="@($"{_vehicleOwnerSignatureUrl}?v={_vehicleOwnerSignedAt?.Ticks ?? 0}")" alt="Chân ký Chủ xe" style="max-width:100%;height:90px;object-fit:contain;border:1px solid var(--mud-palette-lines-default);border-radius:8px" />
                     }
                     else
                     {
-                        <MudAlert Severity="Severity.Warning" Dense="true">Owner/Admin chưa cập nhật chữ ký chủ xe.</MudAlert>
+                        <MudAlert Severity="Severity.Warning" Dense="true">Chủ hệ thống/Quản lý chưa cập nhật chữ ký chủ xe.</MudAlert>
                     }
 
                     <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2">Chữ ký tài xế cho xe này</MudText>
@@ -77,7 +77,7 @@ else
                                       SignerName="@_fullName"
                                       SignedAt="@vehicle.AccountDriverSignedAt" />
                         <MudAlert Severity="Severity.Success" Dense="true" Class="mt-2">
-                            Chữ ký đã khóa. Cần thay đổi, vui lòng yêu cầu Owner/Admin hỗ trợ.
+                            Chữ ký đã khóa. Cần thay đổi, vui lòng yêu cầu Chủ hệ thống/Quản lý hỗ trợ.
                         </MudAlert>
                     }
                     else
@@ -99,6 +99,8 @@ else
     private bool _loading = true;
     private string _userId = string.Empty;
     private string _fullName = string.Empty;
+    private string? _vehicleOwnerSignatureUrl;
+    private DateTime? _vehicleOwnerSignedAt;
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -107,13 +109,24 @@ else
         _loading = true;
         var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         _userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
-        _fullName = auth.User.Identity?.Name ?? "VehicleOwner";
+        _fullName = auth.User.Identity?.Name ?? "Chủ xe";
 
         await using var db = await Factory.CreateDbContextAsync();
-        _fullName = await db.Users.AsNoTracking()
+        var account = await db.Users.AsNoTracking()
             .Where(x => x.Id == _userId)
-            .Select(x => x.FullName)
-            .FirstOrDefaultAsync() ?? _fullName;
+            .Select(x => new
+            {
+                x.FullName,
+                x.VehicleOwnerSignatureFileUrl,
+                x.VehicleOwnerSignedAt
+            })
+            .FirstOrDefaultAsync();
+        if (account is not null)
+        {
+            _fullName = account.FullName;
+            _vehicleOwnerSignatureUrl = account.VehicleOwnerSignatureFileUrl;
+            _vehicleOwnerSignedAt = account.VehicleOwnerSignedAt;
+        }
         _vehicles.Clear();
         _vehicles.AddRange(await db.Vehicles.AsNoTracking()
             .Include(x => x.OfficeVehicles)

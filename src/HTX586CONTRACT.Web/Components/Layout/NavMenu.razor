@@ -6,7 +6,7 @@
 <MudNavMenu Class="enterprise-nav">
     <AuthorizeView Roles="VehicleOwner" Context="driverAuth">
         <Authorized>
-            <div class="nav-section-label">Không gian VehicleOwner</div>
+            <div class="nav-section-label">Không gian Chủ xe</div>
             <MudNavLink Href="/vehicle-owner/dashboard" Icon="@Icons.Material.Filled.SpaceDashboard" Match="NavLinkMatch.All">
                 Tổng quan
             </MudNavLink>
@@ -46,7 +46,7 @@
                     Công ty / Văn phòng
                 </MudNavLink>
                 <MudNavLink Href="/admin/accounts" Icon="@Icons.Material.Filled.ManageAccounts">
-                    Tài khoản Admin / VehicleOwner
+                    Tài khoản Quản lý / Chủ xe
                 </MudNavLink>
                 <MudNavLink Href="/admin/account-registrations" Icon="@Icons.Material.Filled.PersonAddAlt1">
                     <span class="nav-link-content">
@@ -88,7 +88,7 @@
 
     <AuthorizeView Roles="Admin" Context="adminAuth">
         <Authorized>
-            <div class="nav-section-label">Quản trị đơn vị</div>
+            <div class="nav-section-label">Quản lý đơn vị</div>
             <MudNavLink Href="/admin/dashboard" Icon="@Icons.Material.Filled.SpaceDashboard" Match="NavLinkMatch.All">
                 Tổng quan
             </MudNavLink>

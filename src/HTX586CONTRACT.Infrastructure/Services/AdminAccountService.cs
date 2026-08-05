@@ -110,6 +110,7 @@ public sealed class AdminAccountService(
     {
         var selectedRole = NormalizeManagedRole(request.Role);
         ValidateRequest(request.FullName, request.UserName, request.Password);
+        ValidateLegalProfile(selectedRole, request.CitizenId, request.CitizenIdIssuedDate, request.CitizenIdIssuedPlace, request.Address);
         var phoneNumber = VietnamPhoneNumber.NormalizeOrThrow(request.PhoneNumber);
         var officeIds = await ValidateAndNormalizeOfficesAsync(selectedRole, request.OfficeIds, ct);
         await EnsureLoginIdentifiersAvailableAsync(request.UserName, phoneNumber, null, ct);
@@ -127,10 +128,6 @@ public sealed class AdminAccountService(
             DateOfBirth = request.DateOfBirth?.Date,
             Address = N(request.Address),
             AreaCode = N(request.AreaCode),
-            DriverLicenseNumber = N(request.DriverLicenseNumber),
-            DriverLicenseClass = N(request.DriverLicenseClass),
-            DriverLicenseIssuedDate = request.DriverLicenseIssuedDate?.Date,
-            DriverLicenseExpiryDate = request.DriverLicenseExpiryDate?.Date,
             RegistrationStatus = "Approved",
             IsActive = true,
             MustChangePassword = request.MustChangePassword,
@@ -231,10 +228,8 @@ public sealed class AdminAccountService(
             DateOfBirth = user.DateOfBirth,
             Address = user.Address,
             AreaCode = user.AreaCode,
-            DriverLicenseNumber = user.DriverLicenseNumber,
-            DriverLicenseClass = user.DriverLicenseClass,
-            DriverLicenseIssuedDate = user.DriverLicenseIssuedDate,
-            DriverLicenseExpiryDate = user.DriverLicenseExpiryDate,
+            VehicleOwnerSignatureFileUrl = user.VehicleOwnerSignatureFileUrl,
+            VehicleOwnerSignedAt = user.VehicleOwnerSignedAt,
             VehicleCount = vehicles.Count,
             VehiclePlates = string.Join(", ", vehicles),
             IsActive = user.IsActive,
@@ -257,6 +252,7 @@ public sealed class AdminAccountService(
             selectedRole = NormalizeManagedRole(request.Role);
             if (string.IsNullOrWhiteSpace(request.FullName))
                 throw new InvalidOperationException("Vui lòng nhập họ và tên.");
+            ValidateLegalProfile(selectedRole, request.CitizenId, request.CitizenIdIssuedDate, request.CitizenIdIssuedPlace, request.Address);
             phoneNumber = VietnamPhoneNumber.NormalizeOrThrow(request.PhoneNumber);
             officeIds = await ValidateAndNormalizeOfficesAsync(selectedRole, request.OfficeIds, ct);
         }
@@ -277,7 +273,7 @@ public sealed class AdminAccountService(
         {
             await using var checkDb = await factory.CreateDbContextAsync(ct);
             if (await checkDb.Vehicles.AnyAsync(x => x.AssignedDriverId == user.Id, ct))
-                return ServiceResult.Failure("Tài khoản đang sở hữu xe. Hãy chuyển các xe sang VehicleOwner khác trước khi đổi sang Admin.");
+                return ServiceResult.Failure("Tài khoản đang sở hữu xe. Hãy chuyển các xe sang Chủ xe khác trước khi đổi sang Quản lý.");
         }
 
         try
@@ -299,10 +295,6 @@ public sealed class AdminAccountService(
         user.DateOfBirth = request.DateOfBirth?.Date;
         user.Address = N(request.Address);
         user.AreaCode = N(request.AreaCode);
-        user.DriverLicenseNumber = N(request.DriverLicenseNumber);
-        user.DriverLicenseClass = N(request.DriverLicenseClass);
-        user.DriverLicenseIssuedDate = request.DriverLicenseIssuedDate?.Date;
-        user.DriverLicenseExpiryDate = request.DriverLicenseExpiryDate?.Date;
         user.IsActive = request.IsActive;
         user.MustChangePassword = request.MustChangePassword;
         user.UpdatedAt = DateTime.UtcNow;
@@ -332,7 +324,12 @@ public sealed class AdminAccountService(
             request.UpdatedByUserId,
             ct);
 
-        return ServiceResult.Success("Cập nhật tài khoản và phạm vi văn phòng thành công.");
+        if (selectedRole == VehicleOwnerRole)
+            await SyncOwnedVehicleSnapshotsAsync(user, request.UpdatedByUserId, ct);
+
+        return ServiceResult.Success(selectedRole == VehicleOwnerRole
+            ? "Đã cập nhật tài khoản Chủ xe và đồng bộ thông tin pháp lý sang các xe đang sở hữu."
+            : "Đã cập nhật tài khoản Quản lý và phạm vi Công ty/Văn phòng.");
     }
 
     public async Task<ServiceResult> ResetPasswordToDefaultAsync(string userId, CancellationToken ct = default)
@@ -432,7 +429,7 @@ public sealed class AdminAccountService(
             .Distinct()
             .ToHashSet();
         if (ids.Count == 0)
-            throw new InvalidOperationException("Admin phải được chọn ít nhất một Công ty/Văn phòng.");
+            throw new InvalidOperationException("Tài khoản Quản lý phải được chọn ít nhất một Công ty/Văn phòng.");
 
         await using var db = await factory.CreateDbContextAsync(ct);
         var validIds = await db.CompanyProfiles.AsNoTracking()
@@ -503,6 +500,38 @@ public sealed class AdminAccountService(
                 CreatedBy = N(actorUserId)
             });
         }
+        await db.SaveChangesAsync(ct);
+    }
+
+
+    private async Task SyncOwnedVehicleSnapshotsAsync(
+        ApplicationUser owner,
+        string? actorUserId,
+        CancellationToken ct)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var vehicles = await db.Vehicles
+            .Where(x => x.AssignedDriverId == owner.Id && !x.IsDeleted)
+            .ToListAsync(ct);
+        if (vehicles.Count == 0)
+            return;
+
+        var now = DateTime.UtcNow;
+        foreach (var vehicle in vehicles)
+        {
+            vehicle.OwnerName = owner.FullName.Trim();
+            vehicle.OwnerPhoneNumber = N(owner.PhoneNumber);
+            vehicle.OwnerCitizenId = N(owner.CitizenId);
+            vehicle.OwnerCitizenIdIssuedDate = owner.CitizenIdIssuedDate?.Date;
+            vehicle.OwnerCitizenIdIssuedPlace = N(owner.CitizenIdIssuedPlace);
+            vehicle.OwnerAddress = N(owner.Address);
+            vehicle.OwnerSignatureFileUrl = owner.VehicleOwnerSignatureFileUrl;
+            vehicle.OwnerSignatureHash = owner.VehicleOwnerSignatureHash;
+            vehicle.OwnerSignedAt = owner.VehicleOwnerSignedAt;
+            vehicle.UpdatedAt = now;
+            vehicle.UpdatedBy = N(actorUserId);
+        }
+
         await db.SaveChangesAsync(ct);
     }
 
@@ -592,7 +621,7 @@ public sealed class AdminAccountService(
             return AdminRole;
         if (string.Equals(role, VehicleOwnerRole, StringComparison.OrdinalIgnoreCase))
             return VehicleOwnerRole;
-        throw new InvalidOperationException("Vai trò chỉ được chọn Admin hoặc VehicleOwner.");
+        throw new InvalidOperationException("Vai trò chỉ được chọn Quản lý hoặc Chủ xe.");
     }
 
     private static void ValidateRequest(string fullName, string userName, string password)
@@ -603,6 +632,26 @@ public sealed class AdminAccountService(
             throw new InvalidOperationException("Vui lòng nhập tên đăng nhập.");
         if (string.IsNullOrWhiteSpace(password))
             throw new InvalidOperationException("Vui lòng nhập mật khẩu.");
+    }
+
+    private static void ValidateLegalProfile(
+        string selectedRole,
+        string? citizenId,
+        DateTime? citizenIdIssuedDate,
+        string? citizenIdIssuedPlace,
+        string? address)
+    {
+        if (selectedRole != VehicleOwnerRole)
+            return;
+
+        if (string.IsNullOrWhiteSpace(citizenId))
+            throw new InvalidOperationException("Tài khoản Chủ xe phải có số CCCD.");
+        if (!citizenIdIssuedDate.HasValue)
+            throw new InvalidOperationException("Tài khoản Chủ xe phải có ngày cấp CCCD.");
+        if (string.IsNullOrWhiteSpace(citizenIdIssuedPlace))
+            throw new InvalidOperationException("Tài khoản Chủ xe phải có nơi cấp CCCD.");
+        if (string.IsNullOrWhiteSpace(address))
+            throw new InvalidOperationException("Tài khoản Chủ xe phải có địa chỉ chủ xe.");
     }
 
     private static void Ensure(IdentityResult result)

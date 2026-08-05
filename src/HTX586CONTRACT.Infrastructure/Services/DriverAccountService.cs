@@ -165,12 +165,17 @@ public sealed class DriverAccountService(
     public async Task UpdateAsync(string userId, UpdateDriverAccountRequest request, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(request.FullName))
-            throw new InvalidOperationException("Vui lòng nhập họ tên tài khoản VehicleOwner.");
+            throw new InvalidOperationException("Vui lòng nhập họ tên tài khoản Chủ xe.");
+        if (string.IsNullOrWhiteSpace(request.CitizenId) ||
+            !request.CitizenIdIssuedDate.HasValue ||
+            string.IsNullOrWhiteSpace(request.CitizenIdIssuedPlace) ||
+            string.IsNullOrWhiteSpace(request.Address))
+            throw new InvalidOperationException("Vui lòng nhập đầy đủ CCCD, ngày cấp, nơi cấp và địa chỉ Chủ xe.");
 
         var phone = VietnamPhoneNumber.NormalizeOrThrow(request.PhoneNumber);
         var user = await userManager.FindByIdAsync(userId)
-            ?? throw new KeyNotFoundException("Không tìm thấy tài khoản VehicleOwner.");
-        EnsureNotDeleted(user, "Không tìm thấy tài khoản VehicleOwner.");
+            ?? throw new KeyNotFoundException("Không tìm thấy tài khoản Chủ xe.");
+        EnsureNotDeleted(user, "Không tìm thấy tài khoản Chủ xe.");
         await EnsureVehicleOwnerRoleAsync(user);
         await EnsureLoginIdentifiersAvailableAsync(user.UserName ?? string.Empty, phone, user.Id, ct);
 
@@ -193,6 +198,7 @@ public sealed class DriverAccountService(
         user.UpdatedAt = DateTime.UtcNow;
         user.UpdatedByUserId = N(request.UpdatedByUserId);
         Ensure(await userManager.UpdateAsync(user));
+        await SyncOwnedVehicleSnapshotsAsync(user, request.UpdatedByUserId, ct);
 
         if (activeChanged)
             await SetActiveAsync(userId, request.IsActive, ct);
@@ -356,8 +362,8 @@ public sealed class DriverAccountService(
     public async Task ResetPasswordAsync(string userId, string newPassword, CancellationToken ct = default)
     {
         var user = await userManager.FindByIdAsync(userId)
-            ?? throw new KeyNotFoundException("Không tìm thấy tài khoản VehicleOwner.");
-        EnsureNotDeleted(user, "Không tìm thấy tài khoản VehicleOwner.");
+            ?? throw new KeyNotFoundException("Không tìm thấy tài khoản Chủ xe.");
+        EnsureNotDeleted(user, "Không tìm thấy tài khoản Chủ xe.");
         await EnsureVehicleOwnerRoleAsync(user);
 
         // Mật khẩu reset dùng chung theo yêu cầu nghiệp vụ, không nhận giá trị tùy ý từ giao diện.
@@ -372,8 +378,8 @@ public sealed class DriverAccountService(
     public async Task RequirePasswordChangeAsync(string userId, CancellationToken ct = default)
     {
         var user = await userManager.FindByIdAsync(userId)
-            ?? throw new KeyNotFoundException("Không tìm thấy tài khoản VehicleOwner.");
-        EnsureNotDeleted(user, "Không tìm thấy tài khoản VehicleOwner.");
+            ?? throw new KeyNotFoundException("Không tìm thấy tài khoản Chủ xe.");
+        EnsureNotDeleted(user, "Không tìm thấy tài khoản Chủ xe.");
         await EnsureVehicleOwnerRoleAsync(user);
         user.MustChangePassword = true;
         user.UpdatedAt = DateTime.UtcNow;
@@ -394,13 +400,13 @@ public sealed class DriverAccountService(
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
 
         var user = await db.Users.FirstOrDefaultAsync(x => x.Id == userId && !x.IsDeleted, ct)
-            ?? throw new KeyNotFoundException("Không tìm thấy tài khoản VehicleOwner.");
+            ?? throw new KeyNotFoundException("Không tìm thấy tài khoản Chủ xe.");
         var isVehicleOwner = await (from userRole in db.UserRoles
                                     join role in db.Roles on userRole.RoleId equals role.Id
                                     where userRole.UserId == userId && role.Name == VehicleOwnerRole
                                     select userRole.UserId).AnyAsync(ct);
         if (!isVehicleOwner)
-            throw new KeyNotFoundException("Không tìm thấy tài khoản VehicleOwner.");
+            throw new KeyNotFoundException("Không tìm thấy tài khoản Chủ xe.");
 
         if (active && !string.Equals(user.RegistrationStatus, "Approved", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Chỉ tài khoản đã được duyệt mới được mở khóa.");
@@ -436,6 +442,35 @@ public sealed class DriverAccountService(
         await transaction.CommitAsync(ct);
     }
 
+
+    private async Task SyncOwnedVehicleSnapshotsAsync(
+        ApplicationUser owner,
+        string? actorUserId,
+        CancellationToken ct)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var vehicles = await db.Vehicles
+            .Where(x => x.AssignedDriverId == owner.Id && !x.IsDeleted)
+            .ToListAsync(ct);
+        if (vehicles.Count == 0)
+            return;
+
+        var now = DateTime.UtcNow;
+        foreach (var vehicle in vehicles)
+        {
+            vehicle.OwnerName = owner.FullName.Trim();
+            vehicle.OwnerPhoneNumber = N(owner.PhoneNumber);
+            vehicle.OwnerCitizenId = N(owner.CitizenId);
+            vehicle.OwnerCitizenIdIssuedDate = owner.CitizenIdIssuedDate?.Date;
+            vehicle.OwnerCitizenIdIssuedPlace = N(owner.CitizenIdIssuedPlace);
+            vehicle.OwnerAddress = N(owner.Address);
+            vehicle.UpdatedAt = now;
+            vehicle.UpdatedBy = N(actorUserId) ?? owner.Id;
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
     private async Task EnsureLoginIdentifiersAvailableAsync(
         string userName,
         string phoneNumber,
@@ -464,7 +499,7 @@ public sealed class DriverAccountService(
     private async Task EnsureVehicleOwnerRoleAsync(ApplicationUser user)
     {
         if (!await userManager.IsInRoleAsync(user, VehicleOwnerRole))
-            throw new KeyNotFoundException("Không tìm thấy tài khoản VehicleOwner.");
+            throw new KeyNotFoundException("Không tìm thấy tài khoản Chủ xe.");
     }
 
     private static IQueryable<ApplicationUser> VehicleOwnerUsers(ApplicationDbContext db) =>

@@ -7,7 +7,7 @@
 @inject ISnackbar Snackbar
 
 <PageTitle>Chi tiết xe</PageTitle>
-<PageHeader Title="Chi tiết xe" Subtitle="Thông tin phương tiện, VehicleOwner và các Công ty/Văn phòng hoạt động." />
+<PageHeader Title="Chi tiết xe" Subtitle="Thông tin phương tiện, Chủ xe và các Công ty/Văn phòng hoạt động." />
 
 @if (_loading) { <MudProgressCircular Indeterminate="true" /> }
 else if (_item is null) { <MudAlert Severity="Severity.Error">Không tìm thấy xe hoặc xe nằm ngoài phạm vi quản lý.</MudAlert> }
@@ -17,20 +17,22 @@ else
         <MudGrid>
             <MudItem xs="12" md="4"><InfoListItem Label="Biển số" Value="@_item.PlateNumber" /></MudItem>
             <MudItem xs="12" md="4"><InfoListItem Label="Mã xe" Value="@Display(_item.VehicleCode)" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="VehicleOwner" Value="@Display(_item.AssignedDriver?.FullName)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Tài khoản Chủ xe" Value="@Display(_item.AssignedDriver?.FullName)" /></MudItem>
             <MudItem xs="12"><InfoListItem Label="Công ty/Văn phòng" Value="@Display(_officeNames)" /></MudItem>
             <MudItem xs="12" md="4"><InfoListItem Label="Nhãn hiệu" Value="@Display(_item.Brand)" /></MudItem>
             <MudItem xs="12" md="4"><InfoListItem Label="Dòng xe" Value="@Display(_item.Model)" /></MudItem>
             <MudItem xs="12" md="4"><InfoListItem Label="Số chỗ" Value="@(_item.SeatCount?.ToString() ?? "—")" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Chủ sở hữu pháp lý" Value="@_item.OwnerName" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="CCCD chủ xe" Value="@Display(_item.OwnerCitizenId)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Họ tên chủ xe" Value="@_item.OwnerName" /></MudItem>
             <MudItem xs="12" md="4"><InfoListItem Label="Điện thoại chủ xe" Value="@Display(_item.OwnerPhoneNumber)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="CCCD chủ xe" Value="@Display(_item.OwnerCitizenId)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Ngày cấp CCCD" Value="@DateText(_item.OwnerCitizenIdIssuedDate)" /></MudItem>
+            <MudItem xs="12" md="8"><InfoListItem Label="Nơi cấp CCCD" Value="@Display(_item.OwnerCitizenIdIssuedPlace)" /></MudItem>
             <MudItem xs="12"><InfoListItem Label="Địa chỉ chủ xe" Value="@Display(_item.OwnerAddress)" /></MudItem>
             <MudItem xs="12" md="6">
-                <MudText Typo="Typo.subtitle1">Chữ ký chủ xe</MudText>
-                @if (!string.IsNullOrWhiteSpace(_item.OwnerSignatureFileUrl))
+                <MudText Typo="Typo.subtitle1">Chân ký Chủ xe từ tài khoản</MudText>
+                @if (!string.IsNullOrWhiteSpace(OwnerSignatureUrl))
                 {
-                    <img src="@($"{_item.OwnerSignatureFileUrl}?v={_item.OwnerSignedAt?.Ticks ?? 0}")" style="max-width:260px;max-height:120px;object-fit:contain" />
+                    <img src="@($"{OwnerSignatureUrl}?v={OwnerSignedAt?.Ticks ?? 0}")" style="max-width:260px;max-height:120px;object-fit:contain" />
                 }
                 else { <MudText>Chưa có chữ ký.</MudText> }
             </MudItem>
@@ -47,6 +49,8 @@ else
     private Vehicle? _item;
     private string _officeNames = string.Empty;
     private bool _loading = true;
+    private string? OwnerSignatureUrl => _item?.AssignedDriver?.VehicleOwnerSignatureFileUrl ?? _item?.OwnerSignatureFileUrl;
+    private DateTime? OwnerSignedAt => _item?.AssignedDriver?.VehicleOwnerSignedAt ?? _item?.OwnerSignedAt;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -69,4 +73,5 @@ else
     }
 
     private static string Display(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+    private static string DateText(DateTime? value) => value?.ToString("dd/MM/yyyy") ?? "—";
 }

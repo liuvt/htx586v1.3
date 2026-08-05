@@ -7,7 +7,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>Chi tiết đơn vị</PageTitle>
-<PageHeader Title="Chi tiết công ty/văn phòng đại diện" Subtitle="VehicleOwner không gán trực tiếp đơn vị; Công ty/Văn phòng được xác định theo từng xe." />
+<PageHeader Title="Chi tiết công ty/văn phòng đại diện" Subtitle="Chủ xe không gán trực tiếp đơn vị; Công ty/Văn phòng được xác định theo từng xe." />
 
 @if (_loading)
 {
@@ -51,7 +51,7 @@ else
         </MudGrid>
 
         <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4">
-            Công ty/văn phòng đại diện này có @_detail.AdminCount Admin, @_detail.DriverCount VehicleOwner đang được cấp xe, @_detail.VehicleCount xe; đã dùng trong @_detail.ContractCount hợp đồng.
+            Công ty/văn phòng đại diện này có @_detail.AdminCount tài khoản Quản lý, @_detail.DriverCount Chủ xe đang được cấp xe, @_detail.VehicleCount xe; đã dùng trong @_detail.ContractCount hợp đồng.
         </MudAlert>
 
         <MudStack Row="true" Class="mt-4">

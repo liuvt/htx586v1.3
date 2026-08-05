@@ -74,6 +74,16 @@ public sealed class ApplicationUserConfiguration : IEntityTypeConfiguration<Appl
         builder.Property(x => x.DriverSignedAt)
             .HasColumnType("datetime2");
 
+        // Chân ký pháp lý dùng chung của tài khoản Chủ xe.
+        builder.Property(x => x.VehicleOwnerSignatureFileUrl)
+            .HasMaxLength(500);
+
+        builder.Property(x => x.VehicleOwnerSignatureHash)
+            .HasMaxLength(128);
+
+        builder.Property(x => x.VehicleOwnerSignedAt)
+            .HasColumnType("datetime2");
+
         builder.HasIndex(x => x.EmployeeCode)
             .IsUnique()
             .HasFilter("[EmployeeCode] IS NOT NULL")

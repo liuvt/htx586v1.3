@@ -6,7 +6,7 @@
 
 <PageTitle>Dashboard quản trị đơn vị</PageTitle>
 <PageHeader Title="Tổng quan đơn vị"
-            Subtitle="Bảng điều hành tập trung dành cho Admin theo toàn bộ Công ty/Văn phòng được phân quyền.">
+            Subtitle="Bảng điều hành tập trung dành cho tài khoản Quản lý theo toàn bộ Công ty/Văn phòng được phân quyền.">
     <MudButton Href="/admin/contracts"
                Color="Color.Primary"
                Variant="Variant.Filled"
@@ -18,7 +18,7 @@
 @if (_companyProfileIds.Count == 0)
 {
     <MudAlert Severity="Severity.Error" Variant="Variant.Filled">
-        Tài khoản Admin chưa được phân quyền Công ty/Văn phòng nên chưa thể xem dashboard.
+        Tài khoản Quản lý chưa được phân quyền Công ty/Văn phòng nên chưa thể xem dashboard.
     </MudAlert>
 }
 else
@@ -162,7 +162,7 @@ else
         <MudItem xs="12" sm="6" xl="3">
             <StatCard Title="Nguồn lực đơn vị"
                       Value="@($"{_stats.VehicleCount:N0} xe")"
-                      Hint="@($"{_stats.DriverCount:N0} VehicleOwner hoạt động")"
+                      Hint="@($"{_stats.DriverCount:N0} Chủ xe hoạt động")"
                       Badge="@($"{_driverCoverage:0.#}%")"
                       Icon="@Icons.Material.Filled.DirectionsCarFilled"
                       Color="Color.Info" />
@@ -219,7 +219,7 @@ else
                     <div class="insight-card-header">
                         <div>
                             <div class="insight-card-title">Lối tắt nghiệp vụ</div>
-                            <div class="insight-card-subtitle">Các tác vụ Admin thường xuyên sử dụng.</div>
+                            <div class="insight-card-subtitle">Các tác vụ tài khoản Quản lý thường xuyên sử dụng.</div>
                         </div>
                         <MudIcon Icon="@Icons.Material.Filled.Bolt" Color="Color.Warning" />
                     </div>
@@ -235,7 +235,7 @@ else
                         </a>
                         <a class="quick-action" href="/admin/account-registrations">
                             <div class="quick-action-icon"><MudIcon Icon="@Icons.Material.Filled.Badge" /></div>
-                            <div><strong>Yêu cầu đăng ký</strong><span>Duyệt tài khoản VehicleOwner</span></div>
+                            <div><strong>Yêu cầu đăng ký</strong><span>Duyệt tài khoản Chủ xe</span></div>
                         </a>
                         <a class="quick-action" href="/admin/customers">
                             <div class="quick-action-icon"><MudIcon Icon="@Icons.Material.Filled.Groups" /></div>

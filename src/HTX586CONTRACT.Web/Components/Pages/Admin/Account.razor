@@ -4,8 +4,8 @@
 @inject IServiceScopeFactory ScopeFactory
 @inject ISnackbar Snackbar
 
-<PageTitle>Tài khoản Admin</PageTitle>
-<PageHeader Title="Tài khoản cá nhân Admin" Subtitle="Cập nhật thông tin cá nhân; Công ty/Văn phòng chỉ Owner mới được thay đổi." />
+<PageTitle>Tài khoản Quản lý</PageTitle>
+<PageHeader Title="Tài khoản cá nhân Quản lý" Subtitle="Cập nhật thông tin cá nhân; Công ty/Văn phòng chỉ Chủ hệ thống mới được thay đổi." />
 
 @if (_loading)
 {
@@ -13,14 +13,14 @@
 }
 else if (_model is null)
 {
-    <MudAlert Severity="Severity.Error">Không tìm thấy tài khoản Admin.</MudAlert>
+    <MudAlert Severity="Severity.Error">Không tìm thấy tài khoản Quản lý.</MudAlert>
 }
 else
 {
     <MudPaper Class="pa-4" Elevation="1">
         <MudGrid>
             <MudItem xs="12" md="4"><MudTextField Value="@_model.UserName" Label="ID đăng nhập" Disabled="true" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField T="string" Value="@RoleName" Label="Role" Disabled="true" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" md="4"><MudTextField T="string" Value="@RoleDisplayName" Label="Vai trò" Disabled="true" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="4"><MudTextField Value="@_model.CompanyName" Label="Công ty/Văn phòng" Disabled="true" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.FullName" Label="Họ tên" Required="true" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.PhoneNumber" Label="Số điện thoại" Required="true" Variant="Variant.Outlined" /></MudItem>
@@ -36,6 +36,7 @@ else
 
 @code {
     private const string RoleName = "Admin";
+    private const string RoleDisplayName = "Quản lý";
     private const string ResetPassword = "Htx@586";
     private AccountModel? _model;
     private bool _loading = true;
@@ -102,7 +103,7 @@ else
             user.UpdatedByUserId = user.Id;
             var result = await userManager.UpdateAsync(user);
             if (!result.Succeeded) throw new InvalidOperationException(string.Join("; ", result.Errors.Select(x => x.Description)));
-            Snackbar.Add("Đã cập nhật tài khoản Admin.", Severity.Success);
+            Snackbar.Add("Đã cập nhật tài khoản Quản lý.", Severity.Success);
         }
         catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
         finally { _saving = false; }

@@ -1,6 +1,7 @@
 @page "/admin/accounts/{UserId}"
 @attribute [Authorize(Roles = "Owner")]
 @inject IAdminAccountService AccountService
+@inject MasterSignatureService MasterSignatureService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
@@ -21,23 +22,36 @@ else
     <MudPaper Class="pa-4" Elevation="1">
         <MudGrid>
             <MudItem xs="12" md="4"><InfoListItem Label="Tên đăng nhập" Value="@_detail.UserName" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Vai trò" Value="@_detail.Role" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Vai trò" Value="@SystemRoleDisplay.Name(_detail.Role)" /></MudItem>
             <MudItem xs="12" md="4"><InfoListItem Label="Trạng thái" Value="@(_detail.IsActive ? "Hoạt động" : "Đã khóa")" /></MudItem>
             <MudItem xs="12" md="4"><InfoListItem Label="Họ và tên" Value="@_detail.FullName" /></MudItem>
             <MudItem xs="12" md="4"><InfoListItem Label="Mã nhân viên" Value="@Display(_detail.EmployeeCode)" /></MudItem>
             <MudItem xs="12" md="4"><InfoListItem Label="Số điện thoại" Value="@Display(_detail.PhoneNumber)" /></MudItem>
             <MudItem xs="12" md="4"><InfoListItem Label="Email" Value="@Display(_detail.Email)" /></MudItem>
-            <MudItem xs="12" md="8"><InfoListItem Label="Công ty/Văn phòng" Value="@Display(_detail.OfficeNames)" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="CCCD" Value="@Display(_detail.CitizenId)" /></MudItem>
             <MudItem xs="12" md="4"><InfoListItem Label="Ngày sinh" Value="@DateText(_detail.DateOfBirth)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Mã khu vực" Value="@Display(_detail.AreaCode)" /></MudItem>
+            <MudItem xs="12"><InfoListItem Label="Công ty/Văn phòng" Value="@Display(_detail.OfficeNames)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="CCCD" Value="@Display(_detail.CitizenId)" /></MudItem>
             <MudItem xs="12" md="4"><InfoListItem Label="Ngày cấp CCCD" Value="@DateText(_detail.CitizenIdIssuedDate)" /></MudItem>
-            <MudItem xs="12" md="6"><InfoListItem Label="Nơi cấp CCCD" Value="@Display(_detail.CitizenIdIssuedPlace)" /></MudItem>
-            <MudItem xs="12" md="6"><InfoListItem Label="Địa chỉ" Value="@Display(_detail.Address)" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Số GPLX" Value="@Display(_detail.DriverLicenseNumber)" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Hạng GPLX" Value="@Display(_detail.DriverLicenseClass)" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Hết hạn GPLX" Value="@DateText(_detail.DriverLicenseExpiryDate)" /></MudItem>
+            <MudItem xs="12" md="4"><InfoListItem Label="Nơi cấp CCCD" Value="@Display(_detail.CitizenIdIssuedPlace)" /></MudItem>
+            <MudItem xs="12"><InfoListItem Label="Địa chỉ" Value="@Display(_detail.Address)" /></MudItem>
             <MudItem xs="12" md="4"><InfoListItem Label="Số xe sở hữu" Value="@_detail.VehicleCount.ToString()" /></MudItem>
             <MudItem xs="12" md="8"><InfoListItem Label="Danh sách biển số" Value="@Display(_detail.VehiclePlates)" /></MudItem>
+
+            @if (_detail.Role == SystemRoleDisplay.VehicleOwnerRole)
+            {
+                <MudItem xs="12" md="6">
+                    <MudText Typo="Typo.subtitle1">Chân ký Chủ xe</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Hợp đồng mới sẽ tự động lấy chân ký này. Có thể ký trực tiếp hoặc upload file PNG.
+                    </MudText>
+                    <SignaturePad ExistingSignatureUrl="@SignatureUrl"
+                                  SignerName="@_detail.FullName"
+                                  SignedAt="@_detail.VehicleOwnerSignedAt"
+                                  OnSignatureSaved="SaveVehicleOwnerSignatureAsync"
+                                  ConfirmationButtonText="Lưu chân ký Chủ xe" />
+                </MudItem>
+            }
         </MudGrid>
 
         <MudStack Row="true" Class="mt-4" Spacing="2">
@@ -58,6 +72,9 @@ else
     private AdminAccountDetail? _detail;
     private bool _loading = true;
     private bool _working;
+    private string? SignatureUrl => string.IsNullOrWhiteSpace(_detail?.VehicleOwnerSignatureFileUrl)
+        ? null
+        : $"{_detail.VehicleOwnerSignatureFileUrl}?v={_detail.VehicleOwnerSignedAt?.Ticks ?? 0}";
 
     protected override async Task OnParametersSetAsync() => await LoadAsync();
 
@@ -67,6 +84,24 @@ else
         try { _detail = await AccountService.GetDetailAsync(UserId); }
         catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
         finally { _loading = false; }
+    }
+
+    private async Task SaveVehicleOwnerSignatureAsync(string dataUrl)
+    {
+        if (_detail is null || _detail.Role != SystemRoleDisplay.VehicleOwnerRole)
+            return;
+
+        try
+        {
+            await MasterSignatureService.SaveVehicleOwnerAccountSignatureAsync(UserId, dataUrl);
+            Snackbar.Add("Đã lưu chân ký Chủ xe và đồng bộ sang toàn bộ xe đang sở hữu.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            throw;
+        }
     }
 
     private async Task ToggleActiveAsync()

@@ -6,7 +6,7 @@
 
 <PageTitle>Báo cáo và xuất Excel</PageTitle>
 <PageHeader Title="Báo cáo và xuất Excel"
-            Subtitle="Xuất dữ liệu quản trị theo đúng phạm vi quyền Owner/Admin." />
+            Subtitle="Xuất dữ liệu quản trị theo đúng phạm vi quyền Chủ hệ thống/Quản lý." />
 
 @if (_loading)
 {
@@ -22,7 +22,7 @@ else
     @if (!_isOwner && _managedCompanyProfileIds.Count == 0)
     {
         <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="mb-4">
-            Tài khoản Admin chưa được phân quyền Công ty/Văn phòng nên chưa thể xuất báo cáo.
+            Tài khoản Quản lý chưa được phân quyền Công ty/Văn phòng nên chưa thể xuất báo cáo.
         </MudAlert>
     }
 
@@ -172,7 +172,7 @@ else
         get
         {
             if (ExportDisabled)
-                return "Tài khoản Admin chưa được phân quyền Công ty/Văn phòng.";
+                return "Tài khoản Quản lý chưa được phân quyền Công ty/Văn phòng.";
             if (!_fromDate.HasValue || !_toDate.HasValue)
                 return "Vui lòng chọn đầy đủ ngày bắt đầu và ngày kết thúc.";
             if (_toDate.Value.Date < _fromDate.Value.Date)

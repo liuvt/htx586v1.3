@@ -2,12 +2,13 @@
 @attribute [Authorize(Roles = "Owner")]
 @inject IAdminAccountService AccountService
 @inject ICompanyProfileService CompanyProfileService
+@inject MasterSignatureService MasterSignatureService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
 
 <PageTitle>Cập nhật tài khoản</PageTitle>
-<PageHeader Title="Cập nhật tài khoản" Subtitle="Đổi vai trò, thông tin hồ sơ và phạm vi Công ty/Văn phòng trong cùng một màn hình." />
+<PageHeader Title="Cập nhật tài khoản" Subtitle="Cập nhật vai trò, hồ sơ và phạm vi Công ty/Văn phòng trong cùng một màn hình." />
 
 @if (_loading)
 {
@@ -24,18 +25,18 @@ else
             <MudItem xs="12" md="4"><MudTextField T="string" Value="@_userName" Label="Tên đăng nhập" Disabled="true" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="4">
                 <MudSelect T="string" @bind-Value="_model.Role" Label="Vai trò" Required="true" Variant="Variant.Outlined">
-                    <MudSelectItem T="string" Value="@("Admin")">Admin</MudSelectItem>
-                    <MudSelectItem T="string" Value="@("VehicleOwner")">VehicleOwner</MudSelectItem>
+                    <MudSelectItem T="string" Value="@SystemRoleDisplay.AdminRole">Quản lý</MudSelectItem>
+                    <MudSelectItem T="string" Value="@SystemRoleDisplay.VehicleOwnerRole">Chủ xe</MudSelectItem>
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" md="4" Class="d-flex align-center"><MudSwitch T="bool" @bind-Value="_model.IsActive" Color="Color.Success" Label="Tài khoản hoạt động" /></MudItem>
 
-            @if (_model.Role == "Admin")
+            @if (_model.Role == SystemRoleDisplay.AdminRole)
             {
                 <MudItem xs="12">
                     <MudSelect T="Guid" Label="Công ty/Văn phòng quản lý" MultiSelection="true" Required="true"
                                SelectedValues="_model.OfficeIds" SelectedValuesChanged="OnOfficeSelectionChanged"
-                               Variant="Variant.Outlined">
+                               Variant="Variant.Outlined" HelperText="Tài khoản Quản lý có thể quản lý nhiều Công ty/Văn phòng.">
                         @foreach (var office in _offices)
                         {
                             <MudSelectItem T="Guid" Value="@office.Id">@OfficeDisplay(office)</MudSelectItem>
@@ -47,7 +48,7 @@ else
             {
                 <MudItem xs="12">
                     <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
-                        VehicleOwner không gán trực tiếp văn phòng. Văn phòng được suy ra từ các xe sở hữu.
+                        Chủ xe không gán trực tiếp văn phòng. Văn phòng được suy ra từ các xe sở hữu.
                     </MudAlert>
                 </MudItem>
             }
@@ -58,16 +59,41 @@ else
             <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.PhoneNumber" Label="Số điện thoại" Required="true" HelperText="@VietnamPhoneNumber.ValidationMessage" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.Email" Label="Email" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="4"><MudDatePicker @bind-Date="_model.DateOfBirth" Label="Ngày sinh" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Culture="@AppCulture.Vietnamese" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.CitizenId" Label="CCCD" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudDatePicker @bind-Date="_model.CitizenIdIssuedDate" Label="Ngày cấp CCCD" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Culture="@AppCulture.Vietnamese" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.CitizenIdIssuedPlace" Label="Nơi cấp CCCD" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.CitizenId" Label="CCCD" Required="@IsVehicleOwner" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" md="4"><MudDatePicker @bind-Date="_model.CitizenIdIssuedDate" Label="Ngày cấp CCCD" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Culture="@AppCulture.Vietnamese" Required="@IsVehicleOwner" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.CitizenIdIssuedPlace" Label="Nơi cấp CCCD" Required="@IsVehicleOwner" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.AreaCode" Label="Mã khu vực" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12"><MudTextField @bind-Value="_model.Address" Label="Địa chỉ" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.DriverLicenseNumber" Label="Số GPLX" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.DriverLicenseClass" Label="Hạng GPLX" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudDatePicker @bind-Date="_model.DriverLicenseIssuedDate" Label="Ngày cấp GPLX" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Culture="@AppCulture.Vietnamese" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudDatePicker @bind-Date="_model.DriverLicenseExpiryDate" Label="Ngày hết hạn GPLX" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Culture="@AppCulture.Vietnamese" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="4" Class="d-flex align-center"><MudSwitch T="bool" @bind-Value="_model.MustChangePassword" Color="Color.Warning" Label="Bắt buộc đổi mật khẩu" /></MudItem>
+            <MudItem xs="12"><MudTextField @bind-Value="_model.Address" Label="Địa chỉ" Required="@IsVehicleOwner" Variant="Variant.Outlined" /></MudItem>
+
+            @if (IsVehicleOwner)
+            {
+                <MudItem xs="12">
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Text">
+                        Các xe đang chọn tài khoản này làm Chủ xe sẽ được đồng bộ ngay hồ sơ pháp lý và chân ký sau khi lưu.
+                    </MudAlert>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudText Typo="Typo.subtitle1">Chân ký Chủ xe</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Hợp đồng mới sẽ tự động lấy chân ký này theo tài khoản Chủ xe.
+                    </MudText>
+                    @if (_originalRole == SystemRoleDisplay.VehicleOwnerRole)
+                    {
+                        <SignaturePad ExistingSignatureUrl="@SignatureUrl"
+                                      SignerName="@_model.FullName"
+                                      SignedAt="@_detail?.VehicleOwnerSignedAt"
+                                      OnSignatureSaved="SaveVehicleOwnerSignatureAsync"
+                                      ConfirmationButtonText="Lưu chân ký Chủ xe" />
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mt-2">
+                            Hãy lưu thay đổi vai trò thành Chủ xe trước, sau đó mở lại tài khoản để tạo chân ký.
+                        </MudAlert>
+                    }
+                </MudItem>
+            }
         </MudGrid>
 
         <MudStack Row="true" Class="mt-4" Spacing="2">
@@ -82,10 +108,16 @@ else
 @code {
     [Parameter] public string UserId { get; set; } = string.Empty;
     private UpdateAdminAccountRequest? _model;
+    private AdminAccountDetail? _detail;
     private IReadOnlyList<CompanyProfileOptionDto> _offices = [];
     private string _userName = string.Empty;
+    private string _originalRole = string.Empty;
     private bool _loading = true;
     private bool _saving;
+    private bool IsVehicleOwner => _model?.Role == SystemRoleDisplay.VehicleOwnerRole;
+    private string? SignatureUrl => string.IsNullOrWhiteSpace(_detail?.VehicleOwnerSignatureFileUrl)
+        ? null
+        : $"{_detail.VehicleOwnerSignatureFileUrl}?v={_detail.VehicleOwnerSignedAt?.Ticks ?? 0}";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -93,30 +125,27 @@ else
         try
         {
             _offices = await CompanyProfileService.GetActiveOptionsAsync();
-            var detail = await AccountService.GetDetailAsync(UserId);
-            if (detail is null) { _model = null; return; }
-            _userName = detail.UserName;
+            _detail = await AccountService.GetDetailAsync(UserId);
+            if (_detail is null) { _model = null; return; }
+            _userName = _detail.UserName;
+            _originalRole = _detail.Role;
             _model = new UpdateAdminAccountRequest
             {
-                UserId = detail.Id,
-                Role = detail.Role,
-                OfficeIds = detail.OfficeIds.ToHashSet(),
-                FullName = detail.FullName,
-                EmployeeCode = detail.EmployeeCode,
-                PhoneNumber = detail.PhoneNumber,
-                Email = detail.Email,
-                CitizenId = detail.CitizenId,
-                CitizenIdIssuedDate = detail.CitizenIdIssuedDate,
-                CitizenIdIssuedPlace = detail.CitizenIdIssuedPlace,
-                DateOfBirth = detail.DateOfBirth,
-                Address = detail.Address,
-                AreaCode = detail.AreaCode,
-                DriverLicenseNumber = detail.DriverLicenseNumber,
-                DriverLicenseClass = detail.DriverLicenseClass,
-                DriverLicenseIssuedDate = detail.DriverLicenseIssuedDate,
-                DriverLicenseExpiryDate = detail.DriverLicenseExpiryDate,
-                IsActive = detail.IsActive,
-                MustChangePassword = detail.MustChangePassword
+                UserId = _detail.Id,
+                Role = _detail.Role,
+                OfficeIds = _detail.OfficeIds.ToHashSet(),
+                FullName = _detail.FullName,
+                EmployeeCode = _detail.EmployeeCode,
+                PhoneNumber = _detail.PhoneNumber,
+                Email = _detail.Email,
+                CitizenId = _detail.CitizenId,
+                CitizenIdIssuedDate = _detail.CitizenIdIssuedDate,
+                CitizenIdIssuedPlace = _detail.CitizenIdIssuedPlace,
+                DateOfBirth = _detail.DateOfBirth,
+                Address = _detail.Address,
+                AreaCode = _detail.AreaCode,
+                IsActive = _detail.IsActive,
+                MustChangePassword = _detail.MustChangePassword
             };
             var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
             _model.UpdatedByUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -128,6 +157,24 @@ else
     private void OnOfficeSelectionChanged(IEnumerable<Guid> values)
     {
         if (_model is not null) _model.OfficeIds = values.ToHashSet();
+    }
+
+    private async Task SaveVehicleOwnerSignatureAsync(string dataUrl)
+    {
+        if (_model is null || _originalRole != SystemRoleDisplay.VehicleOwnerRole)
+            return;
+
+        try
+        {
+            await MasterSignatureService.SaveVehicleOwnerAccountSignatureAsync(UserId, dataUrl);
+            Snackbar.Add("Đã lưu chân ký Chủ xe và đồng bộ sang toàn bộ xe đang sở hữu.", Severity.Success);
+            _detail = await AccountService.GetDetailAsync(UserId);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            throw;
+        }
     }
 
     private async Task SaveAsync()

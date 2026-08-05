@@ -63,7 +63,7 @@ else
             var reviewer = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "SYSTEM";
             await DriverAccountService.ReviewRegistrationAsync(UserId, approve, _reviewNote, reviewer);
             await RegistrationNotificationState.RefreshAsync();
-            Snackbar.Add(approve ? "Đã phê duyệt tài khoản VehicleOwner." : "Đã từ chối yêu cầu.", Severity.Success);
+            Snackbar.Add(approve ? "Đã phê duyệt tài khoản Chủ xe." : "Đã từ chối yêu cầu.", Severity.Success);
             Navigation.NavigateTo("/admin/account-registrations");
         }
         catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
