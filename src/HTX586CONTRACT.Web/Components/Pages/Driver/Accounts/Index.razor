@@ -9,7 +9,7 @@
 <PageTitle>Tài khoản Chủ xe</PageTitle>
 <PageHeader Title="Tài khoản cá nhân" Subtitle="Cập nhật thông tin liên hệ và kiểm tra toàn bộ xe được cấp cho tài khoản.">
     <MudButton Href="/vehicle-owner/vehicles" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.DirectionsCar">
-        Xe và chữ ký tài xế theo xe
+        Xe của tôi
     </MudButton>
 </PageHeader>
 
@@ -27,6 +27,12 @@ else
         <MudItem xs="12" lg="7">
             <MudPaper Class="pa-4" Elevation="1">
                 <MudText Typo="Typo.h6" Class="mb-3">Thông tin tài khoản</MudText>
+                @if (string.IsNullOrWhiteSpace(_model.VehicleOwnerSignatureFileUrl))
+                {
+                    <MudAlert Severity="Severity.Warning" Variant="Variant.Filled" Class="mb-3">
+                        Đây là lần khai báo chân ký đầu tiên. Vui lòng hoàn tất chân ký Chủ xe bên dưới trước khi sử dụng các chức năng khác.
+                    </MudAlert>
+                }
                 <MudGrid>
                     <MudItem xs="12" md="6"><MudTextField Value="@_model.UserName" Label="ID đăng nhập" Disabled="true" Variant="Variant.Outlined" /></MudItem>
                     <MudItem xs="12" md="6"><MudTextField T="string" Value="@RoleDisplayName" Label="Vai trò" Disabled="true" Variant="Variant.Outlined" /></MudItem>
@@ -86,8 +92,8 @@ else
                             <MudText Typo="Typo.subtitle1"><b>@vehicle.PlateNumber</b></MudText>
                             <MudText Typo="Typo.body2">@vehicle.CompanyName</MudText>
                             <MudText Typo="Typo.caption">Chủ xe: @vehicle.OwnerName</MudText><br />
-                            <MudChip T="string" Size="Size.Small" Color="@(vehicle.DriverSignedAt.HasValue ? Color.Success : Color.Warning)" Class="mt-2">
-                                @(vehicle.DriverSignedAt.HasValue ? "Đã ký theo xe" : "Chưa ký theo xe")
+                            <MudChip T="string" Size="Size.Small" Color="@(!string.IsNullOrWhiteSpace(_model.VehicleOwnerSignatureFileUrl) ? Color.Success : Color.Warning)" Class="mt-2">
+                                @(!string.IsNullOrWhiteSpace(_model.VehicleOwnerSignatureFileUrl) ? "Dùng chân ký tài khoản" : "Chưa có chân ký")
                             </MudChip>
                         </MudPaper>
                     }
@@ -146,6 +152,7 @@ else
         await using (var db = await Factory.CreateDbContextAsync())
         {
             var vehicles = await db.Vehicles.AsNoTracking()
+                .Include(x => x.AssignedDriver)
                 .Include(x => x.OfficeVehicles)
                     .ThenInclude(x => x.CompanyProfile)
                 .Where(x => x.AssignedDriverId == userId)
@@ -155,8 +162,7 @@ else
             _vehicles = vehicles.Select(x => new VehicleRow
             {
                 PlateNumber = x.PlateNumber,
-                OwnerName = x.OwnerName,
-                DriverSignedAt = x.AccountDriverSignedAt,
+                OwnerName = x.AssignedDriver != null ? x.AssignedDriver.FullName : x.OwnerName,
                 CompanyName = OfficeNames(x)
             }).ToList();
         }
@@ -174,7 +180,7 @@ else
             var url = await MasterSignatureService.SaveVehicleOwnerAccountSignatureAsync(_model.Id, dataUrl);
             _model.VehicleOwnerSignatureFileUrl = url;
             _model.VehicleOwnerSignedAt = DateTime.UtcNow;
-            Snackbar.Add("Đã lưu chân ký Chủ xe và đồng bộ sang toàn bộ xe đang sở hữu.", Severity.Success);
+            Snackbar.Add("Đã lưu chân ký Chủ xe. Các xe và hợp đồng mới sẽ sử dụng trực tiếp chân ký từ tài khoản này.", Severity.Success);
         }
         catch (Exception ex)
         {
@@ -245,9 +251,6 @@ else
                     vehicle.OwnerCitizenIdIssuedDate = user.CitizenIdIssuedDate?.Date;
                     vehicle.OwnerCitizenIdIssuedPlace = N(user.CitizenIdIssuedPlace);
                     vehicle.OwnerAddress = N(user.Address);
-                    vehicle.OwnerSignatureFileUrl = user.VehicleOwnerSignatureFileUrl;
-                    vehicle.OwnerSignatureHash = user.VehicleOwnerSignatureHash;
-                    vehicle.OwnerSignedAt = user.VehicleOwnerSignedAt;
                     vehicle.UpdatedAt = now;
                     vehicle.UpdatedBy = user.Id;
                 }
@@ -324,6 +327,5 @@ else
         public string PlateNumber { get; set; } = string.Empty;
         public string CompanyName { get; set; } = string.Empty;
         public string OwnerName { get; set; } = string.Empty;
-        public DateTime? DriverSignedAt { get; set; }
     }
 }

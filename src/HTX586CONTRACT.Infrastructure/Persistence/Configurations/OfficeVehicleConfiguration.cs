@@ -24,10 +24,10 @@ public sealed class OfficeVehicleConfiguration : IEntityTypeConfiguration<Office
             .HasForeignKey(x => x.CompanyProfileId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasIndex(x => new { x.VehicleId, x.CompanyProfileId })
+        builder.HasIndex(x => x.VehicleId)
             .IsUnique()
             .HasFilter("[IsDeleted] = 0")
-            .HasDatabaseName("UX_OfficeVehicles_Vehicle_Office");
+            .HasDatabaseName("UX_OfficeVehicles_Vehicle");
         builder.HasIndex(x => new { x.CompanyProfileId, x.IsActive })
             .HasDatabaseName("IX_OfficeVehicles_Office_Active");
         builder.HasQueryFilter(x => !x.IsDeleted);

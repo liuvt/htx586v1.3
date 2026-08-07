@@ -4,7 +4,7 @@ using HTX586CONTRACT.Domain.Vehicles;
 
 namespace HTX586CONTRACT.Domain.Offices;
 
-/// <summary>Liên kết N:N giữa xe và Công ty/Văn phòng nơi xe được phép hoạt động.</summary>
+/// <summary>Liên kết 1:1 theo phía Vehicle: mỗi xe chỉ thuộc đúng một Công ty/Văn phòng.</summary>
 public sealed class OfficeVehicle : BaseEntity
 {
     public Guid VehicleId { get; set; }

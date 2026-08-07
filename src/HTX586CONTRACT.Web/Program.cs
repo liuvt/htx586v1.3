@@ -126,6 +126,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddCascadingAuthenticationState();
 
 #region Đăng ký các dịch vụ ứng dụng
+builder.Services.AddSingleton<SafeUserManager>();
 builder.Services.AddScoped< IAuthorizationHandler, PasswordChangedHandler>();
 builder.Services.AddScoped<IDriverAccountService,DriverAccountService>();
 builder.Services.AddScoped<  IAdminAccountService, AdminAccountService>();

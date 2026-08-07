@@ -1,5 +1,5 @@
 @page "/admin/accounts/create"
-@attribute [Authorize(Roles = "Owner")]
+@attribute [Authorize(Roles = "Owner,Admin")]
 @inject IAdminAccountService AccountService
 @inject ICompanyProfileService CompanyProfileService
 @inject MasterSignatureService MasterSignatureService
@@ -8,16 +8,24 @@
 @inject NavigationManager Navigation
 
 <PageTitle>Tạo tài khoản</PageTitle>
-<PageHeader Title="Tạo tài khoản" Subtitle="Một biểu mẫu dùng chung cho tài khoản Quản lý và Chủ xe." />
+<PageHeader Title="Tạo tài khoản" Subtitle="@HeaderSubtitle" />
 
 <MudPaper Class="pa-4" Elevation="1">
     <MudGrid>
         <MudItem xs="12" md="4">
-            <MudSelect T="string" @bind-Value="_model.Role" Label="Vai trò" Required="true" Variant="Variant.Outlined">
-                <MudSelectItem T="string" Value="@SystemRoleDisplay.AdminRole">Quản lý</MudSelectItem>
-                <MudSelectItem T="string" Value="@SystemRoleDisplay.VehicleOwnerRole">Chủ xe</MudSelectItem>
-            </MudSelect>
+            @if (_isOwner)
+            {
+                <MudSelect T="string" Value="@_model.Role" ValueChanged="OnRoleChanged" Label="Vai trò" Required="true" Variant="Variant.Outlined">
+                    <MudSelectItem T="string" Value="@SystemRoleDisplay.AdminRole">Quản lý</MudSelectItem>
+                    <MudSelectItem T="string" Value="@SystemRoleDisplay.VehicleOwnerRole">Chủ xe</MudSelectItem>
+                </MudSelect>
+            }
+            else
+            {
+                <MudTextField T="string" Value="Chủ xe" Label="Vai trò" Disabled="true" Variant="Variant.Outlined" />
+            }
         </MudItem>
+
         @if (_model.Role == SystemRoleDisplay.AdminRole)
         {
             <MudItem xs="12" md="8">
@@ -35,7 +43,7 @@
         {
             <MudItem xs="12" md="8">
                 <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
-                    Chủ xe không gán trực tiếp văn phòng. Phạm vi văn phòng được xác định từ các xe sở hữu.
+                    Chủ xe không gán trực tiếp văn phòng. Văn phòng được xác định theo xe được gán sau này.
                 </MudAlert>
             </MudItem>
         }
@@ -59,16 +67,20 @@
         {
             <MudItem xs="12">
                 <MudAlert Severity="Severity.Info" Variant="Variant.Text">
-                    Họ tên, số điện thoại, CCCD, ngày cấp, nơi cấp và địa chỉ sẽ được tự động dùng làm thông tin pháp lý khi tạo xe cho Chủ xe này.
+                    Họ tên, số điện thoại, CCCD, ngày cấp, nơi cấp và địa chỉ là hồ sơ pháp lý của Chủ xe và sẽ được dùng khi gán tài khoản này cho xe.
                 </MudAlert>
             </MudItem>
-            <MudItem xs="12" md="6">
+            <MudItem xs="12" md="7">
                 <MudText Typo="Typo.subtitle1">Chân ký Chủ xe</MudText>
                 <MudText Typo="Typo.caption" Color="Color.Secondary">
-                    Hợp đồng mới sẽ tự động lấy chân ký này theo tài khoản Chủ xe. Có thể ký trực tiếp hoặc upload file PNG.
+                    Có thể khai báo chân ký ngay khi tạo tài khoản. Nếu để trống, Chủ xe sẽ được yêu cầu tạo chân ký ở lần đăng nhập đầu tiên.
                 </MudText>
-                <SignaturePad SignerName="@_model.FullName"
+                <SignaturePad ExistingSignatureUrl="@_vehicleOwnerSignatureDataUrl"
+                              SignerName="@_model.FullName"
                               OnSignatureSaved="CaptureVehicleOwnerSignatureAsync"
+                              OnSavedSignatureRemoved="ClearCapturedVehicleOwnerSignatureAsync"
+                              AllowRemoveSavedSignature="true"
+                              SavedStatusText="Đã nhận chân ký"
                               ConfirmationButtonText="Xác nhận chân ký Chủ xe" />
             </MudItem>
         }
@@ -77,7 +89,9 @@
     <MudStack Row="true" Class="mt-4">
         <MudButton Variant="Variant.Outlined" OnClick="@(() => Navigation.NavigateTo("/admin/accounts"))">Quay lại</MudButton>
         <MudSpacer />
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_saving" OnClick="CreateAsync">Tạo tài khoản</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_saving || !_initialized)" OnClick="CreateAsync">
+            @(_saving ? "Đang tạo..." : "Tạo tài khoản")
+        </MudButton>
     </MudStack>
 </MudPaper>
 
@@ -85,14 +99,46 @@
     private CreateAdminAccountRequest _model = new();
     private IReadOnlyList<CompanyProfileOptionDto> _offices = [];
     private bool _saving;
+    private bool _initialized;
+    private bool _isOwner;
     private string? _vehicleOwnerSignatureDataUrl;
     private bool IsVehicleOwner => _model.Role == SystemRoleDisplay.VehicleOwnerRole;
+    private string HeaderSubtitle => _isOwner
+        ? "Tạo tài khoản Quản lý hoặc Chủ xe."
+        : "Tạo tài khoản Chủ xe thuộc phạm vi vận hành của Quản lý.";
 
     protected override async Task OnInitializedAsync()
     {
-        _offices = await CompanyProfileService.GetActiveOptionsAsync();
         var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _isOwner = auth.User.IsInRole("Owner");
+        var isAdmin = auth.User.IsInRole("Admin");
         _model.CreatedByUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!_isOwner && !isAdmin)
+        {
+            Navigation.NavigateTo("/account/access-denied", true);
+            return;
+        }
+
+        // Quản lý chỉ được tạo tài khoản Chủ xe. Owner mới được tạo thêm Quản lý.
+        _model.Role = _isOwner ? SystemRoleDisplay.AdminRole : SystemRoleDisplay.VehicleOwnerRole;
+        if (_isOwner)
+            _offices = await CompanyProfileService.GetActiveOptionsAsync();
+
+        _initialized = true;
+    }
+
+    private Task OnRoleChanged(string role)
+    {
+        if (!_isOwner)
+            role = SystemRoleDisplay.VehicleOwnerRole;
+
+        _model.Role = role;
+        if (role != SystemRoleDisplay.AdminRole)
+            _model.OfficeIds.Clear();
+        if (role != SystemRoleDisplay.VehicleOwnerRole)
+            _vehicleOwnerSignatureDataUrl = null;
+        return Task.CompletedTask;
     }
 
     private void OnOfficeSelectionChanged(IEnumerable<Guid> values) => _model.OfficeIds = values.ToHashSet();
@@ -100,47 +146,70 @@
     private Task CaptureVehicleOwnerSignatureAsync(string dataUrl)
     {
         _vehicleOwnerSignatureDataUrl = dataUrl;
-        Snackbar.Add("Đã nhận chân ký Chủ xe. Chân ký sẽ được lưu cùng tài khoản.", Severity.Success);
+        Snackbar.Add("Đã nhận chân ký Chủ xe. Chân ký sẽ được lưu sau khi tài khoản được tạo thành công.", Severity.Success);
+        return Task.CompletedTask;
+    }
+
+    private Task ClearCapturedVehicleOwnerSignatureAsync()
+    {
+        _vehicleOwnerSignatureDataUrl = null;
         return Task.CompletedTask;
     }
 
     private async Task CreateAsync()
     {
+        if (_saving || !_initialized)
+            return;
+
         _saving = true;
         try
         {
+            // Không tin dữ liệu Role từ client: Admin luôn chỉ tạo VehicleOwner.
+            if (!_isOwner)
+                _model.Role = SystemRoleDisplay.VehicleOwnerRole;
+
             var result = await AccountService.CreateAccountAsync(_model);
             var signatureDataUrl = _vehicleOwnerSignatureDataUrl;
-            if (result.Role == SystemRoleDisplay.VehicleOwnerRole &&
-                !string.IsNullOrWhiteSpace(signatureDataUrl))
+            var signatureSaved = false;
+
+            if (result.Role == SystemRoleDisplay.VehicleOwnerRole && !string.IsNullOrWhiteSpace(signatureDataUrl))
             {
                 try
                 {
-                    await MasterSignatureService.SaveVehicleOwnerAccountSignatureAsync(
-                        result.UserId,
-                        signatureDataUrl);
+                    await MasterSignatureService.SaveVehicleOwnerAccountSignatureAsync(result.UserId, signatureDataUrl);
+                    signatureSaved = true;
                 }
                 catch (Exception ex)
                 {
-                    Snackbar.Add(
-                        $"Tài khoản Chủ xe đã được tạo nhưng chưa lưu được chân ký: {ex.Message}",
-                        Severity.Warning);
-                    Navigation.NavigateTo($"/admin/accounts/{result.UserId}");
-                    return;
+                    // Tài khoản đã tạo hợp lệ. Không xóa tài khoản chỉ vì file chữ ký tạm thời lỗi;
+                    // Chủ xe vẫn có thể khai báo lại ở lần đăng nhập đầu hoặc người quản lý bổ sung ở trang chi tiết.
+                    Snackbar.Add($"Tài khoản đã được tạo nhưng chưa lưu được chân ký: {ex.Message}", Severity.Warning);
                 }
             }
 
-            Snackbar.Add(
-                result.Role == SystemRoleDisplay.VehicleOwnerRole && string.IsNullOrWhiteSpace(signatureDataUrl)
-                    ? "Đã tạo tài khoản Chủ xe. Cần bổ sung chân ký trước khi lập hợp đồng."
-                    : $"Đã tạo tài khoản {SystemRoleDisplay.Name(result.Role)}.",
-                result.Role == SystemRoleDisplay.VehicleOwnerRole && string.IsNullOrWhiteSpace(signatureDataUrl)
-                    ? Severity.Warning
-                    : Severity.Success);
+            if (result.Role == SystemRoleDisplay.VehicleOwnerRole)
+            {
+                Snackbar.Add(
+                    signatureSaved
+                        ? "Đã tạo tài khoản Chủ xe và lưu chân ký thành công."
+                        : "Đã tạo tài khoản Chủ xe. Tài khoản chưa có chân ký sẽ được yêu cầu ký ở lần đăng nhập đầu tiên.",
+                    signatureSaved ? Severity.Success : Severity.Warning);
+            }
+            else
+            {
+                Snackbar.Add("Đã tạo tài khoản Quản lý.", Severity.Success);
+            }
+
             Navigation.NavigateTo($"/admin/accounts/{result.UserId}");
         }
-        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
-        finally { _saving = false; }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 
     private static string OfficeDisplay(CompanyProfileOptionDto x) =>

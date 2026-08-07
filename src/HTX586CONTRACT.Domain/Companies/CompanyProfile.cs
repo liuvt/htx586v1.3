@@ -6,7 +6,7 @@ namespace HTX586CONTRACT.Domain.Companies;
 
 /// <summary>
 /// Công ty/Văn phòng do Owner quản lý. Admin liên kết qua AdminOffice;
-/// xe liên kết qua OfficeVehicle.
+/// mỗi xe liên kết đúng một Công ty/Văn phòng qua OfficeVehicle.
 /// </summary>
 public class CompanyProfile : ISoftDeletable
 {

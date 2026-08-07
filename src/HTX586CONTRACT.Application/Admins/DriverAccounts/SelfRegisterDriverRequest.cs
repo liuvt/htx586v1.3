@@ -2,7 +2,7 @@ namespace HTX586CONTRACT.Application.Admins.DriverAccounts;
 
 /// <summary>
 /// Đăng ký tài khoản chờ duyệt. Không yêu cầu công ty, giấy phép lái xe hay chữ ký;
-/// chữ ký được thiết lập một lần theo từng xe sau khi tài khoản được cấp xe.
+/// chân ký Chủ xe được lưu một lần trên tài khoản và dùng chung cho các xe được cấp.
 /// </summary>
 public sealed class SelfRegisterDriverRequest
 {

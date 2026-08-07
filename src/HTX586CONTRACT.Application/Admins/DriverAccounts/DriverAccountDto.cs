@@ -14,7 +14,7 @@ public sealed class DriverAccountDto
     public string? DriverSignatureFileUrl { get; set; }
     public bool DriverSignatureIsActive { get; set; }
     public string DriverSignatureStatusText =>
-        SignedVehicleCount > 0 ? $"Đã ký {SignedVehicleCount}/{VehicleCount} xe" : "Chưa ký theo xe";
+        DriverSignatureIsActive ? "Đã có chân ký Chủ xe" : "Chưa có chân ký Chủ xe";
     public DateTime? DriverSignatureInactiveAt { get; set; }
     public int VehicleCount { get; set; }
     public int SignedVehicleCount { get; set; }

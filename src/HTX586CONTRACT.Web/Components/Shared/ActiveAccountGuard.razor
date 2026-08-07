@@ -7,11 +7,18 @@
     private readonly CancellationTokenSource _disposeCts = new();
     private Task? _watchTask;
     private bool _redirecting;
+    private bool _locationHooked;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender)
             return;
+
+        if (!_locationHooked)
+        {
+            Navigation.LocationChanged += OnLocationChanged;
+            _locationHooked = true;
+        }
 
         // Chỉ điều hướng sau khi component đã interactive để tránh NavigationException
         // trong giai đoạn static prerender của Blazor Server.
@@ -19,6 +26,25 @@
 
         if (!_redirecting)
             _watchTask = WatchAccountAsync(_disposeCts.Token);
+    }
+
+
+    private async void OnLocationChanged(object? sender, LocationChangedEventArgs args)
+    {
+        if (_disposeCts.IsCancellationRequested)
+            return;
+
+        try
+        {
+            await InvokeAsync(() => ValidateCurrentAccountAsync(_disposeCts.Token));
+        }
+        catch (OperationCanceledException) when (_disposeCts.IsCancellationRequested)
+        {
+        }
+        catch
+        {
+            // Không làm hỏng circuit nếu kiểm tra trạng thái tạm thời thất bại.
+        }
     }
 
     private async Task WatchAccountAsync(CancellationToken cancellationToken)
@@ -77,6 +103,7 @@
                 x.IsActive,
                 x.IsDeleted,
                 x.RegistrationStatus,
+                x.VehicleOwnerSignatureFileUrl,
                 HasActiveCompany = db.AdminOffices.Any(a => a.AdminUserId == x.Id &&
                     a.IsActive && !a.IsDeleted && a.CompanyProfile.IsActive && !a.CompanyProfile.IsDeleted)
             })
@@ -98,7 +125,17 @@
                           StringComparison.OrdinalIgnoreCase));
 
         if (!isValid)
+        {
             await InvokeAsync(RedirectToInactiveLogin);
+            return;
+        }
+
+        if (isVehicleOwner && string.IsNullOrWhiteSpace(userState!.VehicleOwnerSignatureFileUrl))
+        {
+            var path = new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/');
+            if (!string.Equals(path, "/vehicle-owner/account", StringComparison.OrdinalIgnoreCase))
+                await InvokeAsync(() => Navigation.NavigateTo("/vehicle-owner/account?signatureRequired=1"));
+        }
     }
 
     private void RedirectToInactiveLogin()
@@ -113,6 +150,12 @@
 
     public async ValueTask DisposeAsync()
     {
+        if (_locationHooked)
+        {
+            Navigation.LocationChanged -= OnLocationChanged;
+            _locationHooked = false;
+        }
+
         await _disposeCts.CancelAsync();
 
         if (_watchTask is not null)

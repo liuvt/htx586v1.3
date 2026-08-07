@@ -9,7 +9,7 @@ public interface IAdminAccountService
     Task<CreateAdminAccountResult> CreateAccountAsync(CreateAdminAccountRequest request, CancellationToken cancellationToken = default);
     Task<AdminAccountDetail?> GetDetailAsync(string userId, CancellationToken cancellationToken = default);
     Task<ServiceResult> UpdateAccountAsync(UpdateAdminAccountRequest request, CancellationToken cancellationToken = default);
-    Task<ServiceResult> ResetPasswordToDefaultAsync(string userId, CancellationToken cancellationToken = default);
-    Task<ServiceResult> SetActiveAsync(string userId, bool isActive, CancellationToken cancellationToken = default);
+    Task<ServiceResult> ResetPasswordToDefaultAsync(string userId, string? actorUserId = null, CancellationToken cancellationToken = default);
+    Task<ServiceResult> SetActiveAsync(string userId, bool isActive, string? actorUserId = null, CancellationToken cancellationToken = default);
     Task<ServiceResult> DeleteAsync(string userId, string? deletedByUserId = null, CancellationToken cancellationToken = default);
 }

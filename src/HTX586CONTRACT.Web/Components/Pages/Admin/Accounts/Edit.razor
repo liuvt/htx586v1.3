@@ -1,5 +1,5 @@
 @page "/admin/accounts/{UserId}/edit"
-@attribute [Authorize(Roles = "Owner")]
+@attribute [Authorize(Roles = "Owner,Admin")]
 @inject IAdminAccountService AccountService
 @inject ICompanyProfileService CompanyProfileService
 @inject MasterSignatureService MasterSignatureService
@@ -24,10 +24,17 @@ else
         <MudGrid>
             <MudItem xs="12" md="4"><MudTextField T="string" Value="@_userName" Label="Tên đăng nhập" Disabled="true" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="4">
-                <MudSelect T="string" @bind-Value="_model.Role" Label="Vai trò" Required="true" Variant="Variant.Outlined">
-                    <MudSelectItem T="string" Value="@SystemRoleDisplay.AdminRole">Quản lý</MudSelectItem>
-                    <MudSelectItem T="string" Value="@SystemRoleDisplay.VehicleOwnerRole">Chủ xe</MudSelectItem>
-                </MudSelect>
+                @if (_isOwner)
+                {
+                    <MudSelect T="string" @bind-Value="_model.Role" Label="Vai trò" Required="true" Variant="Variant.Outlined">
+                        <MudSelectItem T="string" Value="@SystemRoleDisplay.AdminRole">Quản lý</MudSelectItem>
+                        <MudSelectItem T="string" Value="@SystemRoleDisplay.VehicleOwnerRole">Chủ xe</MudSelectItem>
+                    </MudSelect>
+                }
+                else
+                {
+                    <MudTextField T="string" Value="Chủ xe" Label="Vai trò" Disabled="true" Variant="Variant.Outlined" />
+                }
             </MudItem>
             <MudItem xs="12" md="4" Class="d-flex align-center"><MudSwitch T="bool" @bind-Value="_model.IsActive" Color="Color.Success" Label="Tài khoản hoạt động" /></MudItem>
 
@@ -70,7 +77,7 @@ else
             {
                 <MudItem xs="12">
                     <MudAlert Severity="Severity.Info" Variant="Variant.Text">
-                        Các xe đang chọn tài khoản này làm Chủ xe sẽ được đồng bộ ngay hồ sơ pháp lý và chân ký sau khi lưu.
+                        Các xe đang chọn tài khoản này làm Chủ xe sẽ được đồng bộ hồ sơ pháp lý sau khi lưu. Chân ký luôn được lấy trực tiếp từ tài khoản Chủ xe.
                     </MudAlert>
                 </MudItem>
                 <MudItem xs="12" md="6">
@@ -114,6 +121,8 @@ else
     private string _originalRole = string.Empty;
     private bool _loading = true;
     private bool _saving;
+    private bool _isOwner;
+    private string? _actorUserId;
     private bool IsVehicleOwner => _model?.Role == SystemRoleDisplay.VehicleOwnerRole;
     private string? SignatureUrl => string.IsNullOrWhiteSpace(_detail?.VehicleOwnerSignatureFileUrl)
         ? null
@@ -124,9 +133,21 @@ else
         _loading = true;
         try
         {
-            _offices = await CompanyProfileService.GetActiveOptionsAsync();
+            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            _isOwner = auth.User.IsInRole("Owner");
+            _actorUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (_isOwner)
+                _offices = await CompanyProfileService.GetActiveOptionsAsync();
+
             _detail = await AccountService.GetDetailAsync(UserId);
             if (_detail is null) { _model = null; return; }
+            if (!_isOwner && _detail.Role != SystemRoleDisplay.VehicleOwnerRole)
+            {
+                Snackbar.Add("Quản lý chỉ được cập nhật tài khoản Chủ xe.", Severity.Warning);
+                _model = null;
+                Navigation.NavigateTo("/admin/accounts");
+                return;
+            }
             _userName = _detail.UserName;
             _originalRole = _detail.Role;
             _model = new UpdateAdminAccountRequest
@@ -147,8 +168,7 @@ else
                 IsActive = _detail.IsActive,
                 MustChangePassword = _detail.MustChangePassword
             };
-            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-            _model.UpdatedByUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            _model.UpdatedByUserId = _actorUserId;
         }
         catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); _model = null; }
         finally { _loading = false; }
@@ -167,7 +187,7 @@ else
         try
         {
             await MasterSignatureService.SaveVehicleOwnerAccountSignatureAsync(UserId, dataUrl);
-            Snackbar.Add("Đã lưu chân ký Chủ xe và đồng bộ sang toàn bộ xe đang sở hữu.", Severity.Success);
+            Snackbar.Add("Đã lưu chân ký Chủ xe trên tài khoản. Các xe và hợp đồng mới sẽ lấy trực tiếp chân ký này.", Severity.Success);
             _detail = await AccountService.GetDetailAsync(UserId);
         }
         catch (Exception ex)
@@ -183,6 +203,8 @@ else
         _saving = true;
         try
         {
+            if (!_isOwner)
+                _model.Role = SystemRoleDisplay.VehicleOwnerRole;
             var result = await AccountService.UpdateAccountAsync(_model);
             var message = result.Message ?? (result.Succeeded
                 ? "Đã cập nhật tài khoản."
@@ -199,7 +221,7 @@ else
         _saving = true;
         try
         {
-            var result = await AccountService.ResetPasswordToDefaultAsync(UserId);
+            var result = await AccountService.ResetPasswordToDefaultAsync(UserId, _actorUserId);
             var message = result.Message ?? (result.Succeeded
                 ? "Đã đặt lại mật khẩu mặc định."
                 : "Không thể đặt lại mật khẩu.");

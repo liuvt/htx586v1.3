@@ -920,8 +920,8 @@ else
         ? _detail?.CompanyRepresentativeName ?? "Đại diện văn phòng"
         : SelectedOffice?.RepresentativeName ?? "Đại diện văn phòng";
     private string OwnerSigner => Id.HasValue
-        ? _detail?.OwnerName ?? SelectedVehicle?.OwnerName ?? "Chủ sở hữu xe"
-        : SelectedVehicle?.OwnerName ?? "Chủ sở hữu xe";
+        ? _detail?.OwnerName ?? _driver?.FullName ?? "Chủ sở hữu xe"
+        : _driver?.FullName ?? "Chủ sở hữu xe";
     private string DriverSigner => IsFinalLocked
         ? _detail?.DriverName ?? "Tài xế"
         : _driver?.FullName ?? "Tài xế";
@@ -932,17 +932,17 @@ else
         ? _detail?.CompanyRepresentativeSignedAt
         : SelectedOffice?.RepresentativeSignedAt;
     private string? FixedOwnerSignatureUrl => Id.HasValue
-        ? _detail?.VehicleOwnerSignatureFileUrl ?? SelectedVehicle?.OwnerSignatureFileUrl
-        : SelectedVehicle?.OwnerSignatureFileUrl;
+        ? _detail?.VehicleOwnerSignatureFileUrl ?? _driver?.VehicleOwnerSignatureFileUrl
+        : _driver?.VehicleOwnerSignatureFileUrl;
     private DateTime? FixedOwnerSignedAt => Id.HasValue
-        ? _detail?.VehicleOwnerSignedAt ?? SelectedVehicle?.OwnerSignedAt
-        : SelectedVehicle?.OwnerSignedAt;
+        ? _detail?.VehicleOwnerSignedAt ?? _driver?.VehicleOwnerSignedAt
+        : _driver?.VehicleOwnerSignedAt;
     private string? FixedDriverSignatureUrl => IsFinalLocked
         ? _detail?.DriverSignatureFileUrl
-        : SelectedVehicle?.AccountDriverSignatureFileUrl;
+        : _driver?.VehicleOwnerSignatureFileUrl;
     private DateTime? FixedDriverSignedAt => IsFinalLocked
         ? _detail?.DriverSignedAt
-        : SelectedVehicle?.AccountDriverSignedAt;
+        : _driver?.VehicleOwnerSignedAt;
 
     private static string CustomerDisplay(Customer customer)
     {

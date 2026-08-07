@@ -4,8 +4,8 @@ using Microsoft.EntityFrameworkCore;
 namespace HTX586CONTRACT.Web.Services;
 
 /// <summary>
-/// Quản lý chữ ký master của Công ty/Văn phòng, tài khoản Chủ xe và chữ ký
-/// tài xế theo xe. Các chữ ký master được chụp snapshot theo từng hợp đồng.
+/// Quản lý chữ ký master của Công ty/Văn phòng và tài khoản Chủ xe.
+/// Chữ ký Chủ xe chỉ lưu trên ApplicationUser và được chụp snapshot theo từng hợp đồng.
 /// </summary>
 public sealed class MasterSignatureService(
     IDbContextFactory<ApplicationDbContext> factory,
@@ -40,9 +40,8 @@ public sealed class MasterSignatureService(
 
 
     /// <summary>
-    /// Lưu chân ký pháp lý dùng chung của tài khoản Chủ xe. Chữ ký được đồng bộ
-    /// sang tất cả xe đang thuộc tài khoản để các màn hình cũ và HĐ mới cùng dùng
-    /// một nguồn dữ liệu. HĐ đã tạo vẫn giữ ảnh snapshot tại thời điểm lập.
+    /// Lưu chân ký pháp lý dùng chung của tài khoản Chủ xe.
+    /// Không lưu bản sao chữ ký trên từng xe. HĐ đã tạo giữ ảnh snapshot riêng.
     /// </summary>
     public async Task<string> SaveVehicleOwnerAccountSignatureAsync(
         string userId,
@@ -74,8 +73,6 @@ public sealed class MasterSignatureService(
             ct);
 
         await using var db = await factory.CreateDbContextAsync(ct);
-        await using var transaction = await db.Database.BeginTransactionAsync(ct);
-
         var updatedUser = await db.Users
             .Where(x => x.Id == userId && !x.IsDeleted)
             .ExecuteUpdateAsync(setters => setters
@@ -88,16 +85,6 @@ public sealed class MasterSignatureService(
         if (updatedUser != 1)
             throw new KeyNotFoundException("Không tìm thấy tài khoản Chủ xe để lưu chân ký.");
 
-        await db.Vehicles
-            .Where(x => x.AssignedDriverId == userId && !x.IsDeleted)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(x => x.OwnerSignatureFileUrl, stored.RelativeUrl)
-                .SetProperty(x => x.OwnerSignatureHash, stored.Sha256Hash)
-                .SetProperty(x => x.OwnerSignedAt, stored.SavedAt)
-                .SetProperty(x => x.UpdatedAt, stored.SavedAt),
-                ct);
-
-        await transaction.CommitAsync(ct);
         return stored.RelativeUrl;
     }
 
@@ -144,52 +131,6 @@ public sealed class MasterSignatureService(
 
         return stored.RelativeUrl;
     }
-    public async Task<string> SaveVehicleAccountDriverSignatureAsync(
-        Guid vehicleId,
-        string userId,
-        string dataUrl,
-        CancellationToken ct = default)
-    {
-        if (string.IsNullOrWhiteSpace(userId))
-            throw new InvalidOperationException("Không xác định được tài khoản Chủ xe.");
 
-        await using (var checkDb = await factory.CreateDbContextAsync(ct))
-        {
-            var vehicle = await checkDb.Vehicles.AsNoTracking()
-                .FirstOrDefaultAsync(x => x.Id == vehicleId && x.IsActive, ct)
-                ?? throw new KeyNotFoundException("Không tìm thấy xe đang hoạt động.");
-
-            if (!string.Equals(vehicle.AssignedDriverId, userId, StringComparison.Ordinal))
-                throw new InvalidOperationException("Chỉ tài khoản Chủ xe đang được gán xe mới được tạo chữ ký cho xe này.");
-            if (vehicle.AccountDriverSignedAt.HasValue || !string.IsNullOrWhiteSpace(vehicle.AccountDriverSignatureFileUrl))
-                throw new InvalidOperationException("Chữ ký tài xế cho xe này đã được xác nhận và không thể tự thay đổi lần hai.");
-        }
-
-        var stored = await storage.SavePngDataUrlAsync(
-            ["master-signatures", "vehicles", vehicleId.ToString("N"), "vehicle-owner", userId],
-            "driver",
-            dataUrl,
-            ct);
-
-        await using var db = await factory.CreateDbContextAsync(ct);
-        var updated = await db.Vehicles
-            .Where(x => x.Id == vehicleId && x.IsActive &&
-                x.AssignedDriverId == userId &&
-                x.AccountDriverSignedAt == null &&
-                x.AccountDriverSignatureFileUrl == null)
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(x => x.AccountDriverSignatureFileUrl, stored.RelativeUrl)
-                .SetProperty(x => x.AccountDriverSignatureHash, stored.Sha256Hash)
-                .SetProperty(x => x.AccountDriverSignedAt, stored.SavedAt)
-                .SetProperty(x => x.AccountDriverSignedByUserId, userId)
-                .SetProperty(x => x.UpdatedAt, stored.SavedAt)
-                .SetProperty(x => x.UpdatedBy, userId),
-                ct);
-
-        if (updated != 1)
-            throw new InvalidOperationException("Không thể lưu chữ ký. Xe có thể đã được chuyển sang tài khoản khác hoặc đã có chữ ký.");
-
-        return stored.RelativeUrl;
-    }
 
 }

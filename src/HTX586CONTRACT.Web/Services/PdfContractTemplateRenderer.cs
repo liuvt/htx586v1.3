@@ -417,14 +417,10 @@ public sealed class PdfContractTemplateRenderer(
                 : contract.CompanyProfile?.RepresentativeSignatureFileUrl),
             ["SIG_OWNER"] = StoredSignaturePath(snapshot is not null
                 ? snapshot.Vehicle.OwnerSignatureFileUrl
-                : First(
-                    contract.Driver?.VehicleOwnerSignatureFileUrl,
-                    contract.Vehicle?.OwnerSignatureFileUrl)),
+                : contract.Driver?.VehicleOwnerSignatureFileUrl),
             ["SIG_DRIVER"] = StoredSignaturePath(snapshot is not null
                 ? snapshot.Driver.SignatureFileUrl
-                : First(
-                    contract.Vehicle?.AccountDriverSignatureFileUrl,
-                    contract.Driver?.DriverSignatureFileUrl)),
+                : contract.Driver?.VehicleOwnerSignatureFileUrl),
 
             // Chữ ký khách hàng là dữ liệu riêng của từng hợp đồng.
             ["SIG_CUSTOMER"] = ContractSignaturePath(contract, SignatureParty.Customer),

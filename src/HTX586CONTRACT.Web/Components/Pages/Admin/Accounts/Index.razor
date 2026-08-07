@@ -1,5 +1,5 @@
 @page "/admin/accounts"
-@attribute [Authorize(Roles = "Owner")]
+@attribute [Authorize(Roles = "Owner,Admin")]
 @inject IAdminAccountService AccountService
 @inject AccountExcelImportService AccountImportService
 @inject AuthenticationStateProvider AuthenticationStateProvider
@@ -7,7 +7,7 @@
 @inject NavigationManager Navigation
 
 <PageTitle>Quản lý tài khoản</PageTitle>
-<PageHeader Title="Quản lý tài khoản" Subtitle="Quản lý chung tài khoản Quản lý và Chủ xe, vai trò và phạm vi Công ty/Văn phòng." />
+<PageHeader Title="@HeaderTitle" Subtitle="@HeaderSubtitle" />
 
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudGrid>
@@ -17,33 +17,43 @@
                           Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
         </MudItem>
         <MudItem xs="12" md="2">
-            <MudSelect T="string" @bind-Value="_roleFilter" Label="Vai trò" Variant="Variant.Outlined" Clearable="true">
-                <MudSelectItem T="string" Value="@SystemRoleDisplay.AdminRole">Quản lý</MudSelectItem>
-                <MudSelectItem T="string" Value="@SystemRoleDisplay.VehicleOwnerRole">Chủ xe</MudSelectItem>
-            </MudSelect>
+            @if (_isOwner)
+            {
+                <MudSelect T="string" @bind-Value="_roleFilter" Label="Vai trò" Variant="Variant.Outlined" Clearable="true">
+                    <MudSelectItem T="string" Value="@SystemRoleDisplay.AdminRole">Quản lý</MudSelectItem>
+                    <MudSelectItem T="string" Value="@SystemRoleDisplay.VehicleOwnerRole">Chủ xe</MudSelectItem>
+                </MudSelect>
+            }
+            else
+            {
+                <MudTextField T="string" Value="Chủ xe" Label="Vai trò" Disabled="true" Variant="Variant.Outlined" />
+            }
         </MudItem>
         <MudItem xs="12" md="5">
             <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="2" Justify="Justify.FlexEnd" AlignItems="AlignItems.Center">
-                <MudButton Href="/templates/Template_Import_Account_HTX586.xlsx"
-                           download="Template_Import_Account_HTX586.xlsx"
-                           Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download"
-                           Disabled="@(_readingImportFile || _importing)">Tải mẫu</MudButton>
-                <MudFileUpload @ref="_fileUpload" T="IBrowserFile"
-                               Accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                               FilesChanged="ReadImportFileAsync" MaximumFileCount="1"
-                               Disabled="@(_readingImportFile || _importing)">
-                    <CustomContent Context="upload">
-                        <MudButton Color="Color.Success" Variant="Variant.Outlined"
-                                   Disabled="@(_readingImportFile || _importing)"
-                                   OnClick="@upload.OpenFilePickerAsync"
-                                   StartIcon="@Icons.Material.Filled.UploadFile">
-                            @(_readingImportFile ? "Đang đọc..." : "Import Excel")
-                        </MudButton>
-                    </CustomContent>
-                </MudFileUpload>
+                @if (_isOwner)
+                {
+                    <MudButton Href="/templates/Template_Import_Account_HTX586.xlsx"
+                               download="Template_Import_Account_HTX586.xlsx"
+                               Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download"
+                               Disabled="@(_readingImportFile || _importing)">Tải mẫu</MudButton>
+                    <MudFileUpload @ref="_fileUpload" T="IBrowserFile"
+                                   Accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                                   FilesChanged="ReadImportFileAsync" MaximumFileCount="1"
+                                   Disabled="@(_readingImportFile || _importing)">
+                        <CustomContent Context="upload">
+                            <MudButton Color="Color.Success" Variant="Variant.Outlined"
+                                       Disabled="@(_readingImportFile || _importing)"
+                                       OnClick="@upload.OpenFilePickerAsync"
+                                       StartIcon="@Icons.Material.Filled.UploadFile">
+                                @(_readingImportFile ? "Đang đọc..." : "Import Excel")
+                            </MudButton>
+                        </CustomContent>
+                    </MudFileUpload>
+                }
                 <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.PersonAdd"
                            Disabled="@(_readingImportFile || _importing)"
-                           OnClick="@(() => Navigation.NavigateTo("/admin/accounts/create"))">Thêm tài khoản</MudButton>
+                           OnClick="@(() => Navigation.NavigateTo("/admin/accounts/create"))">@(_isOwner ? "Thêm tài khoản" : "Thêm Chủ xe")</MudButton>
             </MudStack>
         </MudItem>
     </MudGrid>
@@ -99,6 +109,7 @@
 
 @code {
     private bool _loading;
+    private bool _isOwner;
     private bool _readingImportFile;
     private bool _importing;
     private string? _keyword;
@@ -106,17 +117,28 @@
     private IReadOnlyList<AdminAccountListItem> _items = [];
     private AccountImportPreview? _importPreview;
     private MudFileUpload<IBrowserFile>? _fileUpload;
+    private string HeaderTitle => _isOwner ? "Quản lý tài khoản" : "Tài khoản Chủ xe";
+    private string HeaderSubtitle => _isOwner
+        ? "Quản lý chung tài khoản Quản lý và Chủ xe, vai trò và phạm vi Công ty/Văn phòng."
+        : "Quản lý các tài khoản Chủ xe. Quản lý không được tạo hoặc chỉnh sửa tài khoản Quản lý khác.";
 
     private IEnumerable<AdminAccountListItem> FilteredItems => _items.Where(x =>
         (string.IsNullOrWhiteSpace(_roleFilter) || string.Equals(x.Role, _roleFilter, StringComparison.OrdinalIgnoreCase)) &&
         (string.IsNullOrWhiteSpace(_keyword) || Contains(x.UserName) || Contains(x.FullName) || Contains(x.EmployeeCode) || Contains(x.PhoneNumber) || Contains(x.Email) || Contains(x.OfficeNames)));
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _isOwner = auth.User.IsInRole("Owner");
+        if (!_isOwner)
+            _roleFilter = SystemRoleDisplay.VehicleOwnerRole;
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
         _loading = true;
-        try { _items = await AccountService.GetAccountsAsync(); }
+        try { _items = await AccountService.GetAccountsAsync(role: _isOwner ? null : SystemRoleDisplay.VehicleOwnerRole); }
         catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
         finally { _loading = false; }
     }

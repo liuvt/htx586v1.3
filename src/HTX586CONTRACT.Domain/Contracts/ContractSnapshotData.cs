@@ -68,9 +68,9 @@ public sealed class ContractSnapshotData
                 DriverLicenseClass = driver.DriverLicenseClass,
                 DriverLicenseIssuedDate = driver.DriverLicenseIssuedDate,
                 DriverLicenseExpiryDate = driver.DriverLicenseExpiryDate,
-                SignatureFileUrl = vehicle.AccountDriverSignatureFileUrl ?? driver.DriverSignatureFileUrl,
-                SignatureHash = vehicle.AccountDriverSignatureHash ?? driver.DriverSignatureHash,
-                SignedAt = vehicle.AccountDriverSignedAt ?? driver.DriverSignedAt
+                SignatureFileUrl = driver.VehicleOwnerSignatureFileUrl,
+                SignatureHash = driver.VehicleOwnerSignatureHash,
+                SignedAt = driver.VehicleOwnerSignedAt
             },
             Customer = new CustomerSnapshot
             {
@@ -95,18 +95,15 @@ public sealed class ContractSnapshotData
                 Color = vehicle.Color,
                 ChassisNumber = vehicle.ChassisNumber,
                 EngineNumber = vehicle.EngineNumber,
-                OwnerName = vehicle.OwnerName,
-                OwnerCitizenId = vehicle.OwnerCitizenId,
-                OwnerCitizenIdIssuedDate = vehicle.OwnerCitizenIdIssuedDate,
-                OwnerCitizenIdIssuedPlace = vehicle.OwnerCitizenIdIssuedPlace,
-                OwnerAddress = vehicle.OwnerAddress,
-                OwnerPhoneNumber = vehicle.OwnerPhoneNumber,
-                OwnerSignatureFileUrl = driver.VehicleOwnerSignatureFileUrl ?? vehicle.OwnerSignatureFileUrl,
-                OwnerSignatureHash = driver.VehicleOwnerSignatureHash ?? vehicle.OwnerSignatureHash,
-                OwnerSignedAt = driver.VehicleOwnerSignedAt ?? vehicle.OwnerSignedAt,
-                AccountDriverSignatureFileUrl = vehicle.AccountDriverSignatureFileUrl,
-                AccountDriverSignatureHash = vehicle.AccountDriverSignatureHash,
-                AccountDriverSignedAt = vehicle.AccountDriverSignedAt
+                OwnerName = driver.FullName,
+                OwnerCitizenId = driver.CitizenId,
+                OwnerCitizenIdIssuedDate = driver.CitizenIdIssuedDate,
+                OwnerCitizenIdIssuedPlace = driver.CitizenIdIssuedPlace,
+                OwnerAddress = driver.Address,
+                OwnerPhoneNumber = driver.PhoneNumber,
+                OwnerSignatureFileUrl = driver.VehicleOwnerSignatureFileUrl,
+                OwnerSignatureHash = driver.VehicleOwnerSignatureHash,
+                OwnerSignedAt = driver.VehicleOwnerSignedAt,
             }
         };
 
@@ -157,9 +154,9 @@ public sealed class ContractSnapshotData
                 DriverLicenseClass = First(contract.DriverLicenseClassSnapshot, driver?.DriverLicenseClass),
                 DriverLicenseIssuedDate = driver?.DriverLicenseIssuedDate,
                 DriverLicenseExpiryDate = driver?.DriverLicenseExpiryDate,
-                SignatureFileUrl = vehicle?.AccountDriverSignatureFileUrl ?? driver?.DriverSignatureFileUrl,
-                SignatureHash = vehicle?.AccountDriverSignatureHash ?? driver?.DriverSignatureHash,
-                SignedAt = vehicle?.AccountDriverSignedAt ?? driver?.DriverSignedAt
+                SignatureFileUrl = driver?.VehicleOwnerSignatureFileUrl,
+                SignatureHash = driver?.VehicleOwnerSignatureHash,
+                SignedAt = driver?.VehicleOwnerSignedAt
             },
             Customer = new CustomerSnapshot
             {
@@ -184,18 +181,15 @@ public sealed class ContractSnapshotData
                 Color = vehicle?.Color,
                 ChassisNumber = vehicle?.ChassisNumber,
                 EngineNumber = vehicle?.EngineNumber,
-                OwnerName = First(contract.VehicleOwnerNameSnapshot, vehicle?.OwnerName),
-                OwnerCitizenId = First(contract.VehicleOwnerCitizenIdSnapshot, vehicle?.OwnerCitizenId),
-                OwnerCitizenIdIssuedDate = vehicle?.OwnerCitizenIdIssuedDate,
-                OwnerCitizenIdIssuedPlace = vehicle?.OwnerCitizenIdIssuedPlace,
-                OwnerAddress = vehicle?.OwnerAddress,
-                OwnerPhoneNumber = vehicle?.OwnerPhoneNumber,
-                OwnerSignatureFileUrl = driver?.VehicleOwnerSignatureFileUrl ?? vehicle?.OwnerSignatureFileUrl,
-                OwnerSignatureHash = driver?.VehicleOwnerSignatureHash ?? vehicle?.OwnerSignatureHash,
-                OwnerSignedAt = driver?.VehicleOwnerSignedAt ?? vehicle?.OwnerSignedAt,
-                AccountDriverSignatureFileUrl = vehicle?.AccountDriverSignatureFileUrl,
-                AccountDriverSignatureHash = vehicle?.AccountDriverSignatureHash,
-                AccountDriverSignedAt = vehicle?.AccountDriverSignedAt
+                OwnerName = First(contract.VehicleOwnerNameSnapshot, driver?.FullName),
+                OwnerCitizenId = First(contract.VehicleOwnerCitizenIdSnapshot, driver?.CitizenId),
+                OwnerCitizenIdIssuedDate = driver?.CitizenIdIssuedDate,
+                OwnerCitizenIdIssuedPlace = driver?.CitizenIdIssuedPlace,
+                OwnerAddress = driver?.Address,
+                OwnerPhoneNumber = driver?.PhoneNumber,
+                OwnerSignatureFileUrl = driver?.VehicleOwnerSignatureFileUrl,
+                OwnerSignatureHash = driver?.VehicleOwnerSignatureHash,
+                OwnerSignedAt = driver?.VehicleOwnerSignedAt,
             }
         };
     }
@@ -296,9 +290,6 @@ public sealed class VehicleSnapshot
     public string? OwnerSignatureFileUrl { get; set; }
     public string? OwnerSignatureHash { get; set; }
     public DateTime? OwnerSignedAt { get; set; }
-    public string? AccountDriverSignatureFileUrl { get; set; }
-    public string? AccountDriverSignatureHash { get; set; }
-    public DateTime? AccountDriverSignedAt { get; set; }
 
     public string BrandModel => string.Join(" ", new[] { Brand, Model, VehicleType }
         .Where(x => !string.IsNullOrWhiteSpace(x)));

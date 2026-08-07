@@ -3,6 +3,7 @@ using HTX586CONTRACT.Application.Abstractions;
 using HTX586CONTRACT.Application.Admins.DriverAccounts;
 using HTX586CONTRACT.Domain.Common;
 using HTX586CONTRACT.Domain.Identity;
+using HTX586CONTRACT.Infrastructure.Identity;
 using HTX586CONTRACT.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -14,7 +15,7 @@ namespace HTX586CONTRACT.Infrastructure.Services;
 /// các trang và migration đang sử dụng, nhưng toàn bộ nghiệp vụ đã chuyển sang role VehicleOwner.
 /// </summary>
 public sealed class DriverAccountService(
-    UserManager<ApplicationUser> userManager,
+    SafeUserManager userManager,
     IDbContextFactory<ApplicationDbContext> factory) : IDriverAccountService
 {
     private const string VehicleOwnerRole = "VehicleOwner";
@@ -221,8 +222,6 @@ public sealed class DriverAccountService(
         var vehicles = vehicleEntities.Select(x => new
         {
             x.PlateNumber,
-            x.AccountDriverSignatureFileUrl,
-            x.AccountDriverSignedAt,
             CompanyNames = x.OfficeVehicles
                 .Where(ov => ov.IsActive && !ov.IsDeleted && ov.AssignedTo == null &&
                              ov.CompanyProfile.IsActive && !ov.CompanyProfile.IsDeleted)
@@ -232,11 +231,6 @@ public sealed class DriverAccountService(
                 .Distinct()
                 .ToArray()
         }).ToList();
-
-        var signedVehicle = vehicles
-            .Where(x => x.AccountDriverSignedAt.HasValue && !string.IsNullOrWhiteSpace(x.AccountDriverSignatureFileUrl))
-            .OrderByDescending(x => x.AccountDriverSignedAt)
-            .FirstOrDefault();
 
         return new DriverAccountDetailDto
         {
@@ -256,11 +250,11 @@ public sealed class DriverAccountService(
             DriverLicenseClass = user.DriverLicenseClass,
             DriverLicenseIssuedDate = user.DriverLicenseIssuedDate,
             DriverLicenseExpiryDate = user.DriverLicenseExpiryDate,
-            DriverSignatureFileUrl = signedVehicle?.AccountDriverSignatureFileUrl,
-            DriverSignedAt = signedVehicle?.AccountDriverSignedAt,
-            DriverSignatureIsActive = signedVehicle is not null,
+            DriverSignatureFileUrl = user.VehicleOwnerSignatureFileUrl,
+            DriverSignedAt = user.VehicleOwnerSignedAt,
+            DriverSignatureIsActive = !string.IsNullOrWhiteSpace(user.VehicleOwnerSignatureFileUrl),
             VehicleCount = vehicles.Count,
-            SignedVehicleCount = vehicles.Count(x => x.AccountDriverSignedAt != null),
+            SignedVehicleCount = !string.IsNullOrWhiteSpace(user.VehicleOwnerSignatureFileUrl) ? vehicles.Count : 0,
             VehiclePlates = string.Join(", ", vehicles.Select(x => x.PlateNumber).OrderBy(x => x)),
             CompanyNames = string.Join(", ", vehicles.SelectMany(x => x.CompanyNames).Distinct().OrderBy(x => x)),
             IsActive = user.IsActive,
@@ -316,8 +310,6 @@ public sealed class DriverAccountService(
         {
             UserId = x.AssignedDriverId!,
             x.PlateNumber,
-            x.AccountDriverSignatureFileUrl,
-            x.AccountDriverSignedAt,
             CompanyNames = x.OfficeVehicles
                 .Where(ov => ov.IsActive && !ov.IsDeleted && ov.AssignedTo == null &&
                              ov.CompanyProfile.IsActive && !ov.CompanyProfile.IsDeleted)
@@ -343,9 +335,10 @@ public sealed class DriverAccountService(
                 CitizenId = user.CitizenId,
                 DriverLicenseNumber = user.DriverLicenseNumber,
                 DriverLicenseClass = user.DriverLicenseClass,
-                DriverSignatureIsActive = assigned.Any(x => x.AccountDriverSignedAt != null),
+                DriverSignatureFileUrl = user.VehicleOwnerSignatureFileUrl,
+                DriverSignatureIsActive = !string.IsNullOrWhiteSpace(user.VehicleOwnerSignatureFileUrl),
                 VehicleCount = assigned.Count,
-                SignedVehicleCount = assigned.Count(x => x.AccountDriverSignedAt != null),
+                SignedVehicleCount = !string.IsNullOrWhiteSpace(user.VehicleOwnerSignatureFileUrl) ? assigned.Count : 0,
                 VehiclePlates = string.Join(", ", assigned.Select(x => x.PlateNumber).OrderBy(x => x)),
                 CompanyNames = string.Join(", ", assigned.SelectMany(x => x.CompanyNames).Distinct().OrderBy(x => x)),
                 IsActive = user.IsActive,
@@ -434,6 +427,12 @@ public sealed class DriverAccountService(
                 .Where(x => x.AssignedDriverId == userId && !x.IsDeleted)
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(x => x.AssignedDriverId, (string?)null)
+                    .SetProperty(x => x.OwnerName, string.Empty)
+                    .SetProperty(x => x.OwnerPhoneNumber, (string?)null)
+                    .SetProperty(x => x.OwnerCitizenId, (string?)null)
+                    .SetProperty(x => x.OwnerCitizenIdIssuedDate, (DateTime?)null)
+                    .SetProperty(x => x.OwnerCitizenIdIssuedPlace, (string?)null)
+                    .SetProperty(x => x.OwnerAddress, (string?)null)
                     .SetProperty(x => x.UpdatedAt, now)
                     .SetProperty(x => x.UpdatedBy, source), ct);
         }

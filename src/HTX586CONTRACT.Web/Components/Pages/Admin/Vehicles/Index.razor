@@ -7,8 +7,8 @@
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
-<PageTitle>Xe và chủ sở hữu</PageTitle>
-<PageHeader Title="Quản lý xe" Subtitle="Xe thuộc một Chủ xe và có thể hoạt động tại nhiều Công ty/Văn phòng." />
+<PageTitle>Xe</PageTitle>
+<PageHeader Title="Quản lý xe" Subtitle="Mỗi xe thuộc đúng một Công ty/Văn phòng; tài khoản Chủ xe có thể để trống và gán sau." />
 
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudGrid>
@@ -54,14 +54,14 @@
             <MudChip T="string" Color="@(_importPreview.InvalidRows > 0 ? Color.Error : Color.Default)" Variant="Variant.Outlined">Lỗi @_importPreview.InvalidRows</MudChip>
         </MudStack>
         <MudAlert Severity="@(_importPreview.InvalidRows > 0 ? Severity.Warning : Severity.Success)" Variant="Variant.Outlined" Class="mb-3">
-            @(_importPreview.InvalidRows > 0 ? "Chỉ các dòng hợp lệ được import. Xe tự lấy hồ sơ pháp lý và chân ký từ tài khoản Chủ xe." : "Toàn bộ dữ liệu hợp lệ, có thể xác nhận import.")
+            @(_importPreview.InvalidRows > 0 ? "Chỉ các dòng hợp lệ được import. Chủ xe là tùy chọn; mỗi xe chỉ được gán một Công ty/Văn phòng." : "Toàn bộ dữ liệu hợp lệ, có thể xác nhận import.")
         </MudAlert>
         <MudTable T="VehicleImportRowPreview" Items="_importPreview.Rows" Dense="true" Hover="true" Striped="true" RowsPerPage="10" Loading="_importing">
             <HeaderContent><MudTh>Dòng</MudTh><MudTh>Biển số</MudTh><MudTh>Tài khoản Chủ xe</MudTh><MudTh>Công ty/Văn phòng</MudTh><MudTh>Loại xe</MudTh><MudTh>Số chỗ</MudTh><MudTh>Trạng thái</MudTh><MudTh>Lỗi</MudTh></HeaderContent>
             <RowTemplate>
                 <MudTd>@context.RowNumber</MudTd><MudTd><b>@context.PlateNumber</b></MudTd>
                 <MudTd>@context.VehicleOwnerUserName<br /><small>@context.VehicleOwnerName</small></MudTd>
-                <MudTd>@string.Join("; ", context.OfficeTaxCodes)</MudTd><MudTd>@context.VehicleType</MudTd><MudTd>@context.SeatCount</MudTd>
+                <MudTd>@context.OfficeTaxCode</MudTd><MudTd>@context.VehicleType</MudTd><MudTd>@context.SeatCount</MudTd>
                 <MudTd><MudChip T="string" Size="Size.Small" Color="@(context.IsValid ? Color.Success : Color.Error)">@(context.IsValid ? "Hợp lệ" : "Lỗi")</MudChip></MudTd>
                 <MudTd><MudText Typo="Typo.caption" Color="Color.Error">@context.ErrorMessage</MudText></MudTd>
             </RowTemplate>
@@ -77,12 +77,12 @@
 }
 
 <MudTable T="VehicleRow" Items="FilteredItems" Loading="_loading" Hover="true" Striped="true" RowsPerPage="20" Breakpoint="Breakpoint.Sm">
-    <HeaderContent><MudTh>Biển số</MudTh><MudTh>Công ty/Văn phòng</MudTh><MudTh>Tài khoản Chủ xe</MudTh><MudTh>Nhãn hiệu</MudTh><MudTh>Số chỗ</MudTh><MudTh>Chủ sở hữu pháp lý</MudTh><MudTh>Trạng thái</MudTh><MudTh></MudTh></HeaderContent>
+    <HeaderContent><MudTh>Biển số</MudTh><MudTh>Công ty/Văn phòng</MudTh><MudTh>Tài khoản Chủ xe</MudTh><MudTh>Nhãn hiệu</MudTh><MudTh>Số chỗ</MudTh><MudTh>Chân ký Chủ xe</MudTh><MudTh>Trạng thái</MudTh><MudTh></MudTh></HeaderContent>
     <RowTemplate>
         <MudTd DataLabel="Biển số"><b>@context.PlateNumber</b><br /><small>@(context.VehicleCode ?? "—")</small></MudTd>
         <MudTd DataLabel="Công ty/Văn phòng">@Display(context.OfficeNames)</MudTd><MudTd DataLabel="Tài khoản Chủ xe">@Display(context.VehicleOwnerName)</MudTd>
         <MudTd DataLabel="Nhãn hiệu">@Display(context.Brand)</MudTd><MudTd DataLabel="Số chỗ">@(context.SeatCount?.ToString() ?? "—")</MudTd>
-        <MudTd DataLabel="Chủ sở hữu">@context.OwnerName</MudTd><MudTd DataLabel="Trạng thái"><MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">@(context.IsActive ? "Hoạt động" : "Ngừng")</MudChip></MudTd>
+        <MudTd DataLabel="Chân ký Chủ xe"><MudChip T="string" Size="Size.Small" Color="@(context.HasOwnerSignature ? Color.Success : Color.Warning)">@(context.HasOwnerSignature ? "Đã có" : "Chưa có")</MudChip></MudTd><MudTd DataLabel="Trạng thái"><MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">@(context.IsActive ? "Hoạt động" : "Ngừng")</MudChip></MudTd>
         <MudTd><MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info" OnClick="@(() => Navigation.NavigateTo($"/admin/vehicles/{context.Id}"))" />
             <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="@(() => Navigation.NavigateTo($"/admin/vehicles/{context.Id}/edit"))" />
             @if (_isOwner)
@@ -107,7 +107,7 @@
     private MudFileUpload<IBrowserFile>? _fileUpload;
 
     private IEnumerable<VehicleRow> FilteredItems => string.IsNullOrWhiteSpace(_keyword) ? _items : _items.Where(x =>
-        Contains(x.PlateNumber) || Contains(x.VehicleCode) || Contains(x.OwnerName) || Contains(x.VehicleOwnerName) || Contains(x.OfficeNames));
+        Contains(x.PlateNumber) || Contains(x.VehicleCode) || Contains(x.VehicleOwnerName) || Contains(x.OwnerPhoneNumber) || Contains(x.OfficeNames));
 
     protected override async Task OnInitializedAsync()
     {
@@ -130,7 +130,8 @@
             _items = vehicles.Select(x => new VehicleRow
             {
                 Id = x.Id, PlateNumber = x.PlateNumber, VehicleCode = x.VehicleCode, Brand = x.Brand, SeatCount = x.SeatCount,
-                OwnerName = x.OwnerName, VehicleOwnerName = x.AssignedDriver?.FullName,
+                VehicleOwnerName = x.AssignedDriver?.FullName, OwnerPhoneNumber = x.AssignedDriver?.PhoneNumber,
+                HasOwnerSignature = !string.IsNullOrWhiteSpace(x.AssignedDriver?.VehicleOwnerSignatureFileUrl),
                 OfficeNames = string.Join(", ", x.OfficeVehicles.Where(ov => ov.IsActive && !ov.IsDeleted && ov.AssignedTo == null && _managedOfficeIds.Contains(ov.CompanyProfileId))
                     .OrderByDescending(ov => ov.IsPrimary).ThenBy(ov => ov.CompanyProfile.CompanyName)
                     .Select(ov => string.IsNullOrWhiteSpace(ov.CompanyProfile.BranchName) ? ov.CompanyProfile.CompanyName : $"{ov.CompanyProfile.CompanyName} - {ov.CompanyProfile.BranchName}")),
@@ -206,7 +207,8 @@
     private sealed class VehicleRow
     {
         public Guid Id { get; set; } public string PlateNumber { get; set; } = string.Empty; public string? VehicleCode { get; set; }
-        public string? Brand { get; set; } public int? SeatCount { get; set; } public string OwnerName { get; set; } = string.Empty;
-        public string? VehicleOwnerName { get; set; } public string OfficeNames { get; set; } = string.Empty; public bool IsActive { get; set; }
+        public string? Brand { get; set; } public int? SeatCount { get; set; }
+        public string? VehicleOwnerName { get; set; } public string? OwnerPhoneNumber { get; set; } public bool HasOwnerSignature { get; set; }
+        public string OfficeNames { get; set; } = string.Empty; public bool IsActive { get; set; }
     }
 }

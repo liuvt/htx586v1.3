@@ -4,6 +4,7 @@ using HTX586CONTRACT.Application.Common;
 using HTX586CONTRACT.Domain.Common;
 using HTX586CONTRACT.Domain.Identity;
 using HTX586CONTRACT.Domain.Offices;
+using HTX586CONTRACT.Infrastructure.Identity;
 using HTX586CONTRACT.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -16,7 +17,7 @@ namespace HTX586CONTRACT.Infrastructure.Services;
 /// </summary>
 public sealed class AdminAccountService(
     IDbContextFactory<ApplicationDbContext> factory,
-    UserManager<ApplicationUser> userManager) : IAdminAccountService
+    SafeUserManager userManager) : IAdminAccountService
 {
     private const string AdminRole = "Admin";
     private const string VehicleOwnerRole = "VehicleOwner";
@@ -109,6 +110,7 @@ public sealed class AdminAccountService(
         CancellationToken ct = default)
     {
         var selectedRole = NormalizeManagedRole(request.Role);
+        await EnsureActorCanManageRoleAsync(request.CreatedByUserId, selectedRole, null, ct);
         ValidateRequest(request.FullName, request.UserName, request.Password);
         ValidateLegalProfile(selectedRole, request.CitizenId, request.CitizenIdIssuedDate, request.CitizenIdIssuedPlace, request.Address);
         var phoneNumber = VietnamPhoneNumber.NormalizeOrThrow(request.PhoneNumber);
@@ -250,6 +252,7 @@ public sealed class AdminAccountService(
         try
         {
             selectedRole = NormalizeManagedRole(request.Role);
+            await EnsureActorCanManageRoleAsync(request.UpdatedByUserId, selectedRole, request.UserId, ct);
             if (string.IsNullOrWhiteSpace(request.FullName))
                 throw new InvalidOperationException("Vui lòng nhập họ và tên.");
             ValidateLegalProfile(selectedRole, request.CitizenId, request.CitizenIdIssuedDate, request.CitizenIdIssuedPlace, request.Address);
@@ -332,11 +335,15 @@ public sealed class AdminAccountService(
             : "Đã cập nhật tài khoản Quản lý và phạm vi Công ty/Văn phòng.");
     }
 
-    public async Task<ServiceResult> ResetPasswordToDefaultAsync(string userId, CancellationToken ct = default)
+    public async Task<ServiceResult> ResetPasswordToDefaultAsync(string userId, string? actorUserId = null, CancellationToken ct = default)
     {
         var user = await FindManagedUserAsync(userId);
         if (user is null)
             return ServiceResult.Failure("Không tìm thấy tài khoản.");
+
+        var managedRole = await GetManagedRoleAsync(user);
+        if (!await CanActorManageRoleAsync(actorUserId, managedRole, user.Id, ct))
+            return ServiceResult.Failure("Bạn không có quyền thao tác tài khoản này.");
 
         var token = await userManager.GeneratePasswordResetTokenAsync(user);
         var result = await userManager.ResetPasswordAsync(user, token, DefaultResetPassword);
@@ -351,11 +358,15 @@ public sealed class AdminAccountService(
             : ServiceResult.Failure(update.Errors.Select(x => x.Description));
     }
 
-    public async Task<ServiceResult> SetActiveAsync(string userId, bool isActive, CancellationToken ct = default)
+    public async Task<ServiceResult> SetActiveAsync(string userId, bool isActive, string? actorUserId = null, CancellationToken ct = default)
     {
         var user = await FindManagedUserAsync(userId);
         if (user is null)
             return ServiceResult.Failure("Không tìm thấy tài khoản.");
+
+        var managedRole = await GetManagedRoleAsync(user);
+        if (!await CanActorManageRoleAsync(actorUserId, managedRole, user.Id, ct))
+            return ServiceResult.Failure("Bạn không có quyền thao tác tài khoản này.");
 
         user.IsActive = isActive;
         user.UpdatedAt = DateTime.UtcNow;
@@ -374,6 +385,10 @@ public sealed class AdminAccountService(
         var user = await FindManagedUserAsync(userId);
         if (user is null)
             return ServiceResult.Failure("Không tìm thấy tài khoản.");
+
+        var managedRole = await GetManagedRoleAsync(user);
+        if (!await CanActorManageRoleAsync(deletedByUserId, managedRole, user.Id, ct))
+            return ServiceResult.Failure("Bạn không có quyền thao tác tài khoản này.");
 
         await using var db = await factory.CreateDbContextAsync(ct);
         if (await db.Vehicles.AnyAsync(x => x.AssignedDriverId == userId, ct))
@@ -399,6 +414,77 @@ public sealed class AdminAccountService(
         }
         await db.SaveChangesAsync(ct);
         return ServiceResult.Success("Đã xóa mềm tài khoản.");
+    }
+
+
+    private async Task EnsureActorCanManageRoleAsync(
+        string? actorUserId,
+        string targetRole,
+        string? targetUserId,
+        CancellationToken ct)
+    {
+        if (!await CanActorManageRoleAsync(actorUserId, targetRole, targetUserId, ct))
+            throw new InvalidOperationException("Bạn không có quyền tạo hoặc cập nhật tài khoản với vai trò này.");
+    }
+
+    private async Task<bool> CanActorManageRoleAsync(
+        string? actorUserId,
+        string targetRole,
+        string? targetUserId,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(actorUserId))
+            return false;
+
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var actorRoles = await (
+            from ur in db.UserRoles.AsNoTracking()
+            join role in db.Roles.AsNoTracking() on ur.RoleId equals role.Id
+            join user in db.Users.AsNoTracking() on ur.UserId equals user.Id
+            where ur.UserId == actorUserId && !user.IsDeleted && user.IsActive && role.Name != null
+            select role.Name!)
+            .Distinct()
+            .ToListAsync(ct);
+
+        if (actorRoles.Contains(OwnerRole, StringComparer.OrdinalIgnoreCase))
+            return string.Equals(targetRole, AdminRole, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(targetRole, VehicleOwnerRole, StringComparison.OrdinalIgnoreCase);
+
+        if (!actorRoles.Contains(AdminRole, StringComparer.OrdinalIgnoreCase))
+            return false;
+
+        // Quản lý chỉ được quản trị tài khoản Chủ xe, không được tạo/sửa/khóa/xóa
+        // tài khoản Quản lý khác hoặc tự nâng quyền.
+        if (!string.Equals(targetRole, VehicleOwnerRole, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (!string.IsNullOrWhiteSpace(targetUserId))
+        {
+            if (string.Equals(targetUserId, actorUserId, StringComparison.Ordinal))
+                return false;
+
+            var targetIsVehicleOwner = await (
+                from ur in db.UserRoles.AsNoTracking()
+                join role in db.Roles.AsNoTracking() on ur.RoleId equals role.Id
+                join targetUser in db.Users.AsNoTracking() on ur.UserId equals targetUser.Id
+                where ur.UserId == targetUserId && !targetUser.IsDeleted && role.Name == VehicleOwnerRole
+                select ur.UserId)
+                .AnyAsync(ct);
+
+            if (!targetIsVehicleOwner)
+                return false;
+        }
+
+        return true;
+    }
+
+    private async Task<string> GetManagedRoleAsync(ApplicationUser user)
+    {
+        var roles = await userManager.GetRolesAsync(user);
+        return roles.FirstOrDefault(x =>
+                   string.Equals(x, AdminRole, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(x, VehicleOwnerRole, StringComparison.OrdinalIgnoreCase))
+               ?? string.Empty;
     }
 
     private async Task<ApplicationUser?> FindManagedUserAsync(string userId)
@@ -525,9 +611,6 @@ public sealed class AdminAccountService(
             vehicle.OwnerCitizenIdIssuedDate = owner.CitizenIdIssuedDate?.Date;
             vehicle.OwnerCitizenIdIssuedPlace = N(owner.CitizenIdIssuedPlace);
             vehicle.OwnerAddress = N(owner.Address);
-            vehicle.OwnerSignatureFileUrl = owner.VehicleOwnerSignatureFileUrl;
-            vehicle.OwnerSignatureHash = owner.VehicleOwnerSignatureHash;
-            vehicle.OwnerSignedAt = owner.VehicleOwnerSignedAt;
             vehicle.UpdatedAt = now;
             vehicle.UpdatedBy = N(actorUserId);
         }

@@ -430,11 +430,11 @@ public sealed class ExcelReportService(IDbContextFactory<ApplicationDbContext> f
         string[] headers =
         [
             "STT", "Biển số", "Mã xe", "Hãng xe", "Dòng xe", "Loại xe", "Số chỗ", "Công ty/Văn phòng",
-            "Chủ sở hữu", "SĐT chủ xe", "Tài xế đang gán", "Trạng thái xe", "Trạng thái chữ ký chủ xe",
+            "Chủ xe", "SĐT Chủ xe", "Tài khoản Chủ xe", "Trạng thái xe", "Trạng thái chân ký Chủ xe",
             "Tổng HĐ", "HĐ hoàn tất", "Doanh thu hoàn tất", "Ngày tạo"
         ];
 
-        var ws = PrepareSheet(workbook, "Tổng hợp", "BÁO CÁO TỔNG HỢP XE VÀ CHỦ SỞ HỮU", scope.DisplayName, headers.Length, out var headerRow);
+        var ws = PrepareSheet(workbook, "Tổng hợp", "BÁO CÁO TỔNG HỢP XE", scope.DisplayName, headers.Length, out var headerRow);
         WriteHeaders(ws, headerRow, headers);
 
         var row = headerRow + 1;
@@ -445,7 +445,7 @@ public sealed class ExcelReportService(IDbContextFactory<ApplicationDbContext> f
             WriteRow(ws, row++,
             [
                 index++, vehicle.PlateNumber, vehicle.VehicleCode, vehicle.Brand, vehicle.Model, vehicle.VehicleType, vehicle.SeatCount,
-                CompanyDisplay(vehicle, scope.OfficeIds), vehicle.OwnerName, vehicle.OwnerPhoneNumber, vehicle.AssignedDriver?.FullName,
+                CompanyDisplay(vehicle, scope.OfficeIds), vehicle.AssignedDriver?.FullName ?? vehicle.OwnerName, vehicle.AssignedDriver?.PhoneNumber ?? vehicle.OwnerPhoneNumber, vehicle.AssignedDriver?.FullName,
                 vehicle.IsActive ? "Đang hoạt động" : "Ngừng hoạt động", OwnerSignatureStatusText(vehicle),
                 vehicleStats?.TotalContracts ?? 0, vehicleStats?.CompletedContracts ?? 0, vehicleStats?.CompletedRevenue ?? 0,
                 vehicle.CreatedAt
@@ -467,12 +467,12 @@ public sealed class ExcelReportService(IDbContextFactory<ApplicationDbContext> f
         [
             "STT", "ID xe", "Biển số", "Mã xe", "Hãng xe", "Dòng xe", "Loại xe", "Số chỗ", "Màu xe",
             "Số khung", "Số máy", "Công ty/Văn phòng", "Chủ sở hữu", "CCCD chủ xe", "Ngày cấp CCCD",
-            "Nơi cấp CCCD", "Địa chỉ chủ xe", "SĐT chủ xe", "Tài xế đang gán", "Mã NV tài xế", "SĐT tài xế",
-            "Trạng thái xe", "Trạng thái chữ ký chủ xe", "Ngày chủ xe ký", "Tổng HĐ", "HĐ hoàn tất",
+            "Nơi cấp CCCD", "Địa chỉ Chủ xe", "SĐT Chủ xe", "Tài khoản Chủ xe", "Mã nhân viên Chủ xe", "SĐT tài khoản Chủ xe",
+            "Trạng thái xe", "Trạng thái chân ký Chủ xe", "Ngày Chủ xe ký", "Tổng HĐ", "HĐ hoàn tất",
             "Doanh thu hoàn tất", "Ngày tạo", "Ngày cập nhật"
         ];
 
-        var ws = PrepareSheet(workbook, "Chi tiết", "BÁO CÁO CHI TIẾT XE VÀ CHỦ SỞ HỮU", scope.DisplayName, headers.Length, out var headerRow);
+        var ws = PrepareSheet(workbook, "Chi tiết", "BÁO CÁO CHI TIẾT XE", scope.DisplayName, headers.Length, out var headerRow);
         WriteHeaders(ws, headerRow, headers);
 
         var row = headerRow + 1;
@@ -484,10 +484,10 @@ public sealed class ExcelReportService(IDbContextFactory<ApplicationDbContext> f
             [
                 index++, vehicle.Id.ToString(), vehicle.PlateNumber, vehicle.VehicleCode, vehicle.Brand, vehicle.Model,
                 vehicle.VehicleType, vehicle.SeatCount, vehicle.Color, vehicle.ChassisNumber, vehicle.EngineNumber,
-                CompanyDisplay(vehicle, scope.OfficeIds), vehicle.OwnerName, vehicle.OwnerCitizenId, vehicle.OwnerCitizenIdIssuedDate,
-                vehicle.OwnerCitizenIdIssuedPlace, vehicle.OwnerAddress, vehicle.OwnerPhoneNumber, vehicle.AssignedDriver?.FullName,
+                CompanyDisplay(vehicle, scope.OfficeIds), vehicle.AssignedDriver?.FullName ?? vehicle.OwnerName, vehicle.AssignedDriver?.CitizenId ?? vehicle.OwnerCitizenId, vehicle.AssignedDriver?.CitizenIdIssuedDate ?? vehicle.OwnerCitizenIdIssuedDate,
+                vehicle.AssignedDriver?.CitizenIdIssuedPlace ?? vehicle.OwnerCitizenIdIssuedPlace, vehicle.AssignedDriver?.Address ?? vehicle.OwnerAddress, vehicle.AssignedDriver?.PhoneNumber ?? vehicle.OwnerPhoneNumber, vehicle.AssignedDriver?.FullName,
                 vehicle.AssignedDriver?.EmployeeCode, vehicle.AssignedDriver?.PhoneNumber,
-                vehicle.IsActive ? "Đang hoạt động" : "Ngừng hoạt động", OwnerSignatureStatusText(vehicle), vehicle.OwnerSignedAt,
+                vehicle.IsActive ? "Đang hoạt động" : "Ngừng hoạt động", OwnerSignatureStatusText(vehicle), vehicle.AssignedDriver?.VehicleOwnerSignedAt,
                 vehicleStats?.TotalContracts ?? 0, vehicleStats?.CompletedContracts ?? 0,
                 vehicleStats?.CompletedRevenue ?? 0, vehicle.CreatedAt, vehicle.UpdatedAt
             ]);
@@ -863,7 +863,7 @@ public sealed class ExcelReportService(IDbContextFactory<ApplicationDbContext> f
     }
 
     private static string OwnerSignatureStatusText(Vehicle vehicle)
-        => string.IsNullOrWhiteSpace(vehicle.OwnerSignatureFileUrl) ? "Chưa có chữ ký" : "Đã xác nhận";
+        => string.IsNullOrWhiteSpace(vehicle.AssignedDriver?.VehicleOwnerSignatureFileUrl) ? "Chưa có chân ký" : "Đã có chân ký";
 
     private static string CompanyDisplay(Vehicle vehicle, HashSet<Guid>? officeIds = null)
     {

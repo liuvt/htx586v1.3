@@ -7,25 +7,33 @@
 @inject NavigationManager Navigation
 
 <PageTitle>Thêm xe</PageTitle>
-<PageHeader Title="Thêm xe" Subtitle="Chọn Chủ xe và Công ty/Văn phòng, sau đó chỉ nhập thông tin phương tiện." />
+<PageHeader Title="Thêm xe" Subtitle="Chọn đúng một Công ty/Văn phòng. Chủ xe có thể để trống và gán sau." />
 
 <MudPaper Class="pa-4" Elevation="1">
     <MudGrid>
         <MudItem xs="12" md="6">
-            <MudSelect T="string" @bind-Value="_model.AssignedDriverId" Label="Tài khoản Chủ xe" Required="true" Variant="Variant.Outlined"
-                       HelperText="Thông tin pháp lý của xe được lấy tự động từ tài khoản đã chọn.">
-                @foreach (var owner in _vehicleOwners)
-                {
-                    <MudSelectItem T="string" Value="@owner.Id">@UserDisplay(owner)</MudSelectItem>
-                }
-            </MudSelect>
+            <MudAutocomplete T="ApplicationUser"
+                             Value="@SelectedVehicleOwner"
+                             ValueChanged="SelectVehicleOwner"
+                             SearchFunc="SearchVehicleOwnersAsync"
+                             ToStringFunc="UserDisplay"
+                             Label="Tài khoản Chủ xe (không bắt buộc)"
+                             Placeholder="Gõ họ tên hoặc số điện thoại Chủ xe"
+                             HelperText="Gõ họ tên hoặc số điện thoại; kết quả gợi ý hiển thị ngay bên dưới. Có thể để trống và gán Chủ xe sau."
+                             Variant="Variant.Outlined"
+                             Clearable="true"
+                             ResetValueOnEmptyText="true"
+                             CoerceText="true"
+                             MinCharacters="1"
+                             DebounceInterval="300"
+                             MaxItems="30" />
         </MudItem>
         <MudItem xs="12" md="6">
-            <MudSelect T="Guid" Label="Công ty/Văn phòng hoạt động" MultiSelection="true" Required="true"
-                       SelectedValues="_officeIds" SelectedValuesChanged="OnOfficeSelectionChanged" Variant="Variant.Outlined">
+            <MudSelect T="Guid?" @bind-Value="_officeId" Label="Công ty/Văn phòng hoạt động" Required="true"
+                       Variant="Variant.Outlined" HelperText="Mỗi xe chỉ thuộc đúng một Công ty/Văn phòng.">
                 @foreach (var office in _offices)
                 {
-                    <MudSelectItem T="Guid" Value="@office.Id">@OfficeDisplay(office)</MudSelectItem>
+                    <MudSelectItem T="Guid?" Value="@((Guid?)office.Id)">@OfficeDisplay(office)</MudSelectItem>
                 }
             </MudSelect>
         </MudItem>
@@ -34,7 +42,7 @@
         {
             <MudItem xs="12">
                 <MudPaper Class="pa-3" Outlined="true">
-                    <MudText Typo="Typo.subtitle1" Class="mb-2">Thông tin chủ xe lấy từ tài khoản</MudText>
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">Thông tin Chủ xe lấy từ tài khoản</MudText>
                     <MudGrid>
                         <MudItem xs="12" md="4"><InfoListItem Label="Họ và tên" Value="@SelectedVehicleOwner.FullName" /></MudItem>
                         <MudItem xs="12" md="4"><InfoListItem Label="Số điện thoại" Value="@Display(SelectedVehicleOwner.PhoneNumber)" /></MudItem>
@@ -47,10 +55,18 @@
                     @if (string.IsNullOrWhiteSpace(SelectedVehicleOwner.VehicleOwnerSignatureFileUrl))
                     {
                         <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true" Class="mt-2">
-                            Có thể tạo xe, nhưng chưa thể lập hợp đồng cho xe này cho đến khi tài khoản Chủ xe có chân ký.
+                            Tài khoản Chủ xe chưa có chân ký. Xe vẫn được lưu, nhưng cần bổ sung chân ký trước khi hoàn thiện hợp đồng có sử dụng chữ ký Chủ xe.
                         </MudAlert>
                     }
                 </MudPaper>
+            </MudItem>
+        }
+        else
+        {
+            <MudItem xs="12">
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
+                    Xe đang được khởi tạo chưa có Chủ xe. Bạn có thể gán tài khoản Chủ xe ở màn hình cập nhật xe sau này.
+                </MudAlert>
             </MudItem>
         }
 
@@ -76,13 +92,13 @@
 
 @code {
     private Vehicle _model = new() { Id = Guid.NewGuid(), IsActive = true };
-    private HashSet<Guid> _officeIds = [];
+    private Guid? _officeId;
     private List<CompanyProfile> _offices = [];
-    private List<ApplicationUser> _vehicleOwners = [];
+    private ApplicationUser? _selectedVehicleOwner;
     private string _currentUserId = string.Empty;
     private bool _isOwner;
     private bool _saving;
-    private ApplicationUser? SelectedVehicleOwner => _vehicleOwners.FirstOrDefault(x => x.Id == _model.AssignedDriverId);
+    private ApplicationUser? SelectedVehicleOwner => _selectedVehicleOwner;
 
     protected override async Task OnInitializedAsync()
     {
@@ -95,21 +111,15 @@
             .Where(x => managedIds.Contains(x.Id) && x.IsActive && !x.IsDeleted)
             .OrderBy(x => x.CompanyName).ThenBy(x => x.BranchName)
             .ToListAsync();
-        _vehicleOwners = await LoadVehicleOwnersAsync(db);
-
         if (_offices.Count == 1)
-            _officeIds.Add(_offices[0].Id);
-        if (_vehicleOwners.Count == 1)
-            _model.AssignedDriverId = _vehicleOwners[0].Id;
+            _officeId = _offices[0].Id;
     }
-
-    private void OnOfficeSelectionChanged(IEnumerable<Guid> values) => _officeIds = values.ToHashSet();
 
     private async Task SaveAsync()
     {
-        if (_officeIds.Count == 0)
+        if (!_officeId.HasValue)
         {
-            Snackbar.Add("Vui lòng chọn ít nhất một Công ty/Văn phòng.", Severity.Warning);
+            Snackbar.Add("Vui lòng chọn Công ty/Văn phòng cho xe.", Severity.Warning);
             return;
         }
         if (string.IsNullOrWhiteSpace(_model.PlateNumber))
@@ -119,14 +129,9 @@
         }
 
         var selectedOwner = SelectedVehicleOwner;
-        if (selectedOwner is null)
+        if (selectedOwner is not null && !HasCompleteLegalProfile(selectedOwner))
         {
-            Snackbar.Add("Vui lòng chọn tài khoản Chủ xe.", Severity.Warning);
-            return;
-        }
-        if (!HasCompleteLegalProfile(selectedOwner))
-        {
-            Snackbar.Add("Hồ sơ Chủ xe chưa đủ CCCD, ngày cấp, nơi cấp hoặc địa chỉ. Hãy cập nhật tài khoản trước khi tạo xe.", Severity.Warning);
+            Snackbar.Add("Hồ sơ Chủ xe chưa đủ CCCD, ngày cấp, nơi cấp hoặc địa chỉ. Hãy cập nhật tài khoản trước khi gán vào xe.", Severity.Warning);
             return;
         }
 
@@ -135,67 +140,94 @@
         {
             await using var db = await Factory.CreateDbContextAsync();
             var managedIds = await OfficeAccessService.GetManagedOfficeIdsAsync(_currentUserId, _isOwner);
-            if (_officeIds.Any(x => !managedIds.Contains(x)))
-                throw new InvalidOperationException("Có Công ty/Văn phòng nằm ngoài phạm vi quản lý.");
+            if (!managedIds.Contains(_officeId.Value))
+                throw new InvalidOperationException("Công ty/Văn phòng nằm ngoài phạm vi quản lý.");
 
-            var validOwner = await FindValidVehicleOwnerAsync(db, selectedOwner.Id);
-            if (validOwner is null)
-                throw new InvalidOperationException("Tài khoản Chủ xe không hợp lệ, đã khóa hoặc chưa được duyệt.");
+            ApplicationUser? validOwner = null;
+            if (!string.IsNullOrWhiteSpace(_model.AssignedDriverId))
+            {
+                validOwner = await FindValidVehicleOwnerAsync(db, _model.AssignedDriverId);
+                if (validOwner is null)
+                    throw new InvalidOperationException("Tài khoản Chủ xe không hợp lệ, đã khóa hoặc chưa được duyệt.");
+                if (!HasCompleteLegalProfile(validOwner))
+                    throw new InvalidOperationException("Hồ sơ Chủ xe chưa đủ thông tin pháp lý.");
+            }
 
             _model.PlateNumber = _model.PlateNumber.Trim().ToUpperInvariant();
             if (await db.Vehicles.IgnoreQueryFilters().AnyAsync(x => !x.IsDeleted && x.PlateNumber == _model.PlateNumber))
                 throw new InvalidOperationException("Biển số xe đã tồn tại.");
 
-            ApplyOwnerSnapshot(_model, validOwner);
+            if (validOwner is not null)
+                ApplyOwnerSnapshot(_model, validOwner);
+            else
+                ClearOwnerSnapshot(_model);
+
             var now = DateTime.UtcNow;
-            var primaryOfficeId = _offices.First(x => _officeIds.Contains(x.Id)).Id;
             _model.CreatedAt = now;
             _model.CreatedBy = _currentUserId;
             db.Vehicles.Add(_model);
-
-            foreach (var officeId in _officeIds.OrderBy(x => x))
+            db.OfficeVehicles.Add(new HTX586CONTRACT.Domain.Offices.OfficeVehicle
             {
-                db.OfficeVehicles.Add(new HTX586CONTRACT.Domain.Offices.OfficeVehicle
+                VehicleId = _model.Id,
+                CompanyProfileId = _officeId.Value,
+                IsPrimary = true,
+                IsActive = true,
+                AssignedFrom = now,
+                CreatedAt = now,
+                CreatedBy = _currentUserId
+            });
+
+            if (validOwner is not null)
+            {
+                db.DriverNotifications.Add(new DriverNotification
                 {
-                    VehicleId = _model.Id,
-                    CompanyProfileId = officeId,
-                    IsPrimary = officeId == primaryOfficeId,
-                    IsActive = true,
-                    AssignedFrom = now,
-                    CreatedAt = now,
-                    CreatedBy = _currentUserId
+                    DriverId = validOwner.Id,
+                    Type = "VehicleAssigned",
+                    Title = "Bạn được gán phương tiện",
+                    Message = $"Phương tiện {_model.PlateNumber} đã được gán cho tài khoản Chủ xe của bạn.",
+                    LinkUrl = "/vehicle-owner/vehicles",
+                    RelatedVehicleId = _model.Id,
+                    CreatedAt = now
                 });
             }
 
-            db.DriverNotifications.Add(new DriverNotification
-            {
-                DriverId = validOwner.Id,
-                Type = "VehicleAssigned",
-                Title = "Bạn được gán phương tiện",
-                Message = $"Phương tiện {_model.PlateNumber} đã được gán cho tài khoản Chủ xe của bạn.",
-                LinkUrl = "/vehicle-owner/vehicles",
-                RelatedVehicleId = _model.Id,
-                CreatedAt = now
-            });
-
             await db.SaveChangesAsync();
-            Snackbar.Add("Đã tạo xe, gán Chủ xe và Công ty/Văn phòng.", Severity.Success);
+            Snackbar.Add(validOwner is null
+                ? "Đã tạo xe chưa gán Chủ xe và liên kết với Công ty/Văn phòng."
+                : "Đã tạo xe, gán Chủ xe và Công ty/Văn phòng.", Severity.Success);
             Navigation.NavigateTo($"/admin/vehicles/{_model.Id}/edit");
         }
         catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
         finally { _saving = false; }
     }
 
-    private static async Task<List<ApplicationUser>> LoadVehicleOwnersAsync(ApplicationDbContext db)
+    private async Task<IEnumerable<ApplicationUser>> SearchVehicleOwnersAsync(string? value, CancellationToken cancellationToken)
     {
-        var ids = await (from ur in db.UserRoles.AsNoTracking()
-                         join r in db.Roles.AsNoTracking() on ur.RoleId equals r.Id
-                         where r.Name == SystemRoleDisplay.VehicleOwnerRole
-                         select ur.UserId).ToListAsync();
-        return await db.Users.AsNoTracking()
-            .Where(x => ids.Contains(x.Id) && x.IsActive && !x.IsDeleted && x.RegistrationStatus == "Approved")
-            .OrderBy(x => x.FullName)
-            .ToListAsync();
+        var search = value?.Trim();
+        if (string.IsNullOrWhiteSpace(search))
+            return Enumerable.Empty<ApplicationUser>();
+
+        await using var db = await Factory.CreateDbContextAsync(cancellationToken);
+        var query = from user in db.Users.AsNoTracking()
+                    join userRole in db.UserRoles.AsNoTracking() on user.Id equals userRole.UserId
+                    join role in db.Roles.AsNoTracking() on userRole.RoleId equals role.Id
+                    where role.Name == SystemRoleDisplay.VehicleOwnerRole
+                          && user.IsActive
+                          && !user.IsDeleted
+                          && user.RegistrationStatus == "Approved"
+                          && (user.FullName.Contains(search) ||
+                              (user.PhoneNumber != null && user.PhoneNumber.Contains(search)))
+                    orderby user.FullName, user.PhoneNumber
+                    select user;
+
+        return await query.Take(30).ToListAsync(cancellationToken);
+    }
+
+    private Task SelectVehicleOwner(ApplicationUser? owner)
+    {
+        _selectedVehicleOwner = owner;
+        _model.AssignedDriverId = owner?.Id;
+        return Task.CompletedTask;
     }
 
     private static async Task<ApplicationUser?> FindValidVehicleOwnerAsync(ApplicationDbContext db, string userId)
@@ -217,9 +249,17 @@
         vehicle.OwnerCitizenIdIssuedDate = owner.CitizenIdIssuedDate?.Date;
         vehicle.OwnerCitizenIdIssuedPlace = N(owner.CitizenIdIssuedPlace);
         vehicle.OwnerAddress = N(owner.Address);
-        vehicle.OwnerSignatureFileUrl = owner.VehicleOwnerSignatureFileUrl;
-        vehicle.OwnerSignatureHash = owner.VehicleOwnerSignatureHash;
-        vehicle.OwnerSignedAt = owner.VehicleOwnerSignedAt;
+    }
+
+    private static void ClearOwnerSnapshot(Vehicle vehicle)
+    {
+        vehicle.AssignedDriverId = null;
+        vehicle.OwnerName = string.Empty;
+        vehicle.OwnerPhoneNumber = null;
+        vehicle.OwnerCitizenId = null;
+        vehicle.OwnerCitizenIdIssuedDate = null;
+        vehicle.OwnerCitizenIdIssuedPlace = null;
+        vehicle.OwnerAddress = null;
     }
 
     private static bool HasCompleteLegalProfile(ApplicationUser owner) =>
@@ -231,7 +271,7 @@
         !string.IsNullOrWhiteSpace(owner.Address);
 
     private static string OfficeDisplay(CompanyProfile x) => string.IsNullOrWhiteSpace(x.BranchName) ? x.CompanyName : $"{x.CompanyName} - {x.BranchName}";
-    private static string UserDisplay(ApplicationUser x) => string.IsNullOrWhiteSpace(x.EmployeeCode) ? $"{x.FullName} - {x.PhoneNumber}" : $"{x.FullName} ({x.EmployeeCode}) - {x.PhoneNumber}";
+    private static string UserDisplay(ApplicationUser x) => $"{x.FullName} - {Display(x.PhoneNumber)}";
     private static string Display(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
     private static string DateText(DateTime? value) => value?.ToString("dd/MM/yyyy") ?? "—";
     private static string? N(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

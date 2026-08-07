@@ -27,15 +27,6 @@ public sealed class VehicleConfiguration : IEntityTypeConfiguration<Vehicle>
         builder.Property(x => x.OwnerAddress).HasMaxLength(500);
         builder.Property(x => x.OwnerPhoneNumber).HasMaxLength(20);
 
-        builder.Property(x => x.OwnerSignatureFileUrl).HasMaxLength(500);
-        builder.Property(x => x.OwnerSignatureHash).HasMaxLength(128);
-        builder.Property(x => x.OwnerSignedAt).HasColumnType("datetime2");
-
-        builder.Property(x => x.AccountDriverSignatureFileUrl).HasMaxLength(500);
-        builder.Property(x => x.AccountDriverSignatureHash).HasMaxLength(128);
-        builder.Property(x => x.AccountDriverSignedAt).HasColumnType("datetime2");
-        builder.Property(x => x.AccountDriverSignedByUserId).HasMaxLength(450);
-
         builder.Property(x => x.AssignedDriverId).HasMaxLength(450);
         builder.Property(x => x.RowVersion).IsRowVersion();
 

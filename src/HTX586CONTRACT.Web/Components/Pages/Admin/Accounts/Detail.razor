@@ -1,5 +1,5 @@
 @page "/admin/accounts/{UserId}"
-@attribute [Authorize(Roles = "Owner")]
+@attribute [Authorize(Roles = "Owner,Admin")]
 @inject IAdminAccountService AccountService
 @inject MasterSignatureService MasterSignatureService
 @inject AuthenticationStateProvider AuthenticationStateProvider
@@ -72,6 +72,8 @@ else
     private AdminAccountDetail? _detail;
     private bool _loading = true;
     private bool _working;
+    private bool _isOwner;
+    private string? _actorUserId;
     private string? SignatureUrl => string.IsNullOrWhiteSpace(_detail?.VehicleOwnerSignatureFileUrl)
         ? null
         : $"{_detail.VehicleOwnerSignatureFileUrl}?v={_detail.VehicleOwnerSignedAt?.Ticks ?? 0}";
@@ -81,7 +83,20 @@ else
     private async Task LoadAsync()
     {
         _loading = true;
-        try { _detail = await AccountService.GetDetailAsync(UserId); }
+        try
+        {
+            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            _isOwner = auth.User.IsInRole("Owner");
+            _actorUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            _detail = await AccountService.GetDetailAsync(UserId);
+
+            if (_detail is not null && !_isOwner && _detail.Role != SystemRoleDisplay.VehicleOwnerRole)
+            {
+                Snackbar.Add("Quản lý chỉ được thao tác tài khoản Chủ xe.", Severity.Warning);
+                _detail = null;
+                Navigation.NavigateTo("/admin/accounts");
+            }
+        }
         catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
         finally { _loading = false; }
     }
@@ -94,7 +109,7 @@ else
         try
         {
             await MasterSignatureService.SaveVehicleOwnerAccountSignatureAsync(UserId, dataUrl);
-            Snackbar.Add("Đã lưu chân ký Chủ xe và đồng bộ sang toàn bộ xe đang sở hữu.", Severity.Success);
+            Snackbar.Add("Đã lưu chân ký Chủ xe trên tài khoản. Các xe và hợp đồng mới sẽ lấy trực tiếp chân ký này.", Severity.Success);
             await LoadAsync();
         }
         catch (Exception ex)
@@ -110,7 +125,7 @@ else
         _working = true;
         try
         {
-            var result = await AccountService.SetActiveAsync(UserId, !_detail.IsActive);
+            var result = await AccountService.SetActiveAsync(UserId, !_detail.IsActive, _actorUserId);
             var message = result.Message ?? (result.Succeeded
                 ? "Đã cập nhật trạng thái tài khoản."
                 : "Không thể cập nhật trạng thái tài khoản.");
@@ -125,9 +140,7 @@ else
         _working = true;
         try
         {
-            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-            var actor = auth.User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var result = await AccountService.DeleteAsync(UserId, actor);
+            var result = await AccountService.DeleteAsync(UserId, _actorUserId);
             var message = result.Message ?? (result.Succeeded
                 ? "Đã xóa tài khoản."
                 : "Không thể xóa tài khoản.");

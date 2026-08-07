@@ -933,8 +933,8 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
 
     private string OwnerSigner
         => Id.HasValue
-            ? _detail?.OwnerName ?? SelectedVehicle?.OwnerName ?? "Chủ sở hữu xe"
-            : SelectedVehicle?.OwnerName ?? "Chủ sở hữu xe";
+            ? _detail?.OwnerName ?? SelectedDriver?.FullName ?? "Chủ sở hữu xe"
+            : SelectedDriver?.FullName ?? "Chủ sở hữu xe";
 
     private string DriverSigner
         => SelectedDriver?.FullName ?? "Tài xế";
@@ -947,19 +947,19 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
 
     private string? FixedOwnerSignatureUrl
         => Id.HasValue
-            ? _detail?.VehicleOwnerSignatureFileUrl ?? SelectedVehicle?.OwnerSignatureFileUrl
-            : SelectedVehicle?.OwnerSignatureFileUrl;
+            ? _detail?.VehicleOwnerSignatureFileUrl ?? SelectedDriver?.VehicleOwnerSignatureFileUrl
+            : SelectedDriver?.VehicleOwnerSignatureFileUrl;
 
     private DateTime? FixedOwnerSignedAt
         => Id.HasValue
-            ? _detail?.VehicleOwnerSignedAt ?? SelectedVehicle?.OwnerSignedAt
-            : SelectedVehicle?.OwnerSignedAt;
+            ? _detail?.VehicleOwnerSignedAt ?? SelectedDriver?.VehicleOwnerSignedAt
+            : SelectedDriver?.VehicleOwnerSignedAt;
 
     private string? FixedDriverSignatureUrl
-        => SelectedVehicle?.AccountDriverSignatureFileUrl;
+        => SelectedDriver?.VehicleOwnerSignatureFileUrl;
 
     private DateTime? FixedDriverSignedAt
-        => SelectedVehicle?.AccountDriverSignedAt;
+        => SelectedDriver?.VehicleOwnerSignedAt;
 
     private ContractSignatureDto? GetSignature(SignatureParty party)
         => _signatures.FirstOrDefault(x => x.Party == party);

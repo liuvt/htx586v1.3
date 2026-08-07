@@ -6,8 +6,8 @@ using HTX586CONTRACT.Domain.Offices;
 namespace HTX586CONTRACT.Domain.Vehicles;
 
 /// <summary>
-/// Xe, chủ sở hữu pháp lý, đơn vị quản lý và tài khoản VehicleOwner được cấp xe.
-/// Một VehicleOwner có thể có nhiều xe; một xe chỉ được gán cho tối đa một tài khoản.
+/// Xe thuộc đúng một Công ty/Văn phòng qua OfficeVehicle. Chủ xe là tùy chọn.
+/// Một VehicleOwner có thể có nhiều xe; một xe chỉ được gán cho tối đa một tài khoản Chủ xe.
 /// </summary>
 public class Vehicle : BaseEntity
 {
@@ -34,18 +34,9 @@ public class Vehicle : BaseEntity
     public string? AssignedDriverId { get; set; }
     public ApplicationUser? AssignedDriver { get; set; }
 
-    // Bản sao chân ký từ tài khoản Chủ xe để tương thích màn hình xe và mẫu HĐ.
-    // Nguồn dữ liệu gốc nằm tại ApplicationUser.VehicleOwnerSignature*.
-    public string? OwnerSignatureFileUrl { get; set; }
-    public string? OwnerSignatureHash { get; set; }
-    public DateTime? OwnerSignedAt { get; set; }
-
-    // Chữ ký tài xế/VehicleOwner theo từng xe. Chỉ tài khoản được gán xe được ký,
-    // và sau khi ký thành công không được tự thay đổi lần hai.
-    public string? AccountDriverSignatureFileUrl { get; set; }
-    public string? AccountDriverSignatureHash { get; set; }
-    public DateTime? AccountDriverSignedAt { get; set; }
-    public string? AccountDriverSignedByUserId { get; set; }
+    // Chân ký Chủ xe KHÔNG lưu trên từng xe. Nguồn duy nhất là
+    // AssignedDriver.VehicleOwnerSignature* (tài khoản role VehicleOwner).
+    // Khi lập hợp đồng, chữ ký được chụp vào ContractDataJson để khóa theo HĐ.
 
     public bool IsActive { get; set; } = true;
     public ICollection<Contract> Contracts { get; set; } = [];

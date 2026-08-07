@@ -192,11 +192,6 @@ public static class AccountEndpoints
                 returnUrl);
         }
 
-        if (IsLocalUrl(returnUrl))
-        {
-            return Results.Redirect(returnUrl);
-        }
-
         var roles =
             await userManager.GetRolesAsync(user);
 
@@ -210,6 +205,28 @@ public static class AccountEndpoints
         {
             await signInManager.SignOutAsync();
             return RedirectToLogin("inactive", returnUrl);
+        }
+
+        var isVehicleOwner = roles.Contains(
+            "VehicleOwner",
+            StringComparer.OrdinalIgnoreCase);
+
+        if (!isOwner && !isAdmin && !isVehicleOwner)
+        {
+            await signInManager.SignOutAsync();
+            return RedirectToLogin("norole", returnUrl);
+        }
+
+        // Không cho returnUrl bỏ qua bước khai báo chân ký lần đầu.
+        if (isVehicleOwner && string.IsNullOrWhiteSpace(user.VehicleOwnerSignatureFileUrl))
+        {
+            return Results.Redirect(
+                "/vehicle-owner/account?signatureRequired=1");
+        }
+
+        if (IsLocalUrl(returnUrl))
+        {
+            return Results.Redirect(returnUrl);
         }
 
         if (roles.Contains(
@@ -228,9 +245,7 @@ public static class AccountEndpoints
                 "/admin/dashboard");
         }
 
-        if (roles.Contains(
-                "VehicleOwner",
-                StringComparer.OrdinalIgnoreCase))
+        if (isVehicleOwner)
         {
             return Results.Redirect(
                 "/vehicle-owner/dashboard");

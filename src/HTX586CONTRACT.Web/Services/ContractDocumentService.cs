@@ -325,25 +325,13 @@ public sealed class ContractDocumentService(
                 snapshot.Vehicle.OwnerSignedAt ??= driver.VehicleOwnerSignedAt;
             }
 
-            if (vehicle is not null)
-            {
-                snapshot.Vehicle.OwnerSignatureFileUrl ??= vehicle.OwnerSignatureFileUrl;
-                snapshot.Vehicle.OwnerSignatureHash ??= vehicle.OwnerSignatureHash;
-                snapshot.Vehicle.OwnerSignedAt ??= vehicle.OwnerSignedAt;
-            }
-
-            if (vehicle is not null)
-            {
-                snapshot.Driver.SignatureFileUrl ??= vehicle.AccountDriverSignatureFileUrl;
-                snapshot.Driver.SignatureHash ??= vehicle.AccountDriverSignatureHash;
-                snapshot.Driver.SignedAt ??= vehicle.AccountDriverSignedAt;
-            }
-
             if (driver is not null)
             {
-                snapshot.Driver.SignatureFileUrl ??= driver.DriverSignatureFileUrl;
-                snapshot.Driver.SignatureHash ??= driver.DriverSignatureHash;
-                snapshot.Driver.SignedAt ??= driver.DriverSignedAt;
+                // Không có chữ ký theo từng xe. Vị trí ký của tài khoản được phát HĐ
+                // sử dụng trực tiếp chân ký Chủ xe trên ApplicationUser.
+                snapshot.Driver.SignatureFileUrl ??= driver.VehicleOwnerSignatureFileUrl;
+                snapshot.Driver.SignatureHash ??= driver.VehicleOwnerSignatureHash;
+                snapshot.Driver.SignedAt ??= driver.VehicleOwnerSignedAt;
             }
         }
 
@@ -352,7 +340,7 @@ public sealed class ContractDocumentService(
         if (string.IsNullOrWhiteSpace(snapshot.Vehicle.OwnerSignatureFileUrl))
             throw new InvalidOperationException("Tài khoản Chủ xe chưa có chân ký cố định.");
         if (string.IsNullOrWhiteSpace(snapshot.Driver.SignatureFileUrl))
-            throw new InvalidOperationException("Chủ xe chưa tạo chữ ký cho chiếc xe này.");
+            throw new InvalidOperationException("Tài khoản Chủ xe chưa có chân ký cố định.");
 
         return snapshot.ToJson();
     }
@@ -406,7 +394,7 @@ public sealed class ContractDocumentService(
             missingSignatures.Add("chân ký tài khoản Chủ xe tại thời điểm lập hợp đồng");
 
         if (!StoredSignatureExists(snapshot.Driver.SignatureFileUrl))
-            missingSignatures.Add("chữ ký cố định tài xế tại thời điểm lập hợp đồng");
+            missingSignatures.Add("chân ký tài khoản Chủ xe tại vị trí ký của người được phát hợp đồng");
 
         if (!signedRoles.Contains(SignatureParty.Customer))
             missingSignatures.Add("chữ ký khách hàng");

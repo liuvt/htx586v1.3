@@ -9,6 +9,7 @@ using HTX586CONTRACT.Domain.Enums;
 using HTX586CONTRACT.Domain.Identity;
 using HTX586CONTRACT.Domain.Notifications;
 using HTX586CONTRACT.Domain.Vehicles;
+using HTX586CONTRACT.Infrastructure.Identity;
 using HTX586CONTRACT.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -22,7 +23,7 @@ namespace HTX586CONTRACT.Infrastructure.Services;
 /// </summary>
 public sealed class ContractService(
     IDbContextFactory<ApplicationDbContext> factory,
-    UserManager<ApplicationUser> userManager) : IContractService
+    SafeUserManager userManager) : IContractService
 {
     public async Task<IReadOnlyList<ContractListItemDto>> GetAsync(
         ContractFilter filter,
@@ -115,7 +116,7 @@ public sealed class ContractService(
                 ActualPassengerCount = x.ActualPassengerCount ?? x.Passengers.Count(p => !p.IsDeleted),
                 OwnerName = x.VehicleOwnerNameSnapshot,
                 OwnerCitizenId = x.VehicleOwnerCitizenIdSnapshot,
-                OwnerCitizenIdIssuedDate = x.Vehicle != null ? x.Vehicle.OwnerCitizenIdIssuedDate : null,
+                OwnerCitizenIdIssuedDate = x.Driver != null ? x.Driver.CitizenIdIssuedDate : null,
                 OperatingDriverName = x.OperatingDriverName,
                 OperatingDriverPhoneNumber = x.OperatingDriverPhoneNumber,
                 OperatingDriverLicenseNumber = x.OperatingDriverLicenseNumber,
@@ -466,6 +467,7 @@ public sealed class ContractService(
         await using var db = await factory.CreateDbContextAsync(ct);
         var entity = await db.Contracts
             .Include(x => x.Vehicle)
+            .Include(x => x.Driver)
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, ct);
         if (entity is null)
             return new(false, null, "Không tìm thấy hợp đồng.");
@@ -479,8 +481,11 @@ public sealed class ContractService(
             return new(false, id, "Hợp đồng không ở trạng thái chờ nhận.");
         if (entity.Vehicle is null || entity.Vehicle.AssignedDriverId != currentUserId)
             return new(false, id, "Xe của hợp đồng không còn được gán cho tài khoản này.");
-        if (string.IsNullOrWhiteSpace(entity.Vehicle.AccountDriverSignatureFileUrl))
-            return new(false, id, $"Bạn phải tạo chữ ký tài xế một lần cho xe {entity.Vehicle.PlateNumber} trước khi nhận hợp đồng.");
+        var receiveSnapshot = ContractSnapshotData.FromJson(entity.ContractDataJson);
+        var ownerSignatureUrl = receiveSnapshot?.Vehicle.OwnerSignatureFileUrl
+            ?? entity.Driver?.VehicleOwnerSignatureFileUrl;
+        if (string.IsNullOrWhiteSpace(ownerSignatureUrl))
+            return new(false, id, "Tài khoản Chủ xe chưa có chân ký. Vui lòng cập nhật chân ký trong hồ sơ tài khoản trước khi nhận hợp đồng.");
 
         var now = DateTime.UtcNow;
         entity.Status = ContractStatus.Received;
@@ -534,12 +539,9 @@ public sealed class ContractService(
         if (string.IsNullOrWhiteSpace(entity.CompanyProfile.RepresentativeSignatureFileUrl))
             return new(false, id, "Công ty/Văn phòng chưa có chữ ký đại diện cố định.");
         var vehicleOwnerSignatureUrl = existingSnapshot?.Vehicle.OwnerSignatureFileUrl
-            ?? entity.Driver.VehicleOwnerSignatureFileUrl
-            ?? entity.Vehicle.OwnerSignatureFileUrl;
+            ?? entity.Driver.VehicleOwnerSignatureFileUrl;
         if (string.IsNullOrWhiteSpace(vehicleOwnerSignatureUrl))
             return new(false, id, "Tài khoản Chủ xe chưa có chân ký cố định.");
-        if (string.IsNullOrWhiteSpace(entity.Vehicle.AccountDriverSignatureFileUrl))
-            return new(false, id, "Xe chưa có chữ ký của tài khoản Chủ xe.");
         if (!entity.Signatures.Any(x => !x.IsDeleted && x.Party == SignatureParty.Customer))
             return new(false, id, "Khách hàng chưa ký xác nhận hợp đồng.");
 
@@ -1116,7 +1118,7 @@ public sealed class ContractService(
         if (canManage)
         {
             if (string.IsNullOrWhiteSpace(vehicle.AssignedDriverId))
-                return (vehicle, null, selectedOfficeLink.CompanyProfile, "Xe chưa được gán tài khoản Chủ xe. Hãy gán tại Quản lý xe và chủ sở hữu trước khi phát hợp đồng.");
+                return (vehicle, null, selectedOfficeLink.CompanyProfile, "Xe chưa được gán tài khoản Chủ xe. Hãy gán tại mục Xe trước khi phát hợp đồng.");
             vehicleOwnerId = vehicle.AssignedDriverId;
             if (!string.IsNullOrWhiteSpace(request.DriverId) &&
                 !string.Equals(request.DriverId, vehicleOwnerId, StringComparison.Ordinal))
@@ -1160,6 +1162,12 @@ public sealed class ContractService(
         target.Vehicle.OwnerSignatureFileUrl = source.Vehicle.OwnerSignatureFileUrl;
         target.Vehicle.OwnerSignatureHash = source.Vehicle.OwnerSignatureHash;
         target.Vehicle.OwnerSignedAt = source.Vehicle.OwnerSignedAt;
+
+        // Vị trí ký của tài khoản được phát HĐ dùng cùng nguồn chân ký Chủ xe.
+        // Giữ nguyên cả hai vị trí ký theo snapshot của hợp đồng.
+        target.Driver.SignatureFileUrl = source.Driver.SignatureFileUrl ?? source.Vehicle.OwnerSignatureFileUrl;
+        target.Driver.SignatureHash = source.Driver.SignatureHash ?? source.Vehicle.OwnerSignatureHash;
+        target.Driver.SignedAt = source.Driver.SignedAt ?? source.Vehicle.OwnerSignedAt;
     }
 
     private static void ApplyImmutableSnapshot(ContractDetailDto detail, ContractSnapshotData snapshot)
@@ -1239,8 +1247,8 @@ public sealed class ContractService(
         entity.VehiclePlateSnapshot = vehicle.PlateNumber;
         entity.VehicleBrandSnapshot = string.Join(" ", new[] { vehicle.Brand, vehicle.Model }
             .Where(x => !string.IsNullOrWhiteSpace(x)));
-        entity.VehicleOwnerNameSnapshot = vehicle.OwnerName;
-        entity.VehicleOwnerCitizenIdSnapshot = vehicle.OwnerCitizenId;
+        entity.VehicleOwnerNameSnapshot = vehicleOwner.FullName;
+        entity.VehicleOwnerCitizenIdSnapshot = vehicleOwner.CitizenId;
     }
 
     private static void AddPassengers(

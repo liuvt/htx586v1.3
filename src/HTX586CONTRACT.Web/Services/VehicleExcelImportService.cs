@@ -4,8 +4,8 @@ using HTX586CONTRACT.Domain.Identity;
 using HTX586CONTRACT.Domain.Notifications;
 using HTX586CONTRACT.Domain.Offices;
 using HTX586CONTRACT.Domain.Vehicles;
+using HTX586CONTRACT.Infrastructure.Identity;
 using HTX586CONTRACT.Infrastructure.Persistence;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace HTX586CONTRACT.Web.Services;
@@ -13,7 +13,7 @@ namespace HTX586CONTRACT.Web.Services;
 public sealed class VehicleExcelImportService(
     IDbContextFactory<ApplicationDbContext> factory,
     IOfficeAccessService officeAccessService,
-    UserManager<ApplicationUser> userManager)
+    SafeUserManager userManager)
 {
     public const string WorksheetName = "IMPORT_VEHICLE";
     public const int MaximumDataRows = 1000;
@@ -21,7 +21,7 @@ public sealed class VehicleExcelImportService(
 
     private static readonly string[] ExpectedHeaders =
     [
-        "PlateNumber", "VehicleOwnerUserName", "OfficeTaxCodes", "PrimaryOfficeTaxCode",
+        "PlateNumber", "VehicleOwnerUserName", "OfficeTaxCode",
         "VehicleCode", "VehicleType", "Brand", "Model", "SeatCount", "Color",
         "ChassisNumber", "EngineNumber", "IsActive"
     ];
@@ -59,22 +59,21 @@ public sealed class VehicleExcelImportService(
                     RowNumber = rowNumber,
                     PlateNumber = values[0].Trim().ToUpperInvariant(),
                     VehicleOwnerUserName = values[1].Trim(),
-                    OfficeTaxCodes = ExcelImportUtility.SplitCodes(values[2]).ToList(),
-                    PrimaryOfficeTaxCode = ExcelImportUtility.NullIfWhiteSpace(values[3]),
-                    VehicleCode = ExcelImportUtility.NullIfWhiteSpace(values[4]),
-                    VehicleType = ExcelImportUtility.NullIfWhiteSpace(values[5]),
-                    Brand = ExcelImportUtility.NullIfWhiteSpace(values[6]),
-                    Model = ExcelImportUtility.NullIfWhiteSpace(values[7]),
-                    Color = ExcelImportUtility.NullIfWhiteSpace(values[9]),
-                    ChassisNumber = ExcelImportUtility.NullIfWhiteSpace(values[10]),
-                    EngineNumber = ExcelImportUtility.NullIfWhiteSpace(values[11]),
+                    OfficeTaxCode = values[2].Trim(),
+                    VehicleCode = ExcelImportUtility.NullIfWhiteSpace(values[3]),
+                    VehicleType = ExcelImportUtility.NullIfWhiteSpace(values[4]),
+                    Brand = ExcelImportUtility.NullIfWhiteSpace(values[5]),
+                    Model = ExcelImportUtility.NullIfWhiteSpace(values[6]),
+                    Color = ExcelImportUtility.NullIfWhiteSpace(values[8]),
+                    ChassisNumber = ExcelImportUtility.NullIfWhiteSpace(values[9]),
+                    EngineNumber = ExcelImportUtility.NullIfWhiteSpace(values[10]),
                     IsActive = true
                 };
 
-                row.IsActive = ExcelImportUtility.ParseBoolean(values[12], true, "IsActive", row.Errors);
-                if (!string.IsNullOrWhiteSpace(values[8]))
+                row.IsActive = ExcelImportUtility.ParseBoolean(values[11], true, "IsActive", row.Errors);
+                if (!string.IsNullOrWhiteSpace(values[7]))
                 {
-                    if (int.TryParse(values[8], out var seats) && seats is >= 1 and <= 100)
+                    if (int.TryParse(values[7], out var seats) && seats is >= 1 and <= 100)
                         row.SeatCount = seats;
                     else
                         ExcelImportUtility.AddError(row.Errors, "SeatCount phải là số nguyên từ 1 đến 100.");
@@ -110,40 +109,40 @@ public sealed class VehicleExcelImportService(
             try
             {
                 await using var db = await factory.CreateDbContextAsync(ct);
-                var normalizedName = userManager.NormalizeName(row.VehicleOwnerUserName);
-                var vehicleOwnerRoleId = await db.Roles.AsNoTracking()
-                    .Where(x => x.Name == "VehicleOwner")
-                    .Select(x => x.Id)
-                    .FirstOrDefaultAsync(ct);
-                var owner = await (
-                    from user in db.Users
-                    join userRole in db.UserRoles on user.Id equals userRole.UserId
-                    where userRole.RoleId == vehicleOwnerRoleId &&
-                          user.NormalizedUserName == normalizedName &&
-                          !user.IsDeleted && user.IsActive && user.RegistrationStatus == "Approved"
-                    select user).FirstOrDefaultAsync(ct);
-                if (owner is null)
-                    throw new InvalidOperationException("Không tìm thấy tài khoản Chủ xe hợp lệ.");
-                if (!HasCompleteLegalProfile(owner))
-                    throw new InvalidOperationException("Hồ sơ Chủ xe chưa đủ CCCD, ngày cấp, nơi cấp hoặc địa chỉ.");
+
+                ApplicationUser? owner = null;
+                if (!string.IsNullOrWhiteSpace(row.VehicleOwnerUserName))
+                {
+                    var normalizedName = userManager.NormalizeName(row.VehicleOwnerUserName);
+                    var vehicleOwnerRoleId = await db.Roles.AsNoTracking()
+                        .Where(x => x.Name == "VehicleOwner")
+                        .Select(x => x.Id)
+                        .FirstOrDefaultAsync(ct);
+                    owner = await (
+                        from user in db.Users
+                        join userRole in db.UserRoles on user.Id equals userRole.UserId
+                        where userRole.RoleId == vehicleOwnerRoleId &&
+                              user.NormalizedUserName == normalizedName &&
+                              !user.IsDeleted && user.IsActive && user.RegistrationStatus == "Approved"
+                        select user).FirstOrDefaultAsync(ct);
+                    if (owner is null)
+                        throw new InvalidOperationException("Không tìm thấy tài khoản Chủ xe hợp lệ.");
+                    if (!HasCompleteLegalProfile(owner))
+                        throw new InvalidOperationException("Hồ sơ Chủ xe chưa đủ CCCD, ngày cấp, nơi cấp hoặc địa chỉ.");
+                }
 
                 var plate = row.PlateNumber.Trim().ToUpperInvariant();
                 if (await db.Vehicles.IgnoreQueryFilters().AnyAsync(x => !x.IsDeleted && x.PlateNumber == plate, ct))
                     throw new InvalidOperationException("Biển số xe đã tồn tại.");
 
-                var offices = await db.CompanyProfiles.AsNoTracking()
-                    .Where(x => row.OfficeTaxCodes.Contains(x.TaxCode) && x.IsActive && !x.IsDeleted)
+                var office = await db.CompanyProfiles.AsNoTracking()
+                    .Where(x => x.TaxCode == row.OfficeTaxCode && x.IsActive && !x.IsDeleted)
                     .Select(x => new { x.Id, x.TaxCode })
-                    .ToListAsync(ct);
-                if (offices.Count != row.OfficeTaxCodes.Count)
-                    throw new InvalidOperationException("Có Công ty/Văn phòng không tồn tại hoặc đã ngừng hoạt động.");
-                if (offices.Any(x => !managedOfficeIds.Contains(x.Id)))
-                    throw new InvalidOperationException("Có Công ty/Văn phòng nằm ngoài phạm vi quản lý.");
-
-                var primaryCode = row.PrimaryOfficeTaxCode ?? row.OfficeTaxCodes.First();
-                var primaryOfficeId = offices.FirstOrDefault(x =>
-                    string.Equals(x.TaxCode, primaryCode, StringComparison.OrdinalIgnoreCase))?.Id
-                    ?? throw new InvalidOperationException("PrimaryOfficeTaxCode không nằm trong OfficeTaxCodes.");
+                    .SingleOrDefaultAsync(ct);
+                if (office is null)
+                    throw new InvalidOperationException("Công ty/Văn phòng không tồn tại hoặc đã ngừng hoạt động.");
+                if (!managedOfficeIds.Contains(office.Id))
+                    throw new InvalidOperationException("Công ty/Văn phòng nằm ngoài phạm vi quản lý.");
 
                 var now = DateTime.UtcNow;
                 var vehicle = new Vehicle
@@ -158,46 +157,40 @@ public sealed class VehicleExcelImportService(
                     Color = N(row.Color),
                     ChassisNumber = N(row.ChassisNumber),
                     EngineNumber = N(row.EngineNumber),
-                    AssignedDriverId = owner.Id,
-                    OwnerName = owner.FullName.Trim(),
-                    OwnerPhoneNumber = N(owner.PhoneNumber),
-                    OwnerCitizenId = N(owner.CitizenId),
-                    OwnerCitizenIdIssuedDate = owner.CitizenIdIssuedDate?.Date,
-                    OwnerCitizenIdIssuedPlace = N(owner.CitizenIdIssuedPlace),
-                    OwnerAddress = N(owner.Address),
-                    OwnerSignatureFileUrl = owner.VehicleOwnerSignatureFileUrl,
-                    OwnerSignatureHash = owner.VehicleOwnerSignatureHash,
-                    OwnerSignedAt = owner.VehicleOwnerSignedAt,
                     IsActive = row.IsActive,
                     CreatedAt = now,
                     CreatedBy = currentUserId
                 };
-                db.Vehicles.Add(vehicle);
+                if (owner is not null)
+                    ApplyOwnerSnapshot(vehicle, owner);
+                else
+                    ClearOwnerSnapshot(vehicle);
 
-                foreach (var office in offices)
+                db.Vehicles.Add(vehicle);
+                db.OfficeVehicles.Add(new OfficeVehicle
                 {
-                    db.OfficeVehicles.Add(new OfficeVehicle
+                    VehicleId = vehicle.Id,
+                    CompanyProfileId = office.Id,
+                    IsPrimary = true,
+                    IsActive = true,
+                    AssignedFrom = now,
+                    CreatedAt = now,
+                    CreatedBy = currentUserId
+                });
+
+                if (owner is not null)
+                {
+                    db.DriverNotifications.Add(new DriverNotification
                     {
-                        VehicleId = vehicle.Id,
-                        CompanyProfileId = office.Id,
-                        IsPrimary = office.Id == primaryOfficeId,
-                        IsActive = true,
-                        AssignedFrom = now,
-                        CreatedAt = now,
-                        CreatedBy = currentUserId
+                        DriverId = owner.Id,
+                        Type = "VehicleAssigned",
+                        Title = "Bạn được gán phương tiện",
+                        Message = $"Phương tiện {plate} đã được gán cho tài khoản Chủ xe của bạn.",
+                        LinkUrl = "/vehicle-owner/vehicles",
+                        RelatedVehicleId = vehicle.Id,
+                        CreatedAt = now
                     });
                 }
-
-                db.DriverNotifications.Add(new DriverNotification
-                {
-                    DriverId = owner.Id,
-                    Type = "VehicleAssigned",
-                    Title = "Bạn được gán phương tiện",
-                    Message = $"Phương tiện {plate} đã được gán cho tài khoản Chủ xe của bạn.",
-                    LinkUrl = "/vehicle-owner/vehicles",
-                    RelatedVehicleId = vehicle.Id,
-                    CreatedAt = now
-                });
 
                 await db.SaveChangesAsync(ct);
                 result.ImportedVehicleIds.Add(vehicle.Id);
@@ -224,8 +217,9 @@ public sealed class VehicleExcelImportService(
     {
         await using var db = await factory.CreateDbContextAsync(ct);
         var managedOfficeIds = await officeAccessService.GetManagedOfficeIdsAsync(currentUserId, isOwner, ct);
-        var taxCodes = rows.SelectMany(x => x.OfficeTaxCodes)
-            .Concat(rows.Where(x => x.PrimaryOfficeTaxCode != null).Select(x => x.PrimaryOfficeTaxCode!))
+
+        var taxCodes = rows.Where(x => !string.IsNullOrWhiteSpace(x.OfficeTaxCode))
+            .Select(x => x.OfficeTaxCode)
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var offices = await db.CompanyProfiles.AsNoTracking()
             .Where(x => taxCodes.Contains(x.TaxCode) && x.IsActive && !x.IsDeleted)
@@ -238,12 +232,14 @@ public sealed class VehicleExcelImportService(
             .Where(x => x is not null).Cast<string>().Distinct().ToList();
         var vehicleOwnerRoleId = await db.Roles.AsNoTracking().Where(x => x.Name == "VehicleOwner")
             .Select(x => x.Id).FirstOrDefaultAsync(ct);
-        var owners = await (
-            from user in db.Users.AsNoTracking()
-            join userRole in db.UserRoles.AsNoTracking() on user.Id equals userRole.UserId
-            where userRole.RoleId == vehicleOwnerRoleId && user.NormalizedUserName != null &&
-                  normalizedNames.Contains(user.NormalizedUserName) && !user.IsDeleted
-            select user).ToListAsync(ct);
+        List<ApplicationUser> owners = normalizedNames.Count == 0
+            ? []
+            : await (
+                from user in db.Users.AsNoTracking()
+                join userRole in db.UserRoles.AsNoTracking() on user.Id equals userRole.UserId
+                where userRole.RoleId == vehicleOwnerRoleId && user.NormalizedUserName != null &&
+                      normalizedNames.Contains(user.NormalizedUserName) && !user.IsDeleted
+                select user).ToListAsync(ct);
         var ownerMap = owners.Where(x => x.NormalizedUserName != null)
             .ToDictionary(x => x.NormalizedUserName!, StringComparer.OrdinalIgnoreCase);
 
@@ -258,41 +254,37 @@ public sealed class VehicleExcelImportService(
             if (existingPlateSet.Contains(row.PlateNumber))
                 ExcelImportUtility.AddError(row.Errors, "Biển số xe đã tồn tại trong hệ thống.");
 
-            var normalized = userManager.NormalizeName(row.VehicleOwnerUserName);
-            if (normalized is null || !ownerMap.TryGetValue(normalized, out var owner))
+            if (!string.IsNullOrWhiteSpace(row.VehicleOwnerUserName))
             {
-                ExcelImportUtility.AddError(row.Errors, "Không tìm thấy tài khoản có Role Chủ xe.");
-            }
-            else
-            {
-                row.VehicleOwnerName = owner.FullName;
-                if (!owner.IsActive || owner.RegistrationStatus != "Approved")
-                    ExcelImportUtility.AddError(row.Errors, "Tài khoản Chủ xe đã khóa hoặc chưa được duyệt.");
-                if (!HasCompleteLegalProfile(owner))
-                    ExcelImportUtility.AddError(row.Errors, "Hồ sơ Chủ xe chưa đủ CCCD, ngày cấp, nơi cấp hoặc địa chỉ.");
-            }
-
-            foreach (var code in row.OfficeTaxCodes)
-            {
-                if (!officeMap.TryGetValue(code, out var officeId))
-                    ExcelImportUtility.AddError(row.Errors, $"Không tìm thấy Công ty/Văn phòng hoạt động có mã số thuế '{code}'.");
-                else if (!managedOfficeIds.Contains(officeId))
-                    ExcelImportUtility.AddError(row.Errors, $"Không có quyền quản lý Công ty/Văn phòng mã số thuế '{code}'.");
+                var normalized = userManager.NormalizeName(row.VehicleOwnerUserName);
+                if (normalized is null || !ownerMap.TryGetValue(normalized, out var owner))
+                {
+                    ExcelImportUtility.AddError(row.Errors, "Không tìm thấy tài khoản có Role Chủ xe.");
+                }
+                else
+                {
+                    row.VehicleOwnerName = owner.FullName;
+                    if (!owner.IsActive || owner.RegistrationStatus != "Approved")
+                        ExcelImportUtility.AddError(row.Errors, "Tài khoản Chủ xe đã khóa hoặc chưa được duyệt.");
+                    if (!HasCompleteLegalProfile(owner))
+                        ExcelImportUtility.AddError(row.Errors, "Hồ sơ Chủ xe chưa đủ CCCD, ngày cấp, nơi cấp hoặc địa chỉ.");
+                }
             }
 
-            if (!string.IsNullOrWhiteSpace(row.PrimaryOfficeTaxCode) &&
-                !row.OfficeTaxCodes.Contains(row.PrimaryOfficeTaxCode, StringComparer.OrdinalIgnoreCase))
-                ExcelImportUtility.AddError(row.Errors, "PrimaryOfficeTaxCode phải nằm trong OfficeTaxCodes.");
+            if (!officeMap.TryGetValue(row.OfficeTaxCode, out var officeId))
+                ExcelImportUtility.AddError(row.Errors, $"Không tìm thấy Công ty/Văn phòng hoạt động có mã số thuế '{row.OfficeTaxCode}'.");
+            else if (!managedOfficeIds.Contains(officeId))
+                ExcelImportUtility.AddError(row.Errors, $"Không có quyền quản lý Công ty/Văn phòng mã số thuế '{row.OfficeTaxCode}'.");
         }
     }
 
     private static void ValidateRow(VehicleImportRowPreview row)
     {
         ExcelImportUtility.Required(row.Errors, row.PlateNumber, "PlateNumber");
-        ExcelImportUtility.Required(row.Errors, row.VehicleOwnerUserName, "VehicleOwnerUserName");
-        if (row.OfficeTaxCodes.Count == 0)
-            ExcelImportUtility.AddError(row.Errors, "Thiếu OfficeTaxCodes; một xe phải thuộc ít nhất một Công ty/Văn phòng.");
+        ExcelImportUtility.Required(row.Errors, row.OfficeTaxCode, "OfficeTaxCode");
         ExcelImportUtility.Maximum(row.Errors, row.PlateNumber, 20, "PlateNumber");
+        ExcelImportUtility.Maximum(row.Errors, row.VehicleOwnerUserName, 256, "VehicleOwnerUserName");
+        ExcelImportUtility.Maximum(row.Errors, row.OfficeTaxCode, 50, "OfficeTaxCode");
         ExcelImportUtility.Maximum(row.Errors, row.VehicleCode, 50, "VehicleCode");
         ExcelImportUtility.Maximum(row.Errors, row.VehicleType, 100, "VehicleType");
         ExcelImportUtility.Maximum(row.Errors, row.Brand, 100, "Brand");
@@ -309,6 +301,28 @@ public sealed class VehicleExcelImportService(
             .Where(x => x.Count() > 1).Select(x => x.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
         foreach (var row in rows.Where(x => duplicates.Contains(x.PlateNumber)))
             ExcelImportUtility.AddError(row.Errors, "PlateNumber bị trùng trong file import.");
+    }
+
+    private static void ApplyOwnerSnapshot(Vehicle vehicle, ApplicationUser owner)
+    {
+        vehicle.AssignedDriverId = owner.Id;
+        vehicle.OwnerName = owner.FullName.Trim();
+        vehicle.OwnerPhoneNumber = N(owner.PhoneNumber);
+        vehicle.OwnerCitizenId = N(owner.CitizenId);
+        vehicle.OwnerCitizenIdIssuedDate = owner.CitizenIdIssuedDate?.Date;
+        vehicle.OwnerCitizenIdIssuedPlace = N(owner.CitizenIdIssuedPlace);
+        vehicle.OwnerAddress = N(owner.Address);
+    }
+
+    private static void ClearOwnerSnapshot(Vehicle vehicle)
+    {
+        vehicle.AssignedDriverId = null;
+        vehicle.OwnerName = string.Empty;
+        vehicle.OwnerPhoneNumber = null;
+        vehicle.OwnerCitizenId = null;
+        vehicle.OwnerCitizenIdIssuedDate = null;
+        vehicle.OwnerCitizenIdIssuedPlace = null;
+        vehicle.OwnerAddress = null;
     }
 
     private static bool HasCompleteLegalProfile(ApplicationUser user) =>
@@ -337,8 +351,7 @@ public sealed class VehicleImportRowPreview
     public string PlateNumber { get; set; } = string.Empty;
     public string VehicleOwnerUserName { get; set; } = string.Empty;
     public string? VehicleOwnerName { get; set; }
-    public List<string> OfficeTaxCodes { get; set; } = [];
-    public string? PrimaryOfficeTaxCode { get; set; }
+    public string OfficeTaxCode { get; set; } = string.Empty;
     public string? VehicleCode { get; set; }
     public string? VehicleType { get; set; }
     public string? Brand { get; set; }

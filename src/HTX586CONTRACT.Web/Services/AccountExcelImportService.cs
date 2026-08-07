@@ -3,6 +3,7 @@ using HTX586CONTRACT.Application.Abstractions;
 using HTX586CONTRACT.Application.Admins.AdminAccounts;
 using HTX586CONTRACT.Domain.Common;
 using HTX586CONTRACT.Domain.Identity;
+using HTX586CONTRACT.Infrastructure.Identity;
 using HTX586CONTRACT.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +13,7 @@ namespace HTX586CONTRACT.Web.Services;
 public sealed class AccountExcelImportService(
     IDbContextFactory<ApplicationDbContext> factory,
     IAdminAccountService accountService,
-    UserManager<ApplicationUser> userManager)
+    SafeUserManager userManager)
 {
     public const string WorksheetName = "IMPORT_ACCOUNT";
     public const int MaximumDataRows = 1000;

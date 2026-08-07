@@ -11,7 +11,7 @@ namespace HTX586CONTRACT.Domain.Identity;
 /// <summary>
 /// Tài khoản dùng chung cho ba vai trò hệ thống: Owner, Admin và VehicleOwner.
 /// Admin được phân quyền nhiều Công ty/Văn phòng qua AdminOffice; VehicleOwner
-/// sở hữu nhiều xe và phạm vi văn phòng được xác định qua OfficeVehicle.
+/// có thể sở hữu nhiều xe; mỗi xe chỉ liên kết một Công ty/Văn phòng qua OfficeVehicle.
 /// </summary>
 public class ApplicationUser : IdentityUser, ISoftDeletable
 {

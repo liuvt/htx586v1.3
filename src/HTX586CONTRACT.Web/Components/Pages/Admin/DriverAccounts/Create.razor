@@ -1,5 +1,5 @@
 @page "/admin/vehicle-owner-accounts/create"
-@attribute [Authorize(Roles = "Owner")]
+@attribute [Authorize(Roles = "Owner,Admin")]
 @inject NavigationManager Navigation
 <MudProgressCircular Indeterminate="true" />
 @code { protected override void OnInitialized() => Navigation.NavigateTo("/admin/accounts/create", true); }
