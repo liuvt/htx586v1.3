@@ -33,7 +33,7 @@ else
                 }
                 else
                 {
-                    <MudTextField T="string" Value="Chủ xe" Label="Vai trò" Disabled="true" Variant="Variant.Outlined" />
+                    <MudTextField T="string" Value="@VehicleOwnerRoleLabel" Label="Vai trò" Disabled="true" Variant="Variant.Outlined" />
                 }
             </MudItem>
             <MudItem xs="12" md="4" Class="d-flex align-center"><MudSwitch T="bool" @bind-Value="_model.IsActive" Color="Color.Success" Label="Tài khoản hoạt động" /></MudItem>
@@ -113,6 +113,8 @@ else
 }
 
 @code {
+    private string VehicleOwnerRoleLabel => SystemRoleDisplay.Name(SystemRoleDisplay.VehicleOwnerRole);
+
     [Parameter] public string UserId { get; set; } = string.Empty;
     private UpdateAdminAccountRequest? _model;
     private AdminAccountDetail? _detail;

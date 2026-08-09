@@ -98,17 +98,17 @@ public static class DatabaseSeeder
             db,
             "PASSENGER",
             "HỢP ĐỒNG VẬN CHUYỂN HÀNH KHÁCH",
-            "Hợp đồng vận chuyển hành khách.");
+            "Hợp đồng vận chuyển hành khách bằng xe ô tô.");
 
         var cargo = await UpsertContractTypeAsync(
             db,
             "CARGO",
-            "HỢP ĐỒNG VẬN CHUYỂN HÀNG HÓA",
-            "Hợp đồng vận chuyển hàng hóa.");
+            "HỢP ĐỒNG VẬN CHUYỂN HÀNG HÓA BẰNG XE Ô TÔ",
+            "Hợp đồng vận chuyển hàng hóa bằng xe ô tô.");
 
         await db.SaveChangesAsync();
         await EnsureContractTemplateAsync(db, passenger, "Mẫu HỢP ĐỒNG VẬN CHUYỂN HÀNH KHÁCH");
-        await EnsureContractTemplateAsync(db, cargo, "Mẫu HỢP ĐỒNG VẬN CHUYỂN HÀNG HÓA");
+        await EnsureContractTemplateAsync(db, cargo, "Mẫu HỢP ĐỒNG VẬN CHUYỂN HÀNG HÓA BẰNG XE Ô TÔ");
     }
 
     private static async Task<ContractType> UpsertContractTypeAsync(

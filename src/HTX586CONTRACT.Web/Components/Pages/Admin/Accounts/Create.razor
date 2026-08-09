@@ -22,7 +22,7 @@
             }
             else
             {
-                <MudTextField T="string" Value="Chủ xe" Label="Vai trò" Disabled="true" Variant="Variant.Outlined" />
+                <MudTextField T="string" Value="@VehicleOwnerRoleLabel" Label="Vai trò" Disabled="true" Variant="Variant.Outlined" />
             }
         </MudItem>
 
@@ -96,6 +96,8 @@
 </MudPaper>
 
 @code {
+    private string VehicleOwnerRoleLabel => SystemRoleDisplay.Name(SystemRoleDisplay.VehicleOwnerRole);
+
     private CreateAdminAccountRequest _model = new();
     private IReadOnlyList<CompanyProfileOptionDto> _offices = [];
     private bool _saving;
