@@ -68,9 +68,9 @@ public sealed class ContractSnapshotData
                 DriverLicenseClass = driver.DriverLicenseClass,
                 DriverLicenseIssuedDate = driver.DriverLicenseIssuedDate,
                 DriverLicenseExpiryDate = driver.DriverLicenseExpiryDate,
-                SignatureFileUrl = driver.VehicleOwnerSignatureFileUrl,
-                SignatureHash = driver.VehicleOwnerSignatureHash,
-                SignedAt = driver.VehicleOwnerSignedAt
+                SignatureFileUrl = null,
+                SignatureHash = null,
+                SignedAt = null
             },
             Customer = new CustomerSnapshot
             {
@@ -112,12 +112,26 @@ public sealed class ContractSnapshotData
     /// không ghi đè tên/CCCD/biển số lịch sử bằng dữ liệu danh mục hiện tại.
     /// </summary>
     public static ContractSnapshotData CaptureLegacy(Contract contract)
-    {
-        var company = contract.CompanyProfile;
-        var driver = contract.Driver;
-        var customer = contract.Customer;
-        var vehicle = contract.Vehicle;
+        => CaptureLegacy(
+            contract,
+            contract.CompanyProfile,
+            contract.Driver,
+            contract.Customer,
+            contract.Vehicle);
 
+    /// <summary>
+    /// Tạo snapshot legacy bằng các entity danh mục được truyền riêng. Overload này
+    /// cho phép caller dùng AsNoTracking mà KHÔNG cần gán các entity detached vào
+    /// navigation của một Contract đang được DbContext khác track. Nhờ đó tránh
+    /// việc EF vô tình attach hai ApplicationUser cùng Id vào một ChangeTracker.
+    /// </summary>
+    public static ContractSnapshotData CaptureLegacy(
+        Contract contract,
+        CompanyProfile? company,
+        ApplicationUser? driver,
+        Customer? customer,
+        Vehicle? vehicle)
+    {
         return new ContractSnapshotData
         {
             Version = 1,
@@ -154,9 +168,9 @@ public sealed class ContractSnapshotData
                 DriverLicenseClass = First(contract.DriverLicenseClassSnapshot, driver?.DriverLicenseClass),
                 DriverLicenseIssuedDate = driver?.DriverLicenseIssuedDate,
                 DriverLicenseExpiryDate = driver?.DriverLicenseExpiryDate,
-                SignatureFileUrl = driver?.VehicleOwnerSignatureFileUrl,
-                SignatureHash = driver?.VehicleOwnerSignatureHash,
-                SignedAt = driver?.VehicleOwnerSignedAt
+                SignatureFileUrl = null,
+                SignatureHash = null,
+                SignedAt = null
             },
             Customer = new CustomerSnapshot
             {

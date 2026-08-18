@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using HTX586CONTRACT.Application.Abstractions;
+using HTX586CONTRACT.Application.Contracts;
 using HTX586CONTRACT.Domain.Contracts;
 using HTX586CONTRACT.Domain.Enums;
 using HTX586CONTRACT.Domain.Signatures;
@@ -27,13 +28,13 @@ public sealed class ContractDocumentService(
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(currentUserId))
-            throw new InvalidOperationException("Không xác định được tài khoản tài xế đang ký hợp đồng.");
+            throw new InvalidOperationException("Không xác định được tài khoản Chủ xe đang thao tác ký hợp đồng.");
 
         if (!Enum.TryParse<SignatureParty>(party, true, out var role))
             throw new InvalidOperationException("Vai trò ký không hợp lệ.");
 
-        if (role != SignatureParty.Customer)
-            throw new InvalidOperationException("Company, chủ xe và tài xế dùng chữ ký cố định trong danh mục. Trên hợp đồng chỉ yêu cầu khách hàng ký.");
+        if (role is not SignatureParty.Driver and not SignatureParty.Customer)
+            throw new InvalidOperationException("Trên điện thoại Chủ xe chỉ được ghi nhận chữ ký của người lái thực tế và khách hàng.");
 
         logger.LogInformation(
             "Signature pipeline v3-rowversion-free. ContractId={ContractId}, Party={Party}.",
@@ -105,7 +106,7 @@ public sealed class ContractDocumentService(
 
             if (!callerIsActive || !callerIsDriver || callerIsOwnerOrAdmin)
                 throw new InvalidOperationException(
-                    "Chỉ tài khoản Chủ xe đang hoạt động mới được ghi nhận chữ ký khách hàng và chốt hợp đồng hoàn tất.");
+                    "Chỉ tài khoản Chủ xe đang hoạt động mới được ghi nhận chữ ký người lái/khách hàng và chốt hợp đồng hoàn tất.");
 
             // Transaction Serializable được mở TRƯỚC khi đọc hợp đồng. Nhờ đó hai
             // thao tác ký cùng một hợp đồng không thể cùng vượt qua bước kiểm tra.
@@ -129,7 +130,7 @@ public sealed class ContractDocumentService(
 
                 if (!string.Equals(contract.DriverId, currentUserId, StringComparison.Ordinal))
                     throw new InvalidOperationException(
-                        "Chỉ tài xế được gán trên hợp đồng mới được ghi nhận chữ ký của khách hàng.");
+                        "Chỉ tài khoản Chủ xe nhận hợp đồng mới được ghi nhận chữ ký người lái và khách hàng.");
 
                 if (contract.Status is ContractStatus.Cancelled or ContractStatus.Expired or ContractStatus.Invalidated)
                     throw new InvalidOperationException("Hợp đồng đã bị hủy, hết hạn hoặc vô hiệu hóa.");
@@ -149,12 +150,27 @@ public sealed class ContractDocumentService(
                 else if (contract.Status != ContractStatus.Received)
                 {
                     throw new InvalidOperationException(
-                        "Bạn phải bấm Nhận hợp đồng trước khi cập nhật và ghi nhận chữ ký khách hàng.");
+                        "Bạn phải bấm Nhận hợp đồng trước khi cập nhật và ghi nhận chữ ký người lái/khách hàng.");
                 }
 
                 if (string.IsNullOrWhiteSpace(contract.OperatingDriverName))
                     throw new InvalidOperationException(
-                        "Vui lòng nhập và lưu họ tên tài xế trực tiếp điều khiển xe trước khi khách hàng ký.");
+                        "Vui lòng nhập và lưu họ tên người lái thực tế trước khi ghi nhận chữ ký.");
+
+                if (role == SignatureParty.Driver &&
+                    !AutomobileDrivingLicenseClasses.IsValid(contract.OperatingDriverLicenseClass))
+                    throw new InvalidOperationException(
+                        "Vui lòng nhập và lưu hạng GPLX ô tô hợp lệ của người lái thực tế trước khi ký.");
+
+                if (role == SignatureParty.Customer)
+                {
+                    var hasDriverSignature = await db.ContractSignatures
+                        .AsNoTracking()
+                        .AnyAsync(x => x.ContractId == contractId && !x.IsDeleted && x.Party == SignatureParty.Driver, ct);
+                    if (!hasDriverSignature)
+                        throw new InvalidOperationException(
+                            "Người lái thực tế chưa ký xác nhận. Vui lòng để người lái ký trước, sau đó mới ghi nhận chữ ký khách hàng.");
+                }
 
                 var signatureExists = await db.ContractSignatures
                     .AsNoTracking()
@@ -173,9 +189,11 @@ public sealed class ContractDocumentService(
                     Id = Guid.NewGuid(),
                     ContractId = contractId,
                     Party = role,
-                    SignerName = string.IsNullOrWhiteSpace(signerName)
-                        ? DefaultSignerName(contract, role)
-                        : signerName.Trim(),
+                    SignerName = role == SignatureParty.Driver
+                        ? contract.OperatingDriverName!.Trim()
+                        : string.IsNullOrWhiteSpace(signerName)
+                            ? DefaultSignerName(contract, role)
+                            : signerName.Trim(),
                     SignatureFileUrl = relativeUrl,
                     SignatureHash = Convert.ToHexString(SHA256.HashData(bytes)),
                     ContractHashAtSigning = ContractHash(contract),
@@ -207,9 +225,9 @@ public sealed class ContractDocumentService(
                 if (insertedRows != 1)
                     throw new InvalidOperationException("Không thể thêm bản ghi chữ ký vào SQL.");
 
-                // Chữ ký khách hàng được ghi nhận trước, nhưng hợp đồng chỉ chuyển
-                // sang Completed khi VehicleOwner chủ động bấm nút "Hoàn thành".
-                // Điều này tách rõ hai hành vi: ký xác nhận và chốt khóa hợp đồng.
+                // Chữ ký người lái thực tế và khách hàng được ghi nhận riêng theo từng hợp đồng.
+                // Hợp đồng chỉ chuyển sang Completed khi đã đủ cả hai chữ ký và
+                // VehicleOwner chủ động bấm nút "Hoàn thành hợp đồng".
                 var updatedRows = await db.Contracts
                     .Where(x => x.Id == contractId &&
                         (x.Status == ContractStatus.Created ||
@@ -301,11 +319,14 @@ public sealed class ContractDocumentService(
                     "Không thể tạo snapshot hoàn tất vì thiếu hồ sơ Công ty, tài xế, khách hàng hoặc xe.");
 
             // Hợp đồng cũ vẫn ưu tiên các cột snapshot đã lưu trước đây.
-            contract.CompanyProfile = company;
-            contract.Driver = driver;
-            contract.Customer = customer;
-            contract.Vehicle = vehicle;
-            snapshot = ContractSnapshotData.CaptureLegacy(contract);
+            // Không gán các entity AsNoTracking vào navigation của contract đang tracked:
+            // việc đó có thể làm EF attach thêm một ApplicationUser cùng Id.
+            snapshot = ContractSnapshotData.CaptureLegacy(
+                contract,
+                company,
+                driver,
+                customer,
+                vehicle);
         }
         else
         {
@@ -325,23 +346,12 @@ public sealed class ContractDocumentService(
                 snapshot.Vehicle.OwnerSignedAt ??= driver.VehicleOwnerSignedAt;
             }
 
-            if (driver is not null)
-            {
-                // Không có chữ ký theo từng xe. Vị trí ký của tài khoản được phát HĐ
-                // sử dụng trực tiếp chân ký Chủ xe trên ApplicationUser.
-                snapshot.Driver.SignatureFileUrl ??= driver.VehicleOwnerSignatureFileUrl;
-                snapshot.Driver.SignatureHash ??= driver.VehicleOwnerSignatureHash;
-                snapshot.Driver.SignedAt ??= driver.VehicleOwnerSignedAt;
-            }
         }
 
         if (string.IsNullOrWhiteSpace(snapshot.Company.RepresentativeSignatureFileUrl))
             throw new InvalidOperationException("Công ty/Văn phòng chưa có chữ ký đại diện cố định.");
         if (string.IsNullOrWhiteSpace(snapshot.Vehicle.OwnerSignatureFileUrl))
             throw new InvalidOperationException("Tài khoản Chủ xe chưa có chân ký cố định.");
-        if (string.IsNullOrWhiteSpace(snapshot.Driver.SignatureFileUrl))
-            throw new InvalidOperationException("Tài khoản Chủ xe chưa có chân ký cố định.");
-
         return snapshot.ToJson();
     }
 
@@ -393,8 +403,8 @@ public sealed class ContractDocumentService(
         if (!StoredSignatureExists(snapshot.Vehicle.OwnerSignatureFileUrl))
             missingSignatures.Add("chân ký tài khoản Chủ xe tại thời điểm lập hợp đồng");
 
-        if (!StoredSignatureExists(snapshot.Driver.SignatureFileUrl))
-            missingSignatures.Add("chân ký tài khoản Chủ xe tại vị trí ký của người được phát hợp đồng");
+        if (!signedRoles.Contains(SignatureParty.Driver))
+            missingSignatures.Add("chữ ký người lái thực tế");
 
         if (!signedRoles.Contains(SignatureParty.Customer))
             missingSignatures.Add("chữ ký khách hàng");

@@ -64,7 +64,18 @@ if (forwardedHeadersEnabled)
 builder.Services.AddDbContextFactory<ApplicationDbContext>(
     options =>
     {
-        options.UseSqlServer(connectionString);
+        options.UseSqlServer(
+            connectionString,
+            sqlServerOptions =>
+            {
+                // Tự thử lại khi SQL Server gặp lỗi mạng/transient ngắn hạn.
+                // Lưu ý: retry không thay thế việc cấu hình đúng Server/instance/firewall.
+                sqlServerOptions.EnableRetryOnFailure(
+                    maxRetryCount: builder.Environment.IsDevelopment() ? 2 : 5,
+                    maxRetryDelay: TimeSpan.FromSeconds(builder.Environment.IsDevelopment() ? 2 : 5),
+                    errorNumbersToAdd: null);
+                sqlServerOptions.CommandTimeout(60);
+            });
     });
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(o =>

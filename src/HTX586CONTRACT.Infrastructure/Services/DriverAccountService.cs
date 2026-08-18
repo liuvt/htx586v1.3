@@ -160,7 +160,7 @@ public sealed class DriverAccountService(
         user.UpdatedAt = now;
         user.UpdatedByUserId = reviewerUserId;
         user.SecurityStamp = Guid.NewGuid().ToString("N");
-        Ensure(await userManager.UpdateAsync(user));
+        Ensure(await userManager.UpdateAsync(user, copySecurityStamp: true));
     }
 
     public async Task UpdateAsync(string userId, UpdateDriverAccountRequest request, CancellationToken ct = default)
@@ -365,7 +365,7 @@ public sealed class DriverAccountService(
         user.MustChangePassword = true;
         user.UpdatedAt = DateTime.UtcNow;
         user.SecurityStamp = Guid.NewGuid().ToString("N");
-        Ensure(await userManager.UpdateAsync(user));
+        Ensure(await userManager.UpdateAsync(user, copySecurityStamp: true));
     }
 
     public async Task RequirePasswordChangeAsync(string userId, CancellationToken ct = default)

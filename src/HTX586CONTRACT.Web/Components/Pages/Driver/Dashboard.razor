@@ -18,55 +18,29 @@
     </MudButton>
 </PageHeader>
 
-<section class="dashboard-hero">
-    <div class="dashboard-hero-copy">
-        <div class="dashboard-hero-kicker">
-            <MudIcon Icon="@Icons.Material.Filled.Route" Size="Size.Small" />
-            VEHICLEOWNER WORKSPACE
+<MudPaper Class="driver-quickbar mb-4" Elevation="0">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+        <div class="driver-quickbar-copy">
+            <MudText Typo="Typo.subtitle1" Class="fw-600">Tổng quan @_selectedMonthText</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Theo dõi nhanh hợp đồng, doanh thu và phương tiện của tài khoản.</MudText>
         </div>
-        <MudText Typo="Typo.h2" Class="dashboard-hero-title">
-            Mọi hành trình, hợp đồng và doanh thu trong một màn hình.
-        </MudText>
-        <MudText Typo="Typo.body1" Class="dashboard-hero-description">
-            Dữ liệu cá nhân trong @_selectedMonthText, chỉ tính các hợp đồng thuộc tài khoản đang đăng nhập.
-        </MudText>
-        <div class="dashboard-hero-actions">
-            <MudButton Href="/vehicle-owner/contracts"
-                       Variant="Variant.Filled"
-                       Color="Color.Default"
-                       StartIcon="@Icons.Material.Filled.Description">
-                Hợp đồng của tôi
-            </MudButton>
-            <MudButton Href="/vehicle-owner/notifications"
-                       Variant="Variant.Outlined"
-                       Color="Color.Inherit"
-                       StartIcon="@Icons.Material.Filled.NotificationsNone">
-                Xem thông báo
-            </MudButton>
-        </div>
-    </div>
-
-    <div class="dashboard-hero-side">
-        <div class="hero-metric-panel">
-            <div class="hero-metric">
-                <span>DOANH THU THÁNG</span>
-                <strong>@ShortMoney(_actualRevenue)</strong>
-            </div>
-            <div class="hero-metric">
-                <span>HĐ HOÀN TẤT</span>
-                <strong>@_completedContracts.ToString("N0")</strong>
-            </div>
-            <div class="hero-metric">
-                <span>ĐANG XỬ LÝ</span>
-                <strong>@_unfinishedContracts.ToString("N0")</strong>
-            </div>
-            <div class="hero-metric">
-                <span>SỐ XE ĐANG CÓ</span>
-                <strong>@_assignedVehicles.Count.ToString("N0")</strong>
-            </div>
-        </div>
-    </div>
-</section>
+        <MudSpacer />
+        <MudButton Href="/vehicle-owner/contracts"
+                   Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   Size="Size.Small"
+                   StartIcon="@Icons.Material.Filled.Description">
+            Hợp đồng của tôi
+        </MudButton>
+        <MudButton Href="/vehicle-owner/notifications"
+                   Variant="Variant.Outlined"
+                   Color="Color.Primary"
+                   Size="Size.Small"
+                   StartIcon="@Icons.Material.Filled.NotificationsNone">
+            Thông báo@(_unreadNotifications > 0 ? $" ({_unreadNotifications})" : string.Empty)
+        </MudButton>
+    </MudStack>
+</MudPaper>
 
 @if (!_hasAssignedVehicle)
 {
@@ -116,8 +90,8 @@
 
 <div class="section-heading">
     <div>
-        <h3>Hiệu suất cá nhân</h3>
-        <p>Các chỉ số được tính theo tháng đang chọn.</p>
+        <h3>Tổng quan tháng</h3>
+        <p>Các chỉ số chính của @_selectedMonthText.</p>
     </div>
     <MudChip T="string" Variant="Variant.Outlined" Color="@(_hasAssignedVehicle ? Color.Success : Color.Warning)" Size="Size.Small">
         @(_hasAssignedVehicle ? "Đã gán phương tiện" : "Chưa có phương tiện")
@@ -280,6 +254,36 @@
         </MudItem>
     </MudGrid>
 </section>
+
+<style>
+    .driver-quickbar {
+        padding: 12px 14px;
+        border: 1px solid var(--mud-palette-lines-default);
+        border-radius: 16px;
+        background: var(--mud-palette-surface);
+    }
+
+    .driver-quickbar-copy {
+        min-width: 220px;
+    }
+
+    @@media (max-width: 600px) {
+        .driver-quickbar {
+            padding: 10px 12px;
+            margin-bottom: 12px !important;
+        }
+
+        .driver-quickbar-copy {
+            width: 100%;
+            min-width: 0;
+        }
+
+        .driver-quickbar .mud-button-root {
+            flex: 1 1 calc(50% - 4px);
+            min-width: 0;
+        }
+    }
+</style>
 
 @code {
     private string _userId = string.Empty;

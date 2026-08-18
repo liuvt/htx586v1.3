@@ -2,139 +2,249 @@
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
-<MudStack Spacing="3">
-    <MudAlert Severity="Severity.Success" Variant="Variant.Outlined">
+<div class="contract-history-page">
+    <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="contract-lock-alert">
         Hợp đồng đã kết thúc và được khóa bất biến. Thông tin bên dưới là dữ liệu đã lưu tại thời điểm lập/chốt hợp đồng,
         không lấy lại từ hồ sơ Công ty, xe, tài xế hoặc khách hàng hiện tại.
     </MudAlert>
 
-    <MudPaper Class="pa-4" Elevation="1">
-        <MudStack Row="true" AlignItems="AlignItems.Center">
-            <div>
-                <MudText Typo="Typo.h5">@Detail.ContractNumber</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">
-                    @Detail.CompanyName · @BusinessName(Detail.BusinessType)
-                </MudText>
+    <MudPaper Class="contract-hero" Elevation="1">
+        <div class="contract-hero__left">
+            <MudText Typo="Typo.caption" Class="section-eyebrow">HTX586 CONTRACT</MudText>
+            <MudText Typo="Typo.h4" Class="contract-title">@Detail.ContractNumber</MudText>
+            <MudText Typo="Typo.body1" Class="contract-subtitle">
+                @Detail.CompanyName · @BusinessName(Detail.BusinessType)
+            </MudText>
+            <div class="contract-chip-row">
+                <ContractStatusChip Status="Detail.Status" ChipSize="Size.Medium" />
+                <MudChip T="string" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Badge">@BusinessNameShort(Detail.BusinessType)</MudChip>
+                <MudChip T="string" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.DirectionsCar">@(Detail.VehiclePlate ?? "Chưa có biển số")</MudChip>
             </div>
-            <MudSpacer />
-            <ContractStatusChip Status="Detail.Status" ChipSize="Size.Medium" />
-        </MudStack>
+        </div>
+
+        <div class="contract-hero__right">
+            <div class="hero-meta-card">
+                <span class="hero-meta-label">Ngày tạo</span>
+                <span class="hero-meta-value">@FormatDateTime(Detail.CreatedAt)</span>
+            </div>
+            <div class="hero-meta-card">
+                <span class="hero-meta-label">Hoàn thành</span>
+                <span class="hero-meta-value">@FormatDateTime(Detail.CompletedAt)</span>
+            </div>
+            <div class="hero-meta-card">
+                <span class="hero-meta-label">Người tạo</span>
+                <span class="hero-meta-value">@Detail.CreatedByName</span>
+            </div>
+        </div>
     </MudPaper>
 
-    <MudPaper Class="pa-4" Elevation="1">
-        <MudText Typo="Typo.h6" Class="mb-3">1. Thông tin hợp đồng</MudText>
-        <MudGrid>
-            <MudItem xs="12" md="4"><InfoListItem Label="Số hợp đồng" Value="@Detail.ContractNumber" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Loại hợp đồng" Value="@BusinessName(Detail.BusinessType)" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Trạng thái" Value="@StatusName(Detail.Status)" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Công ty/Văn phòng" Value="@Detail.CompanyName" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Tài xế" Value="@Detail.DriverName" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Khu vực" Value="@Detail.AreaCode" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Người tạo" Value="@Detail.CreatedByName" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Người phát xuống" Value="@(Detail.AssignedByName ?? "Tài xế tự tạo")" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Ngày tạo" Value="@FormatDateTime(Detail.CreatedAt)" /></MudItem>
-        </MudGrid>
+    <div class="contract-kpis">
+        <div class="kpi-card">
+            <div class="kpi-label">Giá trị hợp đồng</div>
+            <div class="kpi-value">@FormatMoney(Detail.ContractValue)</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Tổng quãng đường</div>
+            <div class="kpi-value">@FormatDecimal(Detail.TotalKilometers, " km")</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Số hành khách thực tế</div>
+            <div class="kpi-value">@FormatNumber(Detail.ActualPassengerCount)</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-label">Khoảng thời gian</div>
+            <div class="kpi-value kpi-value--sm">@FormatRange(Detail.StartTime, Detail.EndTime)</div>
+        </div>
+    </div>
+
+    <MudPaper Class="section-card" Elevation="1">
+        <div class="section-header">
+            <div>
+                <MudText Typo="Typo.h6">1. Tổng quan hợp đồng</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Thông tin hành chính và luồng xử lý hợp đồng.</MudText>
+            </div>
+        </div>
+        <div class="data-grid">
+            @DataBlock("Số hợp đồng", Detail.ContractNumber)
+            @DataBlock("Loại hợp đồng", BusinessName(Detail.BusinessType))
+            @DataBlock("Trạng thái", StatusName(Detail.Status))
+            @DataBlock("Công ty/Văn phòng", Detail.CompanyName, "wide")
+            @DataBlock("Người tạo", Detail.CreatedByName)
+            @DataBlock("Người phát xuống", Detail.AssignedByName ?? "Tài xế tự tạo")
+            @DataBlock("Ngày tạo", FormatDateTime(Detail.CreatedAt))
+            @DataBlock("Ngày phát xuống", FormatDateTime(Detail.AssignedAt))
+            @DataBlock("Ngày nhận HĐ", FormatDateTime(Detail.ReceivedAt))
+            @DataBlock("Ngày hoàn thành", FormatDateTime(Detail.CompletedAt))
+            @DataBlock("Khu vực", string.IsNullOrWhiteSpace(Detail.AreaCode) ? "Chưa cập nhật" : Detail.AreaCode)
+        </div>
     </MudPaper>
 
-    <MudPaper Class="pa-4" Elevation="1">
-        <MudText Typo="Typo.h6" Class="mb-3">2. Phương tiện và chủ sở hữu</MudText>
-        <MudGrid>
-            <MudItem xs="12" md="3"><InfoListItem Label="Biển kiểm soát" Value="@(Detail.VehiclePlate ?? "-")" /></MudItem>
-            <MudItem xs="12" md="3"><InfoListItem Label="Mã xe" Value="@(Detail.VehicleCode ?? "-")" /></MudItem>
-            <MudItem xs="12" md="3"><InfoListItem Label="Hãng/Loại xe" Value="@(Detail.VehicleBrand ?? "-")" /></MudItem>
-            <MudItem xs="12" md="3"><InfoListItem Label="Số chỗ" Value="@FormatNumber(Detail.SeatCount)" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Chủ sở hữu" Value="@(Detail.OwnerName ?? "-")" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="CCCD chủ sở hữu" Value="@(Detail.OwnerCitizenId ?? "-")" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Ngày cấp CCCD" Value="@FormatDate(Detail.OwnerCitizenIdIssuedDate)" /></MudItem>
-        </MudGrid>
+    <MudPaper Class="section-card" Elevation="1">
+        <div class="section-header">
+            <div>
+                <MudText Typo="Typo.h6">2. Phương tiện, chủ xe và người lái</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Thông tin xe, chủ sở hữu và người trực tiếp điều khiển phương tiện.</MudText>
+            </div>
+        </div>
+        <div class="data-grid">
+            @DataBlock("Biển kiểm soát", Detail.VehiclePlate)
+            @DataBlock("Mã xe", Detail.VehicleCode)
+            @DataBlock("Hãng / Loại xe", Detail.VehicleBrand)
+            @DataBlock("Số chỗ", FormatNumber(Detail.SeatCount))
+            @DataBlock("Chủ sở hữu", Detail.OwnerName)
+            @DataBlock("CCCD chủ sở hữu", Detail.OwnerCitizenId)
+            @DataBlock("Ngày cấp CCCD", FormatDate(Detail.OwnerCitizenIdIssuedDate))
+            @DataBlock("Tài khoản nhận HĐ", Detail.DriverName)
+            @DataBlock("Người lái thực tế", Detail.OperatingDriverName)
+            @DataBlock("Hạng GPLX", Detail.OperatingDriverLicenseClass)
+            @DataBlock("Số GPLX", Detail.OperatingDriverLicenseNumber)
+            @DataBlock("SĐT người lái", Detail.OperatingDriverPhoneNumber)
+        </div>
     </MudPaper>
 
-    <MudPaper Class="pa-4" Elevation="1">
-        <MudText Typo="Typo.h6" Class="mb-3">3. Khách hàng/người thuê</MudText>
-        <MudGrid>
-            <MudItem xs="12" md="4"><InfoListItem Label="Khách hàng/người thuê" Value="@Detail.CustomerName" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Số điện thoại" Value="@Detail.CustomerPhone" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="CCCD/MST" Value="@(Detail.CustomerCitizenId ?? "-")" /></MudItem>
-            <MudItem xs="12"><InfoListItem Label="Địa chỉ" Value="@(Detail.CustomerAddress ?? "-")" /></MudItem>
-        </MudGrid>
+    <MudPaper Class="section-card" Elevation="1">
+        <div class="section-header">
+            <div>
+                <MudText Typo="Typo.h6">3. Khách hàng / người thuê</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Thông tin khách hàng được khóa theo hợp đồng tại thời điểm tạo/chốt.</MudText>
+            </div>
+        </div>
+        <div class="data-grid">
+            @DataBlock(Detail.CustomerIsCompany ? "Tên công ty" : "Tên khách hàng", Detail.CustomerName)
+            @if (Detail.CustomerIsCompany)
+            {
+                @DataBlock("Tên người đại diện", Detail.CustomerRepresentativeName)
+                @DataBlock("Mã số thuế", Detail.CustomerTaxCode)
+                @DataBlock("CCCD người đại diện", Detail.CustomerCitizenId)
+            }
+            else
+            {
+                @DataBlock("Số điện thoại", Detail.CustomerPhone)
+                @DataBlock("CCCD", Detail.CustomerCitizenId)
+            }
+            @if (Detail.CustomerIsCompany)
+            {
+                @DataBlock("Số điện thoại", Detail.CustomerPhone)
+            }
+            @DataBlock("Ngày cấp CCCD", FormatDate(Detail.CustomerCitizenIdIssuedDate))
+            @DataBlock("Người đặt đi cùng", YesNo(Detail.CustomerTravelsWithGroup))
+            @DataBlock("Địa chỉ", Detail.CustomerAddress, "wide")
+        </div>
     </MudPaper>
 
-    <MudPaper Class="pa-4" Elevation="1">
-        <MudText Typo="Typo.h6" Class="mb-3">4. Nội dung hợp đồng</MudText>
-        <MudGrid>
-            <MudItem xs="12" md="3"><InfoListItem Label="Bắt đầu" Value="@FormatDateTime(Detail.StartTime)" /></MudItem>
-            <MudItem xs="12" md="3"><InfoListItem Label="Kết thúc" Value="@FormatDateTime(Detail.EndTime)" /></MudItem>
-            <MudItem xs="12" md="3"><InfoListItem Label="Tổng km" Value="@FormatDecimal(Detail.TotalKilometers)" /></MudItem>
-            <MudItem xs="12" md="3"><InfoListItem Label="Giá trị hợp đồng" Value="@FormatMoney(Detail.ContractValue)" /></MudItem>
-            <MudItem xs="12" md="6"><InfoListItem Label="Điểm đi" Value="@(Detail.PickupLocation ?? "-")" /></MudItem>
-            <MudItem xs="12" md="6"><InfoListItem Label="Điểm đến" Value="@(Detail.DropoffLocation ?? "-")" /></MudItem>
-            <MudItem xs="12"><InfoListItem Label="Lộ trình chi tiết" Value="@(Detail.RouteDescription ?? "-")" /></MudItem>
-            <MudItem xs="12" md="6"><InfoListItem Label="Hình thức thanh toán" Value="@(Detail.PaymentMethod ?? "-")" /></MudItem>
-            <MudItem xs="12" md="6"><InfoListItem Label="Thời gian thanh toán" Value="@(Detail.PaymentTime ?? "-")" /></MudItem>
-            <MudItem xs="12"><InfoListItem Label="Ghi chú" Value="@(Detail.Note ?? "-")" /></MudItem>
-        </MudGrid>
+    <MudPaper Class="section-card" Elevation="1">
+        <div class="section-header">
+            <div>
+                <MudText Typo="Typo.h6">4. Nội dung hợp đồng</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Lịch trình, tuyến đường, thanh toán và các ghi chú liên quan.</MudText>
+            </div>
+        </div>
+        <div class="data-grid">
+            @DataBlock("Thời gian bắt đầu", FormatDateTime(Detail.StartTime))
+            @DataBlock("Thời gian kết thúc", FormatDateTime(Detail.EndTime))
+            @DataBlock("Tổng km", FormatDecimal(Detail.TotalKilometers, " km"))
+            @DataBlock("Giá trị hợp đồng", FormatMoney(Detail.ContractValue))
+            @DataBlock("Điểm đi", Detail.PickupLocation)
+            @DataBlock("Điểm đến", Detail.DropoffLocation)
+            @DataBlock("Lộ trình chi tiết", Detail.RouteDescription, "wide")
+            @DataBlock("Hình thức thanh toán", Detail.PaymentMethod)
+            @DataBlock("Thời gian thanh toán", Detail.PaymentTime)
+            @DataBlock("Ghi chú", Detail.Note, "wide")
+        </div>
+
+        @if (Detail.BusinessType == ContractBusinessType.Cargo)
+        {
+            <MudDivider Class="my-4" />
+            <MudText Typo="Typo.subtitle1" Class="mb-3">Thông tin hàng hóa</MudText>
+            <div class="data-grid">
+                @DataBlock("Tên hàng hóa", Detail.CargoName)
+                @DataBlock("Khối lượng", Detail.CargoWeight?.ToString("N1"))
+                @DataBlock("Đơn vị", Detail.CargoUnit)
+            </div>
+        }
     </MudPaper>
 
-    <MudPaper Class="pa-4" Elevation="1">
-        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
-            <MudText Typo="Typo.h6">5. Danh sách hành khách</MudText>
-            <MudSpacer />
-            <MudChip T="string" Variant="Variant.Outlined">Số lượng: @FormatNumber(Detail.ActualPassengerCount)</MudChip>
-        </MudStack>
-        <MudTable T="ContractPassengerDto" Items="Detail.Passengers" Dense="true" Hover="true">
-            <HeaderContent>
-                <MudTh>STT</MudTh>
-                <MudTh>Họ tên</MudTh>
-                <MudTh>Năm sinh</MudTh>
-                <MudTh>Ghi chú</MudTh>
-            </HeaderContent>
-            <RowTemplate>
-                <MudTd DataLabel="STT">@context.SortOrder</MudTd>
-                <MudTd DataLabel="Họ tên">@context.FullName</MudTd>
-                <MudTd DataLabel="Năm sinh">@context.BirthYear</MudTd>
-                <MudTd DataLabel="Ghi chú">@context.Note</MudTd>
-            </RowTemplate>
-            <NoRecordsContent><MudText>Không có hành khách bổ sung.</MudText></NoRecordsContent>
-        </MudTable>
+    <MudPaper Class="section-card" Elevation="1">
+        <div class="section-header">
+            <div>
+                <MudText Typo="Typo.h6">5. Danh sách hành khách</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Danh sách hành khách đi cùng hợp đồng tại thời điểm khóa dữ liệu.</MudText>
+            </div>
+            <MudChip T="string" Variant="Variant.Filled" Color="Color.Primary">Tổng số: @FormatNumber(Detail.ActualPassengerCount)</MudChip>
+        </div>
+
+        @if (Detail.CustomerTravelsWithGroup && !string.IsNullOrWhiteSpace(TravelCompanionDisplayName))
+        {
+            <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Dense="true" Class="mb-3">
+                Khách hàng/người đặt trực tiếp đi cùng: <strong>@TravelCompanionDisplayName</strong>
+            </MudAlert>
+        }
+
+        @if (Detail.Passengers.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Không có hành khách bổ sung.</MudAlert>
+        }
+        else
+        {
+            <MudTable T="ContractPassengerDto" Items="Detail.Passengers" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+                <HeaderContent>
+                    <MudTh>STT</MudTh>
+                    <MudTh>Họ tên</MudTh>
+                    <MudTh>Năm sinh</MudTh>
+                    <MudTh>Ghi chú</MudTh>
+                </HeaderContent>
+                <RowTemplate>
+                    <MudTd DataLabel="STT">@context.SortOrder</MudTd>
+                    <MudTd DataLabel="Họ tên">@context.FullName</MudTd>
+                    <MudTd DataLabel="Năm sinh">@(context.BirthYear?.ToString() ?? "-")</MudTd>
+                    <MudTd DataLabel="Ghi chú">@(string.IsNullOrWhiteSpace(context.Note) ? "-" : context.Note)</MudTd>
+                </RowTemplate>
+            </MudTable>
+        }
     </MudPaper>
 
-    <MudPaper Class="pa-4" Elevation="1">
-        <MudText Typo="Typo.h6" Class="mb-3">6. Chữ ký đã khóa theo hợp đồng</MudText>
-        <MudGrid>
-            <MudItem xs="12" md="3">
-                <MudText Typo="Typo.subtitle1">Văn phòng đại diện</MudText>
+    <MudPaper Class="section-card" Elevation="1">
+        <div class="section-header">
+            <div>
+                <MudText Typo="Typo.h6">6. Chữ ký theo hợp đồng</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Bốn chữ ký được chốt và lưu theo từng hợp đồng.</MudText>
+            </div>
+        </div>
+        <div class="signature-grid">
+            <div class="signature-card">
+                <div class="signature-card__title">Văn phòng đại diện</div>
                 <SignaturePad Disabled="true"
                               ExistingSignatureUrl="@Detail.CompanyRepresentativeSignatureFileUrl"
                               SignerName="@(Detail.CompanyRepresentativeName ?? "Đại diện văn phòng")"
                               SignedAt="@Detail.CompanyRepresentativeSignedAt" />
-            </MudItem>
-            <MudItem xs="12" md="3">
-                <MudText Typo="Typo.subtitle1">Chủ sở hữu xe</MudText>
+            </div>
+            <div class="signature-card">
+                <div class="signature-card__title">Chủ sở hữu xe</div>
                 <SignaturePad Disabled="true"
                               ExistingSignatureUrl="@Detail.VehicleOwnerSignatureFileUrl"
                               SignerName="@(Detail.OwnerName ?? "Chủ sở hữu xe")"
                               SignedAt="@Detail.VehicleOwnerSignedAt" />
-            </MudItem>
-            <MudItem xs="12" md="3">
-                <MudText Typo="Typo.subtitle1">Tài xế</MudText>
+            </div>
+            <div class="signature-card">
+                <div class="signature-card__title">Người lái thực tế</div>
                 <SignaturePad Disabled="true"
                               ExistingSignatureUrl="@Detail.DriverSignatureFileUrl"
-                              SignerName="@Detail.DriverName"
+                              SignerName="@(string.IsNullOrWhiteSpace(Detail.OperatingDriverName) ? Detail.DriverName : Detail.OperatingDriverName)"
                               SignedAt="@Detail.DriverSignedAt" />
-            </MudItem>
-            <MudItem xs="12" md="3">
-                <MudText Typo="Typo.subtitle1">Khách hàng</MudText>
+            </div>
+            <div class="signature-card">
+                <div class="signature-card__title">Khách hàng</div>
                 <SignaturePad Disabled="true"
                               ExistingSignatureUrl="@(CustomerSignature?.SignatureFileUrl)"
                               SignerName="@(CustomerSignature?.SignerName ?? Detail.CustomerName)"
                               SignedAt="@(CustomerSignature?.ServerSignedAt)" />
-            </MudItem>
-        </MudGrid>
+            </div>
+        </div>
     </MudPaper>
 
-    <MudStack Row="true" Justify="Justify.FlexEnd">
+    <MudPaper Class="contract-actions" Elevation="0">
         <MudButton Href="@BackUrl" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack">
-            Quay lại
+            Quay lại danh sách
         </MudButton>
         @if (Detail.Status == ContractStatus.Completed)
         {
@@ -145,8 +255,247 @@
                 Mở PDF chính thức
             </MudButton>
         }
-    </MudStack>
-</MudStack>
+    </MudPaper>
+</div>
+
+<style>
+    .contract-history-page {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .contract-lock-alert {
+        border-radius: 18px;
+    }
+
+    .contract-hero {
+        padding: 24px;
+        border-radius: 24px;
+        border: 1px solid rgba(16, 24, 40, 0.08);
+        background: linear-gradient(135deg, rgba(7, 126, 105, 0.10), rgba(7, 126, 105, 0.02));
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
+        gap: 20px;
+    }
+
+    .section-eyebrow {
+        color: var(--mud-palette-primary);
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+    }
+
+    .contract-title {
+        font-weight: 800;
+        margin-bottom: 6px;
+        word-break: break-word;
+    }
+
+    .contract-subtitle {
+        color: var(--mud-palette-text-secondary);
+        margin-bottom: 16px;
+    }
+
+    .contract-chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .contract-hero__right {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .hero-meta-card {
+        background: rgba(255,255,255,0.72);
+        border: 1px solid rgba(16, 24, 40, 0.08);
+        border-radius: 16px;
+        padding: 14px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .hero-meta-label {
+        font-size: .78rem;
+        color: var(--mud-palette-text-secondary);
+    }
+
+    .hero-meta-value {
+        font-size: .98rem;
+        font-weight: 700;
+        color: var(--mud-palette-text-primary);
+        word-break: break-word;
+    }
+
+    .contract-kpis {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 16px;
+    }
+
+    .kpi-card {
+        background: var(--mud-palette-surface);
+        border: 1px solid rgba(16, 24, 40, 0.08);
+        border-radius: 18px;
+        padding: 18px;
+        box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+    }
+
+    .kpi-label {
+        font-size: .8rem;
+        color: var(--mud-palette-text-secondary);
+        margin-bottom: 10px;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+
+    .kpi-value {
+        font-size: 1.35rem;
+        font-weight: 800;
+        line-height: 1.3;
+        color: var(--mud-palette-text-primary);
+    }
+
+    .kpi-value--sm {
+        font-size: 1rem;
+    }
+
+    .section-card {
+        padding: 24px;
+        border-radius: 24px;
+        border: 1px solid rgba(16, 24, 40, 0.08);
+        box-shadow: 0 6px 24px rgba(15, 23, 42, 0.04);
+    }
+
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 18px;
+    }
+
+    .data-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 16px;
+    }
+
+    .data-card {
+        border: 1px solid rgba(16, 24, 40, 0.08);
+        border-radius: 18px;
+        padding: 16px 18px;
+        background: rgba(250, 251, 252, 0.85);
+        min-height: 88px;
+    }
+
+    .data-card.wide {
+        grid-column: span 2;
+    }
+
+    .data-label {
+        display: block;
+        color: var(--mud-palette-primary);
+        font-size: .82rem;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+
+    .data-value {
+        display: block;
+        color: var(--mud-palette-text-primary);
+        font-size: 1.02rem;
+        font-weight: 600;
+        line-height: 1.45;
+        word-break: break-word;
+        white-space: pre-wrap;
+    }
+
+    .signature-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 16px;
+    }
+
+    .signature-card {
+        border: 1px solid rgba(16, 24, 40, 0.08);
+        border-radius: 20px;
+        padding: 16px;
+        background: rgba(250, 251, 252, 0.88);
+    }
+
+    .signature-card__title {
+        font-weight: 700;
+        margin-bottom: 12px;
+    }
+
+    .contract-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+    }
+
+    @@media (max-width: 1280px) {
+        .data-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .signature-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .contract-kpis {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 960px) {
+        .contract-hero {
+            grid-template-columns: 1fr;
+        }
+
+        .data-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @@media (max-width: 600px) {
+        .section-card,
+        .contract-hero {
+            padding: 16px;
+            border-radius: 18px;
+        }
+
+        .contract-actions,
+        .section-header {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .contract-actions > * {
+            width: 100%;
+        }
+
+        .data-grid,
+        .signature-grid,
+        .contract-kpis {
+            grid-template-columns: 1fr;
+        }
+
+        .data-card.wide {
+            grid-column: span 1;
+        }
+
+        .contract-title {
+            font-size: 1.55rem;
+        }
+    }
+</style>
 
 @code {
     [Parameter, EditorRequired] public ContractDetailDto Detail { get; set; } = null!;
@@ -154,6 +503,11 @@
 
     private ContractSignatureDto? CustomerSignature
         => Detail.Signatures.FirstOrDefault(x => x.Party == SignatureParty.Customer);
+
+    private RenderFragment DataBlock(string label, string? value, string cssClass = "") => @<div class="data-card @cssClass">
+        <span class="data-label">@label</span>
+        <span class="data-value">@DisplayText(value)</span>
+    </div>;
 
     private async Task OpenPdfAsync()
     {
@@ -175,6 +529,13 @@
         _ => type.ToString()
     };
 
+    private static string BusinessNameShort(ContractBusinessType type) => type switch
+    {
+        ContractBusinessType.Passenger => "Hành khách",
+        ContractBusinessType.Cargo => "Hàng hóa",
+        _ => type.ToString()
+    };
+
     private static string StatusName(ContractStatus status) => status switch
     {
         ContractStatus.Draft => "Đã tạo",
@@ -187,6 +548,10 @@
         ContractStatus.Invalidated => "Vô hiệu hóa",
         _ => status.ToString()
     };
+
+    private string TravelCompanionDisplayName => Detail.CustomerIsCompany
+        ? (string.IsNullOrWhiteSpace(Detail.CustomerRepresentativeName) ? Detail.CustomerName : Detail.CustomerRepresentativeName)
+        : Detail.CustomerName;
 
     private static DateTime VietnamTime(DateTime value)
         => value.Kind == DateTimeKind.Utc ? value.AddHours(7) : value;
@@ -203,9 +568,17 @@
     private static string FormatNumber(int? value)
         => value?.ToString("N0") ?? "-";
 
-    private static string FormatDecimal(decimal? value)
-        => value?.ToString("N1") ?? "-";
+    private static string FormatDecimal(decimal? value, string suffix = "")
+        => value.HasValue ? $"{value.Value:N1}{suffix}" : "-";
 
     private static string FormatMoney(decimal? value)
         => value.HasValue ? $"{value.Value:N0} VNĐ" : "-";
+
+    private static string FormatRange(DateTime? start, DateTime? end)
+        => $"{FormatDateTime(start)} → {FormatDateTime(end)}";
+
+    private static string YesNo(bool value) => value ? "Có" : "Không";
+
+    private static string DisplayText(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "Chưa cập nhật" : value;
 }

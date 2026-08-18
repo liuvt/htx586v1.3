@@ -7,51 +7,195 @@
 @inject ISnackbar Snackbar
 
 <PageTitle>Xe</PageTitle>
-<PageHeader Title="Chi tiết xe" Subtitle="Thông tin phương tiện, Công ty/Văn phòng và tài khoản Chủ xe (nếu đã gán)." />
+<PageHeader Title="Chi tiết xe" Subtitle="Giao diện phân tách rõ phần tổng quan, thông tin phương tiện, đơn vị vận hành và tài khoản Chủ xe." />
 
-@if (_loading) { <MudProgressCircular Indeterminate="true" /> }
-else if (_item is null) { <MudAlert Severity="Severity.Error">Không tìm thấy xe hoặc xe nằm ngoài phạm vi quản lý.</MudAlert> }
+@if (_loading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (_item is null)
+{
+    <MudAlert Severity="Severity.Error">Không tìm thấy xe hoặc xe nằm ngoài phạm vi quản lý.</MudAlert>
+}
 else
 {
-    <MudPaper Class="pa-4" Elevation="1">
-        <MudGrid>
-            <MudItem xs="12" md="4"><InfoListItem Label="Biển số" Value="@_item.PlateNumber" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Mã xe" Value="@Display(_item.VehicleCode)" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Tài khoản Chủ xe" Value="@Display(_item.AssignedDriver?.FullName)" /></MudItem>
-            <MudItem xs="12"><InfoListItem Label="Công ty/Văn phòng" Value="@Display(_officeNames)" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Nhãn hiệu" Value="@Display(_item.Brand)" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Dòng xe" Value="@Display(_item.Model)" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Số chỗ" Value="@(_item.SeatCount?.ToString() ?? "—")" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Họ tên Chủ xe" Value="@Display(_item.AssignedDriver?.FullName)" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Điện thoại Chủ xe" Value="@Display(_item.AssignedDriver?.PhoneNumber)" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="CCCD Chủ xe" Value="@Display(_item.AssignedDriver?.CitizenId)" /></MudItem>
-            <MudItem xs="12" md="4"><InfoListItem Label="Ngày cấp CCCD" Value="@DateText(_item.AssignedDriver?.CitizenIdIssuedDate)" /></MudItem>
-            <MudItem xs="12" md="8"><InfoListItem Label="Nơi cấp CCCD" Value="@Display(_item.AssignedDriver?.CitizenIdIssuedPlace)" /></MudItem>
-            <MudItem xs="12"><InfoListItem Label="Địa chỉ Chủ xe" Value="@Display(_item.AssignedDriver?.Address)" /></MudItem>
-            <MudItem xs="12" md="6">
-                <MudText Typo="Typo.subtitle1">Chân ký Chủ xe từ tài khoản</MudText>
-                @if (!string.IsNullOrWhiteSpace(_item.AssignedDriver?.VehicleOwnerSignatureFileUrl))
+    <MudGrid Spacing="3">
+        <MudItem xs="12">
+            <MudPaper Class="vehicle-hero pa-5" Elevation="0">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                    <MudAvatar Size="Size.Large" Color="Color.Primary" Variant="Variant.Filled" Class="hero-avatar">
+                        <MudIcon Icon="@Icons.Material.Filled.DirectionsCar" />
+                    </MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.h5" Class="fw-600">@_item.PlateNumber</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">@Display(_item.VehicleCode)</MudText>
+                        <MudStack Row="true" Spacing="1" Class="mt-2" Wrap="Wrap.Wrap">
+                            <MudChip T="string" Size="Size.Small" Color="@(_item.IsActive ? Color.Success : Color.Warning)" Variant="Variant.Filled">
+                                @(_item.IsActive ? "Đang hoạt động" : "Ngừng hoạt động")
+                            </MudChip>
+                            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">
+                                @_officeNamesOrDefault
+                            </MudChip>
+                            <MudChip T="string" Size="Size.Small" Color="@(_item.AssignedDriver is null ? Color.Default : Color.Info)" Variant="Variant.Outlined">
+                                @(_item.AssignedDriver is null ? "Chưa gán Chủ xe" : "Đã gán Chủ xe")
+                            </MudChip>
+                        </MudStack>
+                    </div>
+                    <MudSpacer />
+                    <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
+                        <MudPaper Class="metric-pill pa-3" Elevation="0">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Nhãn hiệu</MudText>
+                            <MudText Typo="Typo.subtitle1">@Display(_item.Brand)</MudText>
+                        </MudPaper>
+                        <MudPaper Class="metric-pill pa-3" Elevation="0">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Dòng xe</MudText>
+                            <MudText Typo="Typo.subtitle1">@Display(_item.Model)</MudText>
+                        </MudPaper>
+                        <MudPaper Class="metric-pill pa-3" Elevation="0">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Số chỗ</MudText>
+                            <MudText Typo="Typo.subtitle1">@(_item.SeatCount?.ToString() ?? "—")</MudText>
+                        </MudPaper>
+                    </MudStack>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudPaper Class="detail-section pa-4 fill-height" Elevation="1">
+                <MudText Typo="Typo.h6">Thông tin phương tiện</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Nhóm thông tin nhận diện và đặc điểm kỹ thuật của xe.</MudText>
+                <MudDivider Class="mb-2" />
+                <MudList T="string" Dense="true">
+                    <InfoListItem Label="Biển số" Value="@_item.PlateNumber" Icon="@Icons.Material.Filled.ConfirmationNumber" />
+                    <InfoListItem Label="Mã xe" Value="@Display(_item.VehicleCode)" Icon="@Icons.Material.Filled.Pin" />
+                    <InfoListItem Label="Nhãn hiệu" Value="@Display(_item.Brand)" Icon="@Icons.Material.Filled.LocalOffer" />
+                    <InfoListItem Label="Dòng xe" Value="@Display(_item.Model)" Icon="@Icons.Material.Filled.ViewInAr" />
+                    <InfoListItem Label="Số chỗ" Value="@(_item.SeatCount?.ToString() ?? "—")" Icon="@Icons.Material.Filled.EventSeat" />
+                    <InfoListItem Label="Trạng thái" Value="@(_item.IsActive ? "Hoạt động" : "Ngừng")" Icon="@Icons.Material.Filled.ToggleOn" />
+                </MudList>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            <MudPaper Class="detail-section pa-4 fill-height" Elevation="1">
+                <MudText Typo="Typo.h6">Đơn vị vận hành</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Mỗi xe chỉ gắn với một Công ty/Văn phòng quản lý.</MudText>
+                <MudDivider Class="mb-2" />
+                <MudList T="string" Dense="true">
+                    <InfoListItem Label="Công ty / Văn phòng" Value="@_officeNamesOrDefault" Icon="@Icons.Material.Filled.Apartment" />
+                    <InfoListItem Label="Cho phép lập hợp đồng" Value="@(_item.IsActive ? "Có" : "Không")" Icon="@Icons.Material.Filled.Description" />
+                    <InfoListItem Label="Tình trạng gán Chủ xe" Value="@(_item.AssignedDriver is null ? "Chưa gán" : "Đã gán")" Icon="@Icons.Material.Filled.SupervisorAccount" />
+                </MudList>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="7">
+            <MudPaper Class="detail-section pa-4 fill-height" Elevation="1">
+                <MudText Typo="Typo.h6">Thông tin tài khoản Chủ xe</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Lấy trực tiếp từ tài khoản Chủ xe đang được gán cho xe.</MudText>
+                <MudDivider Class="mb-3" />
+
+                @if (_item.AssignedDriver is null)
+                {
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                        Xe này chưa gán tài khoản Chủ xe. Bạn vẫn có thể khởi tạo xe trước, sau đó cập nhật và chọn Chủ xe khi cần.
+                    </MudAlert>
+                }
+                else
+                {
+                    <MudGrid>
+                        <MudItem xs="12" md="6">
+                            <MudList T="string" Dense="true">
+                                <InfoListItem Label="Họ tên Chủ xe" Value="@Display(_item.AssignedDriver.FullName)" Icon="@Icons.Material.Filled.Person" />
+                                <InfoListItem Label="Số điện thoại" Value="@Display(_item.AssignedDriver.PhoneNumber)" Icon="@Icons.Material.Filled.Phone" />
+                                <InfoListItem Label="CCCD" Value="@Display(_item.AssignedDriver.CitizenId)" Icon="@Icons.Material.Filled.CreditCard" />
+                            </MudList>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudList T="string" Dense="true">
+                                <InfoListItem Label="Ngày cấp CCCD" Value="@DateText(_item.AssignedDriver.CitizenIdIssuedDate)" Icon="@Icons.Material.Filled.Event" />
+                                <InfoListItem Label="Nơi cấp CCCD" Value="@Display(_item.AssignedDriver.CitizenIdIssuedPlace)" Icon="@Icons.Material.Filled.AccountBalance" />
+                                <InfoListItem Label="Địa chỉ" Value="@Display(_item.AssignedDriver.Address)" Icon="@Icons.Material.Filled.LocationOn" />
+                            </MudList>
+                        </MudItem>
+                    </MudGrid>
+                }
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="5">
+            <MudPaper Class="detail-section pa-4 fill-height" Elevation="1">
+                <MudText Typo="Typo.h6">Chân ký Chủ xe</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Hợp đồng lấy trực tiếp chân ký này từ tài khoản Chủ xe.</MudText>
+                <MudDivider Class="mb-3" />
+
+                @if (_item.AssignedDriver is null)
+                {
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Chưa có tài khoản Chủ xe nên chưa có chân ký để hiển thị.</MudAlert>
+                }
+                else if (!string.IsNullOrWhiteSpace(_item.AssignedDriver.VehicleOwnerSignatureFileUrl))
                 {
                     <SignaturePad Disabled="true"
-                                  ExistingSignatureUrl="@_item.AssignedDriver?.VehicleOwnerSignatureFileUrl"
-                                  SignerName="@_item.AssignedDriver?.FullName"
-                                  SignedAt="@_item.AssignedDriver?.VehicleOwnerSignedAt" />
+                                  ExistingSignatureUrl="@_item.AssignedDriver.VehicleOwnerSignatureFileUrl"
+                                  SignerName="@_item.AssignedDriver.FullName"
+                                  SignedAt="@_item.AssignedDriver.VehicleOwnerSignedAt" />
                 }
-                else { <MudText>Chưa có chân ký trên tài khoản Chủ xe.</MudText> }
-            </MudItem>
-            <MudItem xs="12" md="6"><InfoListItem Label="Trạng thái" Value="@(_item.IsActive ? "Hoạt động" : "Ngừng")" /></MudItem>
-        </MudGrid>
-        <MudStack Row="true" Class="mt-4"><MudButton Variant="Variant.Outlined" OnClick="@(() => Navigation.NavigateTo("/admin/vehicles"))">Quay lại</MudButton><MudSpacer />
-            <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Edit" OnClick="@(() => Navigation.NavigateTo($"/admin/vehicles/{Id}/edit"))">Cập nhật</MudButton>
-        </MudStack>
-    </MudPaper>
+                else
+                {
+                    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
+                        Tài khoản Chủ xe hiện chưa có chân ký. Cần cập nhật chân ký tại hồ sơ tài khoản Chủ xe trước khi phát hành hợp đồng.
+                    </MudAlert>
+                }
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudPaper Class="pa-3" Elevation="1">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                    <MudButton Variant="Variant.Outlined" OnClick="@(() => Navigation.NavigateTo("/admin/vehicles"))">Quay lại danh sách</MudButton>
+                    <MudSpacer />
+                    <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Edit" OnClick="@(() => Navigation.NavigateTo($"/admin/vehicles/{Id}/edit"))">Cập nhật xe</MudButton>
+                </MudStack>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
 }
+
+<style>
+    .vehicle-hero {
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 24px;
+        background: linear-gradient(135deg, rgba(14,165,233,0.08), rgba(16,185,129,0.05));
+    }
+
+    .hero-avatar {
+        font-size: 1.25rem;
+    }
+
+    .metric-pill {
+        min-width: 140px;
+        border-radius: 16px;
+        background: rgba(255,255,255,0.72);
+        border: 1px solid rgba(15, 23, 42, 0.08);
+    }
+
+    .detail-section {
+        border-radius: 22px;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        background: #fff;
+    }
+
+    .fill-height {
+        height: 100%;
+    }
+</style>
 
 @code {
     [Parameter] public Guid Id { get; set; }
     private Vehicle? _item;
     private string _officeNames = string.Empty;
     private bool _loading = true;
+    private string _officeNamesOrDefault => string.IsNullOrWhiteSpace(_officeNames) ? "Chưa gán Công ty/Văn phòng" : _officeNames;
 
     protected override async Task OnParametersSetAsync()
     {

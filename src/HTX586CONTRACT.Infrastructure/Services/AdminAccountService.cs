@@ -371,7 +371,7 @@ public sealed class AdminAccountService(
         user.IsActive = isActive;
         user.UpdatedAt = DateTime.UtcNow;
         user.SecurityStamp = Guid.NewGuid().ToString("N");
-        var result = await userManager.UpdateAsync(user);
+        var result = await userManager.UpdateAsync(user, copySecurityStamp: true);
         return result.Succeeded
             ? ServiceResult.Success(isActive ? "Đã mở khóa tài khoản." : "Đã khóa tài khoản.")
             : ServiceResult.Failure(result.Errors.Select(x => x.Description));
@@ -400,7 +400,7 @@ public sealed class AdminAccountService(
         user.DeletedBy = N(deletedByUserId) ?? "OWNER";
         user.UpdatedAt = DateTime.UtcNow;
         user.SecurityStamp = Guid.NewGuid().ToString("N");
-        var result = await userManager.UpdateAsync(user);
+        var result = await userManager.UpdateAsync(user, copySecurityStamp: true);
         if (!result.Succeeded)
             return ServiceResult.Failure(result.Errors.Select(x => x.Description));
 

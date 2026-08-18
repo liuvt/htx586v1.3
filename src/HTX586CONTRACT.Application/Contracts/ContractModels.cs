@@ -55,8 +55,12 @@ public sealed class ContractDetailDto
 
     public Guid CustomerId { get; set; }
     public string CustomerName { get; set; } = string.Empty;
+    public string? CustomerRepresentativeName { get; set; }
     public string CustomerPhone { get; set; } = string.Empty;
     public string? CustomerCitizenId { get; set; }
+    public DateTime? CustomerCitizenIdIssuedDate { get; set; }
+    public string? CustomerTaxCode { get; set; }
+    public bool CustomerIsCompany { get; set; }
     public string? CustomerAddress { get; set; }
     public bool CustomerTravelsWithGroup { get; set; }
 
@@ -121,9 +125,13 @@ public sealed class SaveContractRequest
 
     public Guid? CustomerId { get; set; }
     public string CustomerName { get; set; } = string.Empty;
+    public string? CustomerRepresentativeName { get; set; }
     public string CustomerPhone { get; set; } = string.Empty;
     public string? CustomerCitizenId { get; set; }
+    public DateTime? CustomerCitizenIdIssuedDate { get; set; }
     public string? CustomerAddress { get; set; }
+    public bool CustomerIsCompany { get; set; }
+    public string? CustomerTaxCode { get; set; }
     public bool CustomerTravelsWithGroup { get; set; }
 
     public string AreaCode { get; set; } = string.Empty;

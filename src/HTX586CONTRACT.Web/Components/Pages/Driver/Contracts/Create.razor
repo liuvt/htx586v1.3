@@ -18,7 +18,7 @@
 }
 else if (_driver is null)
 {
-    <MudAlert Severity="Severity.Error">Không tìm thấy tài khoản tài xế.</MudAlert>
+    <MudAlert Severity="Severity.Error">Không tìm thấy tài khoản Chủ xe.</MudAlert>
 }
 else if (!Id.HasValue && _vehicles.Count == 0)
 {
@@ -199,10 +199,17 @@ else
                                       Disabled="@IsDriverEditableContentLocked" />
                     </MudItem>
                     <MudItem xs="12" md="6">
-                        <MudTextField @bind-Value="_model.OperatingDriverLicenseClass"
-                                      Label="Hạng GPLX"
-                                      Variant="Variant.Outlined"
-                                      Disabled="@IsDriverEditableContentLocked" />
+                        <MudSelect T="string"
+                                   @bind-Value="_model.OperatingDriverLicenseClass"
+                                   Label="Hạng GPLX ô tô"
+                                   Variant="Variant.Outlined"
+                                   Required="true"
+                                   Disabled="@IsDriverEditableContentLocked">
+                            @foreach (var licenseClass in AutomobileDrivingLicenseClasses.All)
+                            {
+                                <MudSelectItem T="string" Value="@licenseClass">@AutomobileDrivingLicenseClasses.DisplayName(licenseClass)</MudSelectItem>
+                            }
+                        </MudSelect>
                     </MudItem>
                     <MudItem xs="12" sm="6" md="3">
                         <MudDatePicker Date="@_startDate"
@@ -337,8 +344,22 @@ else
                              Disabled="@IsDriverEditableContentLocked"
                              Class="mt-3" />
                 <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Outlined" Class="mt-2">
-                    Số người thực tế = danh sách bên dưới + 1 khi khách hàng được đánh dấu đi cùng.
+                    Tài xế được phép điều chỉnh Tổng km và danh sách hành khách trước khi ký/chốt hợp đồng. Số người thực tế = danh sách bên dưới + 1 khi khách hàng được đánh dấu đi cùng.
                 </MudAlert>
+
+                @if (_model.CustomerTravelsWithGroup && !string.IsNullOrWhiteSpace(TravelCompanionDisplayName))
+                {
+                    <MudPaper Class="pa-3 mt-3" Elevation="0" Outlined="true">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                            <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Success" />
+                            <MudText Typo="Typo.subtitle2">Khách hàng/người đặt đi cùng:</MudText>
+                            <MudText Typo="Typo.body1"><strong>@TravelCompanionDisplayName</strong></MudText>
+                        </MudStack>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                            Họ tên được tự động lấy từ thông tin khách hàng và được tính thêm 1 người vào tổng số hành khách thực tế.
+                        </MudText>
+                    </MudPaper>
+                }
 
                 <MudTable T="ContractPassengerDto" Items="_model.Passengers" Dense="true" Class="mt-3 driver-passenger-table">
                     <HeaderContent>
@@ -431,27 +452,82 @@ else
     @if (Id.HasValue)
     {
         <MudPaper Class="pa-4 mt-4 driver-contract-section" Elevation="1">
-            <MudText Typo="Typo.h6" Class="mb-3">Khách hàng ký xác nhận</MudText>
+            <MudText Typo="Typo.h6" Class="mb-1">Ký xác nhận trên điện thoại Chủ xe</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                Sau khi nhận HĐ, Chủ xe đưa điện thoại cho <b>người lái thực tế ký trước</b>, sau đó đưa cho <b>khách hàng ký</b>.
+                Chỉ khi đủ cả 2 chữ ký này mới có thể chốt hoàn thành HĐ.
+            </MudText>
 
-            @if (HasCustomerSignature)
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="6">
+                    <MudPaper Class="pa-3" Elevation="0" Style="border:1px solid var(--mud-palette-lines-default); border-radius:16px;">
+                        <MudText Typo="Typo.subtitle1" Class="mb-2">1. Người lái thực tế ký</MudText>
+                        @if (HasDriverSignature)
+                        {
+                            <SignaturePad Disabled="true"
+                                          ExistingSignatureUrl="@SignatureUrl(SignatureParty.Driver)"
+                                          SignerName="@SignatureName(SignatureParty.Driver)"
+                                          SignedAt="@SignatureTime(SignatureParty.Driver)" />
+                        }
+                        else if (CanDriverSign)
+                        {
+                            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="mb-2">
+                                Người ký: <b>@_model.OperatingDriverName</b> — Hạng GPLX: <b>@_model.OperatingDriverLicenseClass</b>
+                            </MudAlert>
+                            <SignaturePad SignerName="@_model.OperatingDriverName"
+                                          SignedAt="@SignatureTime(SignatureParty.Driver)"
+                                          OnSignatureSaved="SaveDriverSignature"
+                                          Disabled="@(_saving || _savingSignature || _completing)"
+                                          ConfirmationButtonText="Xác nhận chữ ký người lái" />
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true">
+                                Hãy nhận HĐ và lưu đầy đủ họ tên + hạng GPLX người lái thực tế trước khi ký.
+                            </MudAlert>
+                        }
+                    </MudPaper>
+                </MudItem>
+
+                <MudItem xs="12" md="6">
+                    <MudPaper Class="pa-3" Elevation="0" Style="border:1px solid var(--mud-palette-lines-default); border-radius:16px;">
+                        <MudText Typo="Typo.subtitle1" Class="mb-2">2. Khách hàng ký</MudText>
+                        @if (HasCustomerSignature)
+                        {
+                            <SignaturePad Disabled="true"
+                                          ExistingSignatureUrl="@SignatureUrl(SignatureParty.Customer)"
+                                          SignerName="@SignatureName(SignatureParty.Customer)"
+                                          SignedAt="@SignatureTime(SignatureParty.Customer)" />
+                        }
+                        else if (CanCustomerSign)
+                        {
+                            <SignaturePad ExistingSignatureUrl="@SignatureUrl(SignatureParty.Customer)"
+                                          SignerName="@_model.CustomerName"
+                                          SignedAt="@SignatureTime(SignatureParty.Customer)"
+                                          OnSignatureSaved="SaveCustomerSignature"
+                                          Disabled="@(_saving || _savingSignature || _completing)"
+                                          ConfirmationButtonText="Xác nhận chữ ký khách hàng" />
+                        }
+                        else if (!HasDriverSignature)
+                        {
+                            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
+                                Người lái thực tế phải ký trước. Sau đó khu vực ký khách hàng sẽ được mở.
+                            </MudAlert>
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true">
+                                Trạng thái hiện tại không cho phép ghi nhận chữ ký khách hàng.
+                            </MudAlert>
+                        }
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+
+            @if (HasDriverSignature && HasCustomerSignature && !IsFinalLocked)
             {
-                <SignaturePad Disabled="true"
-                              ExistingSignatureUrl="@SignatureUrl(SignatureParty.Customer)"
-                              SignerName="@SignatureName(SignatureParty.Customer)"
-                              SignedAt="@SignatureTime(SignatureParty.Customer)" />
-            }
-            else if (CanCustomerSign)
-            {
-                <SignaturePad ExistingSignatureUrl="@SignatureUrl(SignatureParty.Customer)"
-                              SignerName="@_model.CustomerName"
-                              SignedAt="@SignatureTime(SignatureParty.Customer)"
-                              OnSignatureSaved="SaveCustomerSignature"
-                              Disabled="@(_saving || _savingSignature || _completing)" />
-            }
-            else
-            {
-                <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true">
-                    Trạng thái hiện tại không cho phép ghi nhận chữ ký khách hàng.
+                <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mt-3">
+                    Đã đủ chữ ký người lái thực tế và khách hàng. Có thể chốt hoàn thành HĐ.
                 </MudAlert>
             }
 
@@ -499,37 +575,50 @@ else
     private List<ContractSignatureDto> _signatures = [];
     private SaveContractRequest _model = new() { Passengers = [] };
     private int PassengerCount => _model.Passengers.Count(x => !string.IsNullOrWhiteSpace(x.FullName)) + (_model.CustomerTravelsWithGroup ? 1 : 0);
+    private string TravelCompanionDisplayName => string.IsNullOrWhiteSpace(_model.CustomerName) ? string.Empty : _model.CustomerName.Trim();
+
     private DateTime? _startDate;
     private DateTime? _endDate;
     private TimeSpan? _startTime;
     private TimeSpan? _endTime;
     private bool _editingContent = true;
     private bool _creatingNewCustomer = true;
+    private bool HasDriverSignature => HasSignature(SignatureParty.Driver);
     private bool HasCustomerSignature => HasSignature(SignatureParty.Customer);
+    private bool HasAnyFinalPartySignature => HasDriverSignature || HasCustomerSignature;
     private bool IsFinalLocked =>
         _model.Status is ContractStatus.Completed
             or ContractStatus.Cancelled
             or ContractStatus.Expired
             or ContractStatus.Invalidated;
     private bool IsDriverEditableContentLocked =>
-        IsFinalLocked || HasCustomerSignature ||
+        IsFinalLocked || HasAnyFinalPartySignature ||
         (Id.HasValue && !_editingContent);
     private bool CanEditSavedContract =>
         Id.HasValue &&
         !IsFinalLocked &&
-        !HasCustomerSignature &&
+        !HasAnyFinalPartySignature &&
         !CanReceive &&
         !_editingContent;
     private bool CanSaveContent =>
         !IsFinalLocked &&
-        !HasCustomerSignature &&
+        !HasAnyFinalPartySignature &&
         !CanReceive &&
         (!Id.HasValue || _editingContent);
+    private bool CanDriverSign =>
+        Id.HasValue &&
+        (_model.Status is ContractStatus.Created or ContractStatus.Assigned or ContractStatus.Received) &&
+        !CanReceive &&
+        !IsFinalLocked &&
+        !HasDriverSignature &&
+        !string.IsNullOrWhiteSpace(_model.OperatingDriverName) &&
+        AutomobileDrivingLicenseClasses.IsValid(_model.OperatingDriverLicenseClass);
     private bool CanCustomerSign =>
         Id.HasValue &&
         (_model.Status is ContractStatus.Created or ContractStatus.Assigned or ContractStatus.Received) &&
         !CanReceive &&
         !IsFinalLocked &&
+        HasDriverSignature &&
         !HasCustomerSignature;
     private bool CanReceive =>
         Id.HasValue &&
@@ -537,10 +626,11 @@ else
         _model.Status == ContractStatus.Assigned;
     private bool CanCancel =>
         Id.HasValue &&
-        !HasCustomerSignature &&
+        !HasAnyFinalPartySignature &&
         !IsFinalLocked;
     private bool CanComplete =>
         Id.HasValue &&
+        HasDriverSignature &&
         HasCustomerSignature &&
         !IsFinalLocked &&
         !CanReceive &&
@@ -586,10 +676,6 @@ else
                 _model.AreaCode = _driver?.AreaCode ?? string.Empty;
                 _model.VehicleId = _vehicles.FirstOrDefault()?.Id;
                 _model.CompanyProfileId = PrimaryOfficeId(_vehicles.FirstOrDefault());
-                _model.OperatingDriverName = _driver?.FullName;
-                _model.OperatingDriverPhoneNumber = _driver?.PhoneNumber;
-                _model.OperatingDriverLicenseNumber = _driver?.DriverLicenseNumber;
-                _model.OperatingDriverLicenseClass = _driver?.DriverLicenseClass;
                 if (_model.Passengers.Count == 0)
                     AddPassenger();
                 return;
@@ -885,10 +971,10 @@ else
         ? "Hệ thống tự sinh khi lưu"
         : _model.ContractNumber;
     private string ContractSourceDisplayText => !Id.HasValue
-        ? "Tài xế tự tạo"
+        ? "Chủ xe tự tạo"
         : IsDispatchedContract
             ? "Chủ hệ thống/Quản lý phát xuống"
-            : "Tài xế tự tạo";
+            : "Chủ xe tự tạo";
     private string VehicleBrandDisplayText
     {
         get
@@ -922,9 +1008,9 @@ else
     private string OwnerSigner => Id.HasValue
         ? _detail?.OwnerName ?? _driver?.FullName ?? "Chủ sở hữu xe"
         : _driver?.FullName ?? "Chủ sở hữu xe";
-    private string DriverSigner => IsFinalLocked
-        ? _detail?.DriverName ?? "Tài xế"
-        : _driver?.FullName ?? "Tài xế";
+    private string DriverSigner => _model.OperatingDriverName
+        ?? _detail?.DriverName
+        ?? "Người lái thực tế";
     private string? FixedOfficeSignatureUrl => IsFinalLocked
         ? _detail?.CompanyRepresentativeSignatureFileUrl
         : SelectedOffice?.RepresentativeSignatureFileUrl;
@@ -937,12 +1023,8 @@ else
     private DateTime? FixedOwnerSignedAt => Id.HasValue
         ? _detail?.VehicleOwnerSignedAt ?? _driver?.VehicleOwnerSignedAt
         : _driver?.VehicleOwnerSignedAt;
-    private string? FixedDriverSignatureUrl => IsFinalLocked
-        ? _detail?.DriverSignatureFileUrl
-        : _driver?.VehicleOwnerSignatureFileUrl;
-    private DateTime? FixedDriverSignedAt => IsFinalLocked
-        ? _detail?.DriverSignedAt
-        : _driver?.VehicleOwnerSignedAt;
+    private string? FixedDriverSignatureUrl => SignatureUrl(SignatureParty.Driver);
+    private DateTime? FixedDriverSignedAt => SignatureTime(SignatureParty.Driver);
 
     private static string CustomerDisplay(Customer customer)
     {
@@ -952,13 +1034,37 @@ else
         return $"{customer.FullName} - {customer.PhoneNumber}{citizenId}";
     }
 
+    private async Task SaveDriverSignature(string data)
+    {
+        if (!Id.HasValue)
+            throw new InvalidOperationException("Hợp đồng chưa được tạo nên chưa thể ghi nhận chữ ký người lái.");
+
+        if (!CanDriverSign)
+            throw new InvalidOperationException("Hợp đồng chưa đủ điều kiện để người lái thực tế ký xác nhận.");
+
+        // Nội dung phải được lưu cố định trước chữ ký đầu tiên theo HĐ.
+        if (_editingContent)
+        {
+            await SaveAsync();
+            if (_editingContent)
+                throw new InvalidOperationException(
+                    "Chưa thể lưu nội dung hợp đồng. Vui lòng kiểm tra các trường bắt buộc trước khi người lái ký.");
+        }
+
+        await SaveSignature(
+            "Driver",
+            _model.OperatingDriverName ?? "Người lái thực tế",
+            data,
+            "Đã lưu chữ ký người lái thực tế. Tiếp theo hãy đưa điện thoại cho khách hàng ký xác nhận.");
+    }
+
     private async Task SaveCustomerSignature(string data)
     {
         if (!Id.HasValue)
             throw new InvalidOperationException("Hợp đồng chưa được tạo nên chưa thể ghi nhận chữ ký khách hàng.");
 
         if (!CanCustomerSign)
-            throw new InvalidOperationException("Hợp đồng không còn ở trạng thái cho phép Chủ xe ghi nhận chữ ký khách hàng.");
+            throw new InvalidOperationException("Người lái phải ký trước và hợp đồng phải còn ở trạng thái cho phép ghi nhận chữ ký khách hàng.");
 
         // Luôn lưu dữ liệu được phép chỉnh sửa trước khi khách ký và khóa hợp đồng.
         if (_editingContent)
@@ -973,7 +1079,7 @@ else
             "Customer",
             _model.CustomerName,
             data,
-            "Đã lưu chữ ký khách hàng. Vui lòng kiểm tra và bấm Hoàn thành hợp đồng để khóa dữ liệu.");
+            "Đã lưu chữ ký khách hàng. Đã đủ 2 chữ ký cuối; hãy bấm Hoàn thành hợp đồng để chốt và khóa dữ liệu.");
     }
 
     private async Task SaveSignature(

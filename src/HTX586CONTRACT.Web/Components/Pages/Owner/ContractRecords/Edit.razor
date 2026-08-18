@@ -12,7 +12,7 @@
 
 <PageTitle>@(Id.HasValue ? "Cập nhật hợp đồng" : "Tạo hợp đồng")</PageTitle>
 <PageHeader Title="@(Id.HasValue ? "Cập nhật hợp đồng" : "Tạo hợp đồng")"
-            Subtitle="Owner lập hợp đồng cho Công ty/Văn phòng được chọn và phát xuống tài xế; tài xế tiếp tục cập nhật nội dung hợp đồng, danh sách hành khách và thực hiện bước ký với khách hàng." />
+            Subtitle="Owner lập hợp đồng, chọn xe và phát xuống tài khoản Chủ xe. Người lái thực tế được nhập riêng và có thể khác Chủ xe." />
 
 @if (Id.HasValue)
 {
@@ -94,8 +94,8 @@ else
                                      ValueChanged="SelectDriver"
                                      SearchFunc="SearchDriversAsync"
                                      ToStringFunc="DriverDisplay"
-                                     Label="Tài xế"
-                                     Placeholder="Chọn hoặc gõ họ tên, số điện thoại tài xế"
+                                     Label="Tài khoản nhận HĐ (Chủ xe)"
+                                     Placeholder="Tự động theo Chủ xe đang gán cho xe"
                                      HelperText="@DriverHelperText"
                                      Variant="Variant.Outlined"
                                      Required="true"
@@ -105,6 +105,60 @@ else
                                      MaxItems="50"
                                      Disabled="@DriverSelectDisabled" />
                 </MudItem>
+
+                <MudItem xs="12">
+                    <MudDivider Class="my-2" />
+                    <MudText Typo="Typo.subtitle1">Người trực tiếp điều khiển xe</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Người lái thực tế có thể khác Chủ xe. Nhập đúng thông tin người trực tiếp điều khiển phương tiện trên chuyến này.
+                    </MudText>
+                </MudItem>
+                <MudItem xs="12" md="4">
+                    <MudTextField @bind-Value="_model.OperatingDriverName"
+                                  Label="Họ và tên người lái xe"
+                                  Variant="Variant.Outlined"
+                                  Required="true" />
+                </MudItem>
+                <MudItem xs="12" md="3">
+                    <MudSelect T="string"
+                               @bind-Value="_model.OperatingDriverLicenseClass"
+                               Label="Hạng GPLX ô tô"
+                               Variant="Variant.Outlined"
+                               Required="true">
+                        @foreach (var licenseClass in AutomobileDrivingLicenseClasses.All)
+                        {
+                            <MudSelectItem T="string" Value="@licenseClass">@AutomobileDrivingLicenseClasses.DisplayName(licenseClass)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="3">
+                    <MudTextField @bind-Value="_model.OperatingDriverLicenseNumber"
+                                  Label="Số GPLX"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="12" md="2">
+                    <MudTextField @bind-Value="_model.OperatingDriverPhoneNumber"
+                                  Label="SĐT người lái"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+
+                @if (_model.CompanyProfileId.HasValue && SelectedVehicle is not null)
+                {
+                    <MudItem xs="12">
+                        @if (HasRequiredDispatchSignatures)
+                        {
+                            <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Dense="true">
+                                Đã đủ 2 chân ký bắt buộc để phát HĐ: Văn phòng đại diện và Chủ xe.
+                            </MudAlert>
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true">
+                                Chưa thể phát HĐ xuống tài khoản nhận HĐ. @MissingDispatchSignaturesText
+                            </MudAlert>
+                        }
+                    </MudItem>
+                }
             </MudGrid>
         </MudPaper>
 
@@ -119,7 +173,7 @@ else
                                      ToStringFunc="CustomerDisplay"
                                      Label="Khách hàng/người thuê có sẵn"
                                      Placeholder="Chọn hoặc gõ họ tên, số điện thoại, CCCD/MST"
-                                     HelperText="Gõ trực tiếp trong ô để hiển thị gợi ý khách hàng thuộc Công ty/Văn phòng đã chọn."
+                                     HelperText="Chọn khách hàng có sẵn. Nếu chưa có, bấm Thêm mới khách hàng để lưu trực tiếp cùng Hợp đồng."
                                      Variant="Variant.Outlined"
                                      Clearable="true"
                                      ResetValueOnEmptyText="true"
@@ -130,40 +184,115 @@ else
                 <MudItem xs="12" md="3" Class="d-flex align-center">
                     <MudButton Variant="Variant.Outlined"
                                Color="Color.Primary"
-                               StartIcon="@Icons.Material.Filled.Groups"
+                               StartIcon="@Icons.Material.Filled.PersonAdd"
                                FullWidth="true"
                                Disabled="@(!_model.CompanyProfileId.HasValue)"
-                               Href="/admin/customers">
-                        Qua Quản lý Khách hàng
+                               OnClick="ToggleNewCustomerForm">
+                        @NewCustomerButtonText
                     </MudButton>
                 </MudItem>
 
-                <MudItem xs="12" md="4">
-                    <MudTextField @bind-Value="_model.CustomerName"
-                                  Label="Tên khách hàng/người thuê"
-                                  Required="true"
-                                  Variant="Variant.Outlined"
-                                  Disabled="@CustomerFieldsDisabled" />
-                </MudItem>
-                <MudItem xs="12" md="4">
-                    <MudTextField @bind-Value="_model.CustomerPhone"
-                                  Label="Số điện thoại"
-                                  Required="true"
-                                  Variant="Variant.Outlined"
-                                  Disabled="@CustomerFieldsDisabled" />
-                </MudItem>
-                <MudItem xs="12" md="4">
-                    <MudTextField @bind-Value="_model.CustomerCitizenId"
-                                  Label="CCCD/MST khách hàng"
-                                  Variant="Variant.Outlined"
-                                  Disabled="@CustomerFieldsDisabled" />
-                </MudItem>
-                <MudItem xs="12">
-                    <MudTextField @bind-Value="_model.CustomerAddress"
-                                  Label="Địa chỉ khách hàng"
-                                  Variant="Variant.Outlined"
-                                  Disabled="@CustomerFieldsDisabled" />
-                </MudItem>
+                @if (ShowNewCustomerForm)
+                {
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                            Bạn đang nhập mới khách hàng trực tiếp trên màn hình tạo hợp đồng. Nếu không cần nữa, bấm lại nút <b>Thêm mới khách hàng</b> để ẩn phần này.
+                        </MudAlert>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudCheckBox T="bool"
+                                     Value="@_model.CustomerIsCompany"
+                                     ValueChanged="SetCustomerIsCompany"
+                                     Color="Color.Primary"
+                                     Label="Khách hàng là công ty" />
+                    </MudItem>
+                    @if (_model.CustomerIsCompany)
+                    {
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="_model.CustomerName"
+                                          Label="Tên công ty/người thuê"
+                                          Required="true"
+                                          Variant="Variant.Outlined" />
+                        </MudItem>
+                        <MudItem xs="12" md="3">
+                            <MudTextField @bind-Value="_model.CustomerPhone"
+                                          Label="Số điện thoại"
+                                          Required="true"
+                                          Variant="Variant.Outlined" />
+                        </MudItem>
+                        <MudItem xs="12" md="3">
+                            <MudTextField @bind-Value="_model.CustomerTaxCode"
+                                          Label="Mã số thuế"
+                                          Required="true"
+                                          Variant="Variant.Outlined" />
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudTextField @bind-Value="_model.CustomerRepresentativeName"
+                                          Label="Tên người đại diện"
+                                          Required="true"
+                                          Variant="Variant.Outlined" />
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudTextField @bind-Value="_model.CustomerCitizenId"
+                                          Label="CCCD người đại diện"
+                                          Variant="Variant.Outlined" />
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudDatePicker @bind-Date="_model.CustomerCitizenIdIssuedDate"
+                                           Label="Ngày cấp CCCD"
+                                           DateFormat="dd/MM/yyyy"
+                                           Editable="true"
+                                           Clearable="true"
+                                           ImmediateText="true"
+                                           Placeholder="dd/MM/yyyy"
+                                           Culture="@AppCulture.Vietnamese"
+                                           AutoClose="true"
+                                           Variant="Variant.Outlined" />
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="_model.CustomerAddress"
+                                          Label="Địa chỉ công ty"
+                                          Variant="Variant.Outlined" />
+                        </MudItem>
+                    }
+                    else
+                    {
+                        <MudItem xs="12" md="4">
+                            <MudTextField @bind-Value="_model.CustomerName"
+                                          Label="Tên khách hàng/người thuê"
+                                          Required="true"
+                                          Variant="Variant.Outlined" />
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudTextField @bind-Value="_model.CustomerPhone"
+                                          Label="Số điện thoại"
+                                          Required="true"
+                                          Variant="Variant.Outlined" />
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudTextField @bind-Value="_model.CustomerCitizenId"
+                                          Label="CCCD khách hàng"
+                                          Variant="Variant.Outlined" />
+                        </MudItem>
+                        <MudItem xs="12" md="4">
+                            <MudDatePicker @bind-Date="_model.CustomerCitizenIdIssuedDate"
+                                           Label="Ngày cấp CCCD"
+                                           DateFormat="dd/MM/yyyy"
+                                           Editable="true"
+                                           Clearable="true"
+                                           ImmediateText="true"
+                                           Placeholder="dd/MM/yyyy"
+                                           Culture="@AppCulture.Vietnamese"
+                                           AutoClose="true"
+                                           Variant="Variant.Outlined" />
+                        </MudItem>
+                        <MudItem xs="12" md="8">
+                            <MudTextField @bind-Value="_model.CustomerAddress"
+                                          Label="Địa chỉ khách hàng"
+                                          Variant="Variant.Outlined" />
+                        </MudItem>
+                    }
+                }
             </MudGrid>
         </MudPaper>
 
@@ -249,14 +378,22 @@ else
                     </MudItem>
                 }
 
-                <MudItem xs="12" md="4">
+                <MudItem xs="12" sm="6" md="3">
+                    <MudNumericField T="decimal?"
+                                     @bind-Value="_model.TotalKilometers"
+                                     Label="Tổng km"
+                                     Min="0"
+                                     Variant="Variant.Outlined"
+                                     HelperText="Tổng quãng đường dự kiến/thực tế của hợp đồng." />
+                </MudItem>
+                <MudItem xs="12" sm="6" md="3">
                     <MudNumericField T="decimal?"
                                      @bind-Value="_model.ContractValue"
                                      Label="Giá trị hợp đồng"
                                      Format="N0"
                                      Variant="Variant.Outlined" />
                 </MudItem>
-                <MudItem xs="12" md="4">
+                <MudItem xs="12" sm="6" md="3">
                     <MudSelect T="string"
                                @bind-Value="_model.PaymentMethod"
                                Label="Hình thức thanh toán"
@@ -266,7 +403,7 @@ else
                         <MudSelectItem T="string" Value="@("Chuyển khoản")">Chuyển khoản</MudSelectItem>
                     </MudSelect>
                 </MudItem>
-                <MudItem xs="12" md="4">
+                <MudItem xs="12" sm="6" md="3">
                     <MudAutocomplete T="string"
                                      @bind-Value="_model.PaymentTime"
                                      Label="Thời gian thanh toán"
@@ -298,6 +435,29 @@ else
                 </MudButton>
             </MudStack>
 
+            <MudCheckBox T="bool"
+                         @bind-Value="_model.CustomerTravelsWithGroup"
+                         Label="Khách hàng/người đặt có trực tiếp đi cùng"
+                         Color="Color.Primary"
+                         Class="mt-3" />
+            <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Outlined" Class="mt-2">
+                Số người thực tế = số hành khách trong danh sách + 1 khi khách hàng/người đặt được đánh dấu đi cùng.
+            </MudAlert>
+
+            @if (_model.CustomerTravelsWithGroup && !string.IsNullOrWhiteSpace(TravelCompanionDisplayName))
+            {
+                <MudPaper Class="pa-3 mt-3" Elevation="0" Style="border:1px dashed var(--mud-palette-success); background:rgba(var(--mud-palette-success-rgb), 0.06);">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                        <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Success" />
+                        <MudText Typo="Typo.subtitle2">Khách hàng/người đặt đi cùng:</MudText>
+                        <MudText Typo="Typo.body1"><strong>@TravelCompanionDisplayName</strong></MudText>
+                    </MudStack>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                        Họ tên được tự động lấy từ thông tin khách hàng và được tính thêm 1 người vào tổng số hành khách thực tế.
+                    </MudText>
+                </MudPaper>
+            }
+
             <MudTable T="ContractPassengerDto" Items="_model.Passengers" Dense="true" Class="mt-3">
                 <HeaderContent>
                     <MudTh>STT</MudTh>
@@ -321,9 +481,9 @@ else
             <MudSpacer />
             <MudButton Color="Color.Primary"
                        Variant="Variant.Filled"
-                       Disabled="_saving"
+                       Disabled="@(_saving || !HasRequiredDispatchSignatures)"
                        OnClick="SaveAsync">
-                Lưu hợp đồng
+                @(Id.HasValue ? "Lưu cập nhật HĐ" : "Lưu & phát HĐ")
             </MudButton>
         </MudStack>
     </MudPaper>
@@ -334,8 +494,8 @@ else
     <MudPaper Class="pa-4 mt-4" Elevation="1">
         <MudText Typo="Typo.h6" Class="mb-3">Thông tin chữ ký hợp đồng</MudText>
         <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3">
-Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố định nếu đã được lưu trong danh mục.
-            Chủ hệ thống/Quản lý chỉ được xem chữ ký. Chỉ tài khoản Chủ xe được ghi nhận chữ ký khách hàng và chốt hợp đồng hoàn tất.
+            Chỉ 2 chân ký đầu tiên là bắt buộc trước khi phát HĐ xuống tài khoản nhận HĐ: Văn phòng đại diện và Chủ xe.
+            Sau khi Chủ xe nhận HĐ trên điện thoại, người lái thực tế ký trước và khách hàng ký sau. Đủ 4 chân ký mới được chốt hoàn thành HĐ.
         </MudAlert>
         <MudGrid>
             <MudItem xs="12" md="3">
@@ -353,11 +513,20 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
                               SignedAt="@FixedOwnerSignedAt" />
             </MudItem>
             <MudItem xs="12" md="3">
-                <MudText Typo="Typo.subtitle1">Tài xế</MudText>
-                <SignaturePad Disabled="true"
-                              ExistingSignatureUrl="@FixedDriverSignatureUrl"
-                              SignerName="@DriverSigner"
-                              SignedAt="@FixedDriverSignedAt" />
+                <MudText Typo="Typo.subtitle1">Người lái thực tế</MudText>
+                @if (!string.IsNullOrWhiteSpace(SignatureUrl(SignatureParty.Driver)))
+                {
+                    <SignaturePad Disabled="true"
+                                  ExistingSignatureUrl="@SignatureUrl(SignatureParty.Driver)"
+                                  SignerName="@SignatureName(SignatureParty.Driver)"
+                                  SignedAt="@SignatureTime(SignatureParty.Driver)" />
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
+                        Chưa có chữ ký người lái. Chữ ký này được ghi nhận trên điện thoại tài khoản Chủ xe sau khi nhận HĐ.
+                    </MudAlert>
+                }
             </MudItem>
             <MudItem xs="12" md="3">
                 <MudText Typo="Typo.subtitle1">Khách hàng (Người thuê xe)</MudText>
@@ -371,7 +540,7 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
                 else
                 {
                     <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
-                        Chưa có chữ ký khách hàng. Chỉ tài khoản Chủ xe được thao tác phần ký này.
+                        Chưa có chữ ký khách hàng. Chữ ký này được ghi nhận trên điện thoại tài khoản Chủ xe sau chữ ký người lái.
                     </MudAlert>
                 }
             </MudItem>
@@ -407,12 +576,17 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
     private string _currentUserId = string.Empty;
     private string _vehicleSearch = string.Empty;
     private string _customerSearch = string.Empty;
+    private bool _showNewCustomerForm;
     private SaveContractRequest _model = new() { Passengers = [] };
     private bool IsHistoryLocked => _model.Status is ContractStatus.Completed
         or ContractStatus.Cancelled
         or ContractStatus.Expired
         or ContractStatus.Invalidated;
-    private int PassengerCount => _model.Passengers.Count(x => !string.IsNullOrWhiteSpace(x.FullName));
+    private int PassengerCount => _model.Passengers.Count(x => !string.IsNullOrWhiteSpace(x.FullName)) + (_model.CustomerTravelsWithGroup ? 1 : 0);
+    private string TravelCompanionDisplayName => _model.CustomerIsCompany
+        ? (string.IsNullOrWhiteSpace(_model.CustomerRepresentativeName) ? _model.CustomerName : _model.CustomerRepresentativeName)
+        : _model.CustomerName;
+
     private List<CompanyProfile> _companies = [];
     private List<ApplicationUser> _drivers = [];
     private List<Vehicle> _vehicles = [];
@@ -489,6 +663,7 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
             _signatures = [];
             _vehicleSearch = string.Empty;
             _customerSearch = string.Empty;
+            _showNewCustomerForm = false;
             _startDate = null;
             _startTime = null;
             _endDate = null;
@@ -517,9 +692,13 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
             DriverId = detail.DriverId,
             CustomerId = detail.CustomerId,
             CustomerName = detail.CustomerName,
+            CustomerRepresentativeName = detail.CustomerRepresentativeName,
             CustomerPhone = detail.CustomerPhone,
             CustomerCitizenId = detail.CustomerCitizenId,
+            CustomerCitizenIdIssuedDate = detail.CustomerCitizenIdIssuedDate,
             CustomerAddress = detail.CustomerAddress,
+            CustomerIsCompany = detail.CustomerIsCompany,
+            CustomerTaxCode = detail.CustomerTaxCode,
             AreaCode = detail.AreaCode,
             VehicleId = detail.VehicleId,
             ActualPassengerCount = detail.ActualPassengerCount,
@@ -545,6 +724,24 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
             Passengers = detail.Passengers
         };
 
+        var currentCustomer = _customers.FirstOrDefault(x => x.Id == detail.CustomerId);
+        if (currentCustomer is not null)
+        {
+            _model.CustomerCitizenIdIssuedDate = currentCustomer.CitizenIdIssuedDate;
+            _model.CustomerIsCompany = currentCustomer.Type == CustomerType.Organization;
+            _model.CustomerTaxCode = currentCustomer.TaxCode;
+            if (_model.CustomerIsCompany)
+            {
+                _model.CustomerName = currentCustomer.OrganizationName ?? detail.CustomerName;
+                _model.CustomerRepresentativeName = currentCustomer.FullName;
+            }
+            else
+            {
+                _model.CustomerName = currentCustomer.FullName;
+                _model.CustomerRepresentativeName = null;
+            }
+        }
+
         _signatures = detail.Signatures;
         _startDate = detail.StartTime?.Date;
         _startTime = detail.StartTime?.TimeOfDay;
@@ -552,6 +749,7 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
         _endTime = detail.EndTime?.TimeOfDay;
         _vehicleSearch = string.Empty;
         _customerSearch = string.Empty;
+        _showNewCustomerForm = detail.CustomerId == Guid.Empty && !IsPlaceholderCustomer(detail.CustomerName, detail.CustomerPhone);
     }
 
     private void SelectCompany(Guid? companyProfileId)
@@ -564,7 +762,7 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
         _model.DriverId = string.Empty;
         _model.AreaCode = string.Empty;
         _vehicleSearch = string.Empty;
-        StartNewCustomer();
+        ClearSelectedCustomer(hideNewCustomerForm: true);
     }
 
     private void SelectVehicle(Vehicle? vehicle)
@@ -618,33 +816,78 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
     {
         if (customer is null)
         {
-            StartNewCustomer();
+            ClearSelectedCustomer(hideNewCustomerForm: !_showNewCustomerForm);
             return;
         }
 
         if (!CustomerBelongsToSelectedCompany(customer))
         {
-            StartNewCustomer();
+            ClearSelectedCustomer(hideNewCustomerForm: true);
             Snackbar.Add("Khách hàng không thuộc Công ty/Văn phòng đã chọn.", Severity.Error);
             return;
         }
 
+        _showNewCustomerForm = false;
         _model.CustomerId = customer.Id;
-        _model.CustomerName = customer.FullName;
+        _model.CustomerIsCompany = customer.Type == CustomerType.Organization;
+        _model.CustomerName = _model.CustomerIsCompany
+            ? customer.OrganizationName ?? customer.FullName
+            : customer.FullName;
+        _model.CustomerRepresentativeName = _model.CustomerIsCompany ? customer.FullName : null;
         _model.CustomerPhone = customer.PhoneNumber;
         _model.CustomerCitizenId = customer.CitizenId;
+        _model.CustomerCitizenIdIssuedDate = customer.CitizenIdIssuedDate;
         _model.CustomerAddress = customer.Address;
+        _model.CustomerTaxCode = customer.TaxCode;
         _customerSearch = string.Empty;
+    }
+
+    private void ToggleNewCustomerForm()
+    {
+        if (_showNewCustomerForm)
+        {
+            _showNewCustomerForm = false;
+            if (!_model.CustomerId.HasValue)
+            {
+                ClearSelectedCustomer(hideNewCustomerForm: true);
+            }
+            return;
+        }
+
+        StartNewCustomer();
     }
 
     private void StartNewCustomer()
     {
+        _showNewCustomerForm = true;
+        ClearSelectedCustomer(hideNewCustomerForm: false);
+    }
+
+    private void ClearSelectedCustomer(bool hideNewCustomerForm)
+    {
+        if (hideNewCustomerForm)
+            _showNewCustomerForm = false;
+
         _model.CustomerId = null;
         _model.CustomerName = string.Empty;
         _model.CustomerPhone = string.Empty;
+        _model.CustomerRepresentativeName = null;
         _model.CustomerCitizenId = null;
+        _model.CustomerCitizenIdIssuedDate = null;
         _model.CustomerAddress = null;
+        _model.CustomerIsCompany = false;
+        _model.CustomerTaxCode = null;
         _customerSearch = string.Empty;
+    }
+
+    private void SetCustomerIsCompany(bool isCompany)
+    {
+        _model.CustomerIsCompany = isCompany;
+        if (!isCompany)
+        {
+            _model.CustomerTaxCode = null;
+            _model.CustomerRepresentativeName = null;
+        }
     }
 
     private void AddPassenger()
@@ -736,6 +979,7 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
         {
             result = result.Where(x =>
                 Contains(x.FullName, search) ||
+                Contains(x.OrganizationName, search) ||
                 Contains(x.PhoneNumber, search) ||
                 Contains(x.CitizenId, search) ||
                 Contains(x.TaxCode, search));
@@ -765,6 +1009,12 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
         if (!_model.CompanyProfileId.HasValue)
         {
             Snackbar.Add("Vui lòng chọn Công ty/Văn phòng.", Severity.Error);
+            return;
+        }
+
+        if (!_model.CustomerId.HasValue && !ShowNewCustomerForm)
+        {
+            Snackbar.Add("Vui lòng chọn khách hàng có sẵn hoặc bấm Thêm mới khách hàng để nhập mới.", Severity.Error);
             return;
         }
 
@@ -845,6 +1095,7 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
             {
                 result = result.Where(x =>
                     Contains(x.FullName, search) ||
+                    Contains(x.OrganizationName, search) ||
                     Contains(x.PhoneNumber, search) ||
                     Contains(x.CitizenId, search) ||
                     Contains(x.TaxCode, search));
@@ -860,13 +1111,9 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
 
     private bool CustomerBelongsToSelectedCompany(Customer customer)
     {
-        if (!_model.CompanyProfileId.HasValue)
-            return false;
-
-        var companyId = _model.CompanyProfileId.Value;
-        return customer.Contracts.Any(x => x.CompanyProfileId == companyId) ||
-               _assignedVehicles.Any(x => x.AssignedDriverId == customer.CreatedByDriverId &&
-                                          VehicleBelongsToOffice(x, companyId));
+        // Chủ hệ thống được chọn mọi khách hàng hiện có; Công ty/Văn phòng của lần sử dụng
+        // được xác định bởi chính Hợp đồng đang tạo.
+        return _model.CompanyProfileId.HasValue && !customer.IsDeleted;
     }
 
 
@@ -879,7 +1126,11 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
 
     private bool DriverSelectDisabled => true;
 
-    private bool CustomerFieldsDisabled => true;
+    private bool CustomerFieldsDisabled => !ShowNewCustomerForm;
+
+    private bool ShowNewCustomerForm => _showNewCustomerForm || (!_model.CustomerId.HasValue && !string.IsNullOrWhiteSpace(_model.CustomerName));
+
+    private string NewCustomerButtonText => ShowNewCustomerForm ? "Ẩn nhập mới khách hàng" : "Thêm mới khách hàng";
 
     private string CompanyHelperText
         => "Chọn Công ty/Văn phòng trước để lọc xe, tài xế và khách hàng.";
@@ -889,7 +1140,7 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
             ? "Chọn xe trước."
             : string.IsNullOrWhiteSpace(SelectedVehicle.AssignedDriverId)
                 ? "Xe chưa được gán tài khoản Chủ xe."
-                : "Tài khoản nhận hợp đồng được lấy cố định theo xe; một tài khoản có thể nhận nhiều xe.";
+                : "Đây là tài khoản Chủ xe nhận HĐ theo xe, không phải người lái thực tế. Người lái được nhập riêng bên dưới.";
 
     private static string CompanyDisplay(CompanyProfile company)
         => string.IsNullOrWhiteSpace(company.BranchName)
@@ -915,8 +1166,16 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
         if (customer is null)
             return null;
 
-        var citizenId = string.IsNullOrWhiteSpace(customer.CitizenId) ? string.Empty : $" - {customer.CitizenId}";
-        return $"{customer.FullName} - {customer.PhoneNumber}{citizenId}";
+        var displayName = customer.Type == CustomerType.Organization && !string.IsNullOrWhiteSpace(customer.OrganizationName)
+            ? customer.OrganizationName
+            : customer.FullName;
+        var representative = customer.Type == CustomerType.Organization && !string.IsNullOrWhiteSpace(customer.FullName)
+            ? $" - Đại diện: {customer.FullName}"
+            : string.Empty;
+        var legalId = customer.Type == CustomerType.Organization
+            ? (string.IsNullOrWhiteSpace(customer.TaxCode) ? string.Empty : $" - MST: {customer.TaxCode}")
+            : (string.IsNullOrWhiteSpace(customer.CitizenId) ? string.Empty : $" - CCCD: {customer.CitizenId}");
+        return $"{displayName}{representative} - {customer.PhoneNumber}{legalId}";
     }
 
     private static bool Contains(string? source, string search)
@@ -936,14 +1195,15 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
             ? _detail?.OwnerName ?? SelectedDriver?.FullName ?? "Chủ sở hữu xe"
             : SelectedDriver?.FullName ?? "Chủ sở hữu xe";
 
-    private string DriverSigner
-        => SelectedDriver?.FullName ?? "Tài xế";
-
     private string? FixedOfficeSignatureUrl
-        => SelectedCompany?.RepresentativeSignatureFileUrl;
+        => Id.HasValue
+            ? _detail?.CompanyRepresentativeSignatureFileUrl ?? SelectedCompany?.RepresentativeSignatureFileUrl
+            : SelectedCompany?.RepresentativeSignatureFileUrl;
 
     private DateTime? FixedOfficeSignedAt
-        => SelectedCompany?.RepresentativeSignedAt;
+        => Id.HasValue
+            ? _detail?.CompanyRepresentativeSignedAt ?? SelectedCompany?.RepresentativeSignedAt
+            : SelectedCompany?.RepresentativeSignedAt;
 
     private string? FixedOwnerSignatureUrl
         => Id.HasValue
@@ -955,11 +1215,22 @@ Công ty/Văn phòng, chủ sở hữu xe và tài xế dùng chữ ký cố đ�
             ? _detail?.VehicleOwnerSignedAt ?? SelectedDriver?.VehicleOwnerSignedAt
             : SelectedDriver?.VehicleOwnerSignedAt;
 
-    private string? FixedDriverSignatureUrl
-        => SelectedDriver?.VehicleOwnerSignatureFileUrl;
+    private bool HasRequiredDispatchSignatures
+        => !string.IsNullOrWhiteSpace(FixedOfficeSignatureUrl) &&
+           !string.IsNullOrWhiteSpace(FixedOwnerSignatureUrl);
 
-    private DateTime? FixedDriverSignedAt
-        => SelectedDriver?.VehicleOwnerSignedAt;
+    private string MissingDispatchSignaturesText
+    {
+        get
+        {
+            var missing = new List<string>();
+            if (string.IsNullOrWhiteSpace(FixedOfficeSignatureUrl))
+                missing.Add("Văn phòng đại diện chưa có chân ký");
+            if (string.IsNullOrWhiteSpace(FixedOwnerSignatureUrl))
+                missing.Add("Chủ xe chưa có chân ký");
+            return missing.Count == 0 ? string.Empty : string.Join("; ", missing) + ".";
+        }
+    }
 
     private ContractSignatureDto? GetSignature(SignatureParty party)
         => _signatures.FirstOrDefault(x => x.Party == party);
