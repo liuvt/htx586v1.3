@@ -6,11 +6,21 @@
 @inject ISnackbar Snackbar
 
 <PageTitle>Quản lý khách hàng</PageTitle>
-<PageHeader Title="Quản lý khách hàng" Subtitle="Khách hàng có thể là cá nhân hoặc đơn vị; hệ thống tự lưu tài khoản đã tạo khách hàng." />
+<PageHeader Title="Quản lý khách hàng" Subtitle="Quản lý danh mục khách hàng cá nhân/doanh nghiệp, tìm kiếm nhanh theo họ tên, tên đơn vị hoặc số điện thoại." />
 
 <MudPaper Class="pa-4 mb-4" Elevation="1">
-    <MudGrid>
-        <MudItem xs="12" md="5"><MudTextField T="string" @bind-Value="_keyword" Placeholder="Tìm tên, số điện thoại, CCCD, mã số thuế hoặc người tạo..." Immediate="true" Clearable="true" Variant="Variant.Outlined" /></MudItem>
+    <MudGrid AlignItems="AlignItems.Center">
+        <MudItem xs="12" md="5">
+            <MudTextField T="string"
+                          @bind-Value="_keyword"
+                          Placeholder="Tìm theo họ tên đại diện, tên đơn vị/tổ chức hoặc số điện thoại"
+                          Label="Tìm kiếm khách hàng"
+                          Immediate="true"
+                          Clearable="true"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search"
+                          Variant="Variant.Outlined" />
+        </MudItem>
         <MudItem xs="12" md="7">
             <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="2" Justify="Justify.FlexEnd" AlignItems="AlignItems.Center">
                 <MudButton Href="/templates/Template_Import_Customer_HTX586.xlsx" download="Template_Import_Customer_HTX586.xlsx"
@@ -38,8 +48,12 @@
 {
     <MudPaper Class="pa-4 mb-4" Elevation="2">
         <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
-            <div><MudText Typo="Typo.h6">Kiểm tra import khách hàng</MudText><MudText Typo="Typo.body2" Color="Color.Secondary">@_importPreview.FileName</MudText></div>
-            <MudSpacer /><MudIconButton Icon="@Icons.Material.Filled.Close" Disabled="_importing" OnClick="CancelImport" />
+            <div>
+                <MudText Typo="Typo.h6">Kiểm tra import khách hàng</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@_importPreview.FileName</MudText>
+            </div>
+            <MudSpacer />
+            <MudIconButton Icon="@Icons.Material.Filled.Close" Disabled="_importing" OnClick="CancelImport" />
         </MudStack>
         <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="2" Class="mb-3">
             <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined">Tổng @_importPreview.TotalRows</MudChip>
@@ -50,16 +64,29 @@
             @(_importPreview.InvalidRows > 0 ? "Chỉ các dòng hợp lệ được import. Dữ liệu được ghi nhận theo tài khoản đang thao tác." : "Toàn bộ dữ liệu hợp lệ, có thể xác nhận import.")
         </MudAlert>
         <MudTable T="CustomerImportRowPreview" Items="_importPreview.Rows" Dense="true" Hover="true" Striped="true" RowsPerPage="10" Loading="_importing">
-            <HeaderContent><MudTh>Dòng</MudTh><MudTh>Loại</MudTh><MudTh>Khách hàng</MudTh><MudTh>Điện thoại</MudTh><MudTh>CCCD/MST</MudTh><MudTh>Trạng thái</MudTh><MudTh>Lỗi</MudTh></HeaderContent>
+            <HeaderContent>
+                <MudTh>Dòng</MudTh>
+                <MudTh>Loại</MudTh>
+                <MudTh>Khách hàng</MudTh>
+                <MudTh>Điện thoại</MudTh>
+                <MudTh>CCCD/MST</MudTh>
+                <MudTh>Trạng thái</MudTh>
+                <MudTh>Lỗi</MudTh>
+            </HeaderContent>
             <RowTemplate>
-                <MudTd>@context.RowNumber</MudTd><MudTd>@context.TypeDisplay</MudTd><MudTd><b>@context.DisplayName</b><br /><small>@context.FullName</small></MudTd>
-                <MudTd>@context.PhoneNumber</MudTd><MudTd>@(context.Type == CustomerType.Organization ? context.TaxCode : context.CitizenId)</MudTd>
+                <MudTd>@context.RowNumber</MudTd>
+                <MudTd>@context.TypeDisplay</MudTd>
+                <MudTd><b>@context.DisplayName</b><br /><small>@context.FullName</small></MudTd>
+                <MudTd>@context.PhoneNumber</MudTd>
+                <MudTd>@(context.Type == CustomerType.Organization ? context.TaxCode : context.CitizenId)</MudTd>
                 <MudTd><MudChip T="string" Size="Size.Small" Color="@(context.IsValid ? Color.Success : Color.Error)">@(context.IsValid ? "Hợp lệ" : "Lỗi")</MudChip></MudTd>
                 <MudTd><MudText Typo="Typo.caption" Color="Color.Error">@context.ErrorMessage</MudText></MudTd>
             </RowTemplate>
             <PagerContent><MudTablePager PageSizeOptions="@(new int[] { 10, 20, 50, 100 })" /></PagerContent>
         </MudTable>
-        <MudStack Row="true" Class="mt-4"><MudButton Variant="Variant.Outlined" Disabled="_importing" OnClick="CancelImport">Hủy</MudButton><MudSpacer />
+        <MudStack Row="true" Class="mt-4">
+            <MudButton Variant="Variant.Outlined" Disabled="_importing" OnClick="CancelImport">Hủy</MudButton>
+            <MudSpacer />
             <MudButton Color="Color.Success" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Publish"
                        Disabled="@(_importing || _importPreview.ValidRows == 0)" OnClick="ConfirmImportAsync">
                 @(_importing ? "Đang import..." : $"Import {_importPreview.ValidRows} khách hàng")
@@ -71,44 +98,155 @@
 @if (_editing)
 {
     <MudPaper Class="pa-4 mb-4" Elevation="2">
+        <MudStack Row="true" AlignItems="AlignItems.Start" Wrap="Wrap.Wrap" Class="mb-4" Spacing="2">
+            <div>
+                <MudText Typo="Typo.h6">@(_model.Id == Guid.Empty ? "Thêm khách hàng" : "Cập nhật khách hàng")</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Thiết lập theo 2 nhóm: thông tin pháp lý/chính và thông tin liên hệ/phụ.</MudText>
+            </div>
+            <MudSpacer />
+            <MudPaper Class="pa-3" Outlined="true" Elevation="0" Style="min-width:260px;">
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Người tạo</MudText>
+                <MudText Typo="Typo.subtitle1">@_creatorName</MudText>
+            </MudPaper>
+        </MudStack>
+
+        <MudPaper Class="pa-3 mb-4" Outlined="true" Elevation="0">
+            <MudStack Row="true" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Spacing="2">
+                <MudCheckBox T="bool" @bind-Value="IsOrganization" Label="Khách hàng là công ty/đơn vị/tổ chức" Color="Color.Primary" />
+                <MudChip T="string" Size="Size.Small" Color="@(IsOrganization ? Color.Info : Color.Default)" Variant="Variant.Outlined">
+                    @(IsOrganization ? "Đơn vị/Tổ chức" : "Cá nhân")
+                </MudChip>
+            </MudStack>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2">
+                Khi bật chế độ công ty, hệ thống hiển thị thêm Tên đơn vị/Tổ chức và Mã số thuế. Các thông tin còn lại được hiểu là của người đại diện.
+            </MudText>
+        </MudPaper>
+
+        @if (IsOrganization)
+        {
+            <MudPaper Class="pa-4 mb-4" Outlined="true" Elevation="0">
+                <MudText Typo="Typo.subtitle1" Class="mb-1">Thông tin đơn vị/tổ chức</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3">Chỉ hiển thị khi khách hàng là công ty/đơn vị.</MudText>
+                <MudGrid>
+                    <MudItem xs="12" md="8">
+                        <MudTextField @bind-Value="_model.OrganizationName" Label="Tên đơn vị/Tổ chức" Required="true" Variant="Variant.Outlined" />
+                    </MudItem>
+                    <MudItem xs="12" md="4">
+                        <MudTextField @bind-Value="_model.TaxCode" Label="Mã số thuế" Variant="Variant.Outlined" />
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        }
+
         <MudGrid>
-            <MudItem xs="12" md="3"><MudSelect T="CustomerType" @bind-Value="_model.Type" Label="Loại khách hàng" Variant="Variant.Outlined"><MudSelectItem Value="@CustomerType.Individual">Cá nhân</MudSelectItem><MudSelectItem Value="@CustomerType.Organization">Đơn vị/Tổ chức</MudSelectItem></MudSelect></MudItem>
-            <MudItem xs="12" md="3"><MudTextField T="string" Value="@_creatorName" Label="Người tạo" Disabled="true" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="3"><MudTextField @bind-Value="_model.FullName" Label="Họ tên người liên hệ" Required="true" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="3"><MudTextField @bind-Value="_model.PhoneNumber" Label="Số điện thoại" Required="true" Variant="Variant.Outlined" /></MudItem>
-            @if (_model.Type == CustomerType.Organization)
-            {
-                <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.OrganizationName" Label="Tên đơn vị/Tổ chức" Required="true" Variant="Variant.Outlined" /></MudItem>
-                <MudItem xs="12" md="3"><MudTextField @bind-Value="_model.TaxCode" Label="Mã số thuế" Variant="Variant.Outlined" /></MudItem>
-            }
-            <MudItem xs="12" md="3"><MudTextField @bind-Value="_model.CitizenId" Label="CCCD" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="3"><MudDatePicker @bind-Date="_model.CitizenIdIssuedDate" Label="Ngày cấp CCCD" Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Placeholder="dd/MM/yyyy" Culture="@AppCulture.Vietnamese" AutoClose="true" /></MudItem>
-            <MudItem xs="12" md="3"><MudTextField @bind-Value="_model.CitizenIdIssuedPlace" Label="Nơi cấp CCCD" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="3"><MudDatePicker @bind-Date="_model.DateOfBirth" Label="Ngày sinh" Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Placeholder="dd/MM/yyyy" Culture="@AppCulture.Vietnamese" AutoClose="true" /></MudItem>
-            <MudItem xs="12" md="3"><MudTextField @bind-Value="_model.Email" Label="Email" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12"><MudTextField @bind-Value="_model.Address" Label="Địa chỉ" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" lg="7">
+                <MudPaper Class="pa-4 h-100" Outlined="true" Elevation="0">
+                    <MudText Typo="Typo.subtitle1" Class="mb-1">Nhóm chính</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3">Thông tin người đại diện/khách hàng phục vụ đối chiếu trên hợp đồng.</MudText>
+                    <MudGrid>
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="_model.FullName" Label="@RepresentativeNameLabel" Required="true" Variant="Variant.Outlined" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="_model.CitizenId" Label="@RepresentativeCitizenLabel" Variant="Variant.Outlined" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudDatePicker @bind-Date="_model.CitizenIdIssuedDate" Label="Ngày cấp CCCD" Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Placeholder="dd/MM/yyyy" Culture="@AppCulture.Vietnamese" AutoClose="true" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudTextField @bind-Value="_model.CitizenIdIssuedPlace" Label="Nơi cấp CCCD" Variant="Variant.Outlined" />
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudDatePicker @bind-Date="_model.DateOfBirth" Label="Ngày sinh" Variant="Variant.Outlined" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Placeholder="dd/MM/yyyy" Culture="@AppCulture.Vietnamese" AutoClose="true" />
+                        </MudItem>
+                    </MudGrid>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" lg="5">
+                <MudPaper Class="pa-4 h-100" Outlined="true" Elevation="0">
+                    <MudText Typo="Typo.subtitle1" Class="mb-1">Nhóm phụ</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3">Thông tin liên hệ và địa chỉ. Nếu là công ty thì địa chỉ có thể là địa chỉ công ty.</MudText>
+                    <MudGrid>
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="_model.PhoneNumber" Label="Số điện thoại" Required="true" Variant="Variant.Outlined" />
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="_model.Email" Label="Email" Variant="Variant.Outlined" />
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudTextField @bind-Value="_model.Address" Label="Địa chỉ" Variant="Variant.Outlined" />
+                        </MudItem>
+                    </MudGrid>
+                </MudPaper>
+            </MudItem>
         </MudGrid>
-        <MudStack Row="true" Class="mt-4"><MudButton Variant="Variant.Outlined" OnClick="CancelEdit">Hủy</MudButton><MudSpacer /><MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_saving" OnClick="SaveAsync">Lưu khách hàng</MudButton></MudStack>
+
+        <MudStack Row="true" Class="mt-4">
+            <MudButton Variant="Variant.Outlined" OnClick="CancelEdit">Hủy</MudButton>
+            <MudSpacer />
+            <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_saving" OnClick="SaveAsync">Lưu khách hàng</MudButton>
+        </MudStack>
     </MudPaper>
 }
 
-<MudTable T="CustomerRow" Items="FilteredItems" Loading="_loading" Hover="true" Striped="true" RowsPerPage="20" Breakpoint="Breakpoint.Sm">
-    <HeaderContent><MudTh>Khách hàng</MudTh><MudTh>Loại</MudTh><MudTh>Điện thoại</MudTh><MudTh>CCCD/MST</MudTh><MudTh>Người tạo</MudTh><MudTh>Số HĐ</MudTh><MudTh></MudTh></HeaderContent>
-    <RowTemplate>
-        <MudTd DataLabel="Khách hàng"><b>@context.DisplayName</b><br /><small>@context.Address</small></MudTd>
-        <MudTd DataLabel="Loại">@(context.Type == CustomerType.Organization ? "Đơn vị" : "Cá nhân")</MudTd>
-        <MudTd DataLabel="Điện thoại">@context.PhoneNumber</MudTd>
-        <MudTd DataLabel="CCCD/MST">@(context.Type == CustomerType.Organization ? context.TaxCode : context.CitizenId)</MudTd>
-        <MudTd DataLabel="Người tạo">@context.CreatorName</MudTd>
-        <MudTd DataLabel="Số HĐ">@context.ContractCount</MudTd>
-        <MudTd>
-            <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="@(() => EditAsync(context.Id))" />
-            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" OnClick="@(() => DeleteAsync(context.Id))" />
-        </MudTd>
-    </RowTemplate>
-    <NoRecordsContent><MudText Class="pa-4">Chưa có khách hàng.</MudText></NoRecordsContent>
-    <PagerContent><MudTablePager PageSizeOptions="_pageSizeOptions" /></PagerContent>
-</MudTable>
+<MudPaper Class="pa-4" Elevation="1">
+    <MudStack Row="true" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mb-3">
+        <div>
+            <MudText Typo="Typo.h6">Danh mục khách hàng</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Hiển thị toàn bộ các cột quan trọng. Có thể tìm theo họ tên đại diện, tên đơn vị hoặc số điện thoại.</MudText>
+        </div>
+        <MudSpacer />
+        <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined">Tổng: @_items.Count</MudChip>
+    </MudStack>
+
+    <div style="overflow-x:auto;">
+        <MudTable T="CustomerRow" Items="FilteredItems" Loading="_loading" Hover="true" Striped="true" Dense="true" RowsPerPage="20" Breakpoint="Breakpoint.None">
+            <HeaderContent>
+                <MudTh>Loại</MudTh>
+                <MudTh>Tên đơn vị/Tổ chức</MudTh>
+                <MudTh>Họ tên đại diện</MudTh>
+                <MudTh>Số điện thoại</MudTh>
+                <MudTh>Email</MudTh>
+                <MudTh>CCCD người đại diện</MudTh>
+                <MudTh>Ngày cấp CCCD</MudTh>
+                <MudTh>Nơi cấp</MudTh>
+                <MudTh>Ngày sinh</MudTh>
+                <MudTh>Mã số thuế</MudTh>
+                <MudTh>Địa chỉ</MudTh>
+                <MudTh>Người tạo</MudTh>
+                <MudTh>Số HĐ</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Loại">
+                    <MudChip T="string" Size="Size.Small" Color="@(context.Type == CustomerType.Organization ? Color.Info : Color.Default)" Variant="Variant.Outlined">
+                        @(context.Type == CustomerType.Organization ? "Đơn vị/Tổ chức" : "Cá nhân")
+                    </MudChip>
+                </MudTd>
+                <MudTd DataLabel="Tên đơn vị/Tổ chức">@(string.IsNullOrWhiteSpace(context.OrganizationName) ? "-" : context.OrganizationName)</MudTd>
+                <MudTd DataLabel="Họ tên đại diện"><b>@context.FullName</b></MudTd>
+                <MudTd DataLabel="Số điện thoại">@context.PhoneNumber</MudTd>
+                <MudTd DataLabel="Email">@(string.IsNullOrWhiteSpace(context.Email) ? "-" : context.Email)</MudTd>
+                <MudTd DataLabel="CCCD người đại diện">@(string.IsNullOrWhiteSpace(context.CitizenId) ? "-" : context.CitizenId)</MudTd>
+                <MudTd DataLabel="Ngày cấp CCCD">@FormatDate(context.CitizenIdIssuedDate)</MudTd>
+                <MudTd DataLabel="Nơi cấp">@(string.IsNullOrWhiteSpace(context.CitizenIdIssuedPlace) ? "-" : context.CitizenIdIssuedPlace)</MudTd>
+                <MudTd DataLabel="Ngày sinh">@FormatDate(context.DateOfBirth)</MudTd>
+                <MudTd DataLabel="Mã số thuế">@(string.IsNullOrWhiteSpace(context.TaxCode) ? "-" : context.TaxCode)</MudTd>
+                <MudTd DataLabel="Địa chỉ">@(string.IsNullOrWhiteSpace(context.Address) ? "-" : context.Address)</MudTd>
+                <MudTd DataLabel="Người tạo">@context.CreatorName</MudTd>
+                <MudTd DataLabel="Số HĐ">@context.ContractCount</MudTd>
+                <MudTd DataLabel="Tác vụ">
+                    <MudStack Row="true" Spacing="0">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="@(() => EditAsync(context.Id))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" OnClick="@(() => DeleteAsync(context.Id))" />
+                    </MudStack>
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent><MudText Class="pa-4">Chưa có khách hàng.</MudText></NoRecordsContent>
+            <PagerContent><MudTablePager PageSizeOptions="_pageSizeOptions" /></PagerContent>
+        </MudTable>
+    </div>
+</MudPaper>
 
 @code {
     private static readonly int[] _pageSizeOptions = [10, 20, 50, 100];
@@ -128,8 +266,26 @@
     private CustomerImportPreview? _importPreview;
     private MudFileUpload<IBrowserFile>? _fileUpload;
 
-    private IEnumerable<CustomerRow> FilteredItems => string.IsNullOrWhiteSpace(_keyword) ? _items : _items.Where(x =>
-        Contains(x.DisplayName) || Contains(x.PhoneNumber) || Contains(x.CitizenId) || Contains(x.TaxCode) || Contains(x.CreatorName));
+    private bool IsOrganization
+    {
+        get => _model.Type == CustomerType.Organization;
+        set
+        {
+            _model.Type = value ? CustomerType.Organization : CustomerType.Individual;
+            if (!value)
+            {
+                _model.OrganizationName = null;
+                _model.TaxCode = null;
+            }
+        }
+    }
+
+    private string RepresentativeNameLabel => IsOrganization ? "Họ tên người đại diện" : "Họ tên khách hàng";
+    private string RepresentativeCitizenLabel => IsOrganization ? "CCCD người đại diện" : "CCCD khách hàng";
+
+    private IEnumerable<CustomerRow> FilteredItems => string.IsNullOrWhiteSpace(_keyword)
+        ? _items
+        : _items.Where(x => Contains(x.FullName) || Contains(x.OrganizationName) || Contains(x.PhoneNumber));
 
     protected override async Task OnInitializedAsync()
     {
@@ -217,9 +373,14 @@
                 {
                     Id = x.Id,
                     Type = x.Type,
-                    DisplayName = x.Type == CustomerType.Organization && x.OrganizationName != null ? x.OrganizationName : x.FullName,
+                    FullName = x.FullName,
+                    OrganizationName = x.OrganizationName,
                     PhoneNumber = x.PhoneNumber,
+                    Email = x.Email,
                     CitizenId = x.CitizenId,
+                    CitizenIdIssuedDate = x.CitizenIdIssuedDate,
+                    CitizenIdIssuedPlace = x.CitizenIdIssuedPlace,
+                    DateOfBirth = x.DateOfBirth,
                     TaxCode = x.TaxCode,
                     Address = x.Address,
                     CreatorName = x.CreatedByDriver.FullName,
@@ -264,6 +425,12 @@
         if (string.IsNullOrWhiteSpace(_model.FullName) || string.IsNullOrWhiteSpace(_model.PhoneNumber))
         {
             Snackbar.Add("Vui lòng nhập họ tên và số điện thoại.", Severity.Warning);
+            return;
+        }
+
+        if (IsOrganization && string.IsNullOrWhiteSpace(_model.OrganizationName))
+        {
+            Snackbar.Add("Khách hàng là công ty/đơn vị thì bắt buộc nhập Tên đơn vị/Tổ chức.", Severity.Warning);
             return;
         }
 
@@ -335,7 +502,6 @@
         catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
     }
 
-
     private IQueryable<Customer> ApplyScope(IQueryable<Customer> query, ApplicationDbContext db)
     {
         if (_isOwner)
@@ -358,8 +524,8 @@
     {
         target.Type = source.Type;
         target.FullName = source.FullName.Trim();
-        target.OrganizationName = N(source.OrganizationName);
-        target.TaxCode = N(source.TaxCode);
+        target.OrganizationName = source.Type == CustomerType.Organization ? N(source.OrganizationName) : null;
+        target.TaxCode = source.Type == CustomerType.Organization ? N(source.TaxCode) : null;
         target.PhoneNumber = source.PhoneNumber.Trim();
         target.CitizenId = N(source.CitizenId);
         target.CitizenIdIssuedDate = source.CitizenIdIssuedDate?.Date;
@@ -369,14 +535,20 @@
         target.Email = N(source.Email);
     }
     private static string? N(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string FormatDate(DateTime? value) => value?.ToString("dd/MM/yyyy") ?? "-";
 
     private sealed class CustomerRow
     {
         public Guid Id { get; set; }
         public CustomerType Type { get; set; }
-        public string DisplayName { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string? OrganizationName { get; set; }
         public string PhoneNumber { get; set; } = string.Empty;
+        public string? Email { get; set; }
         public string? CitizenId { get; set; }
+        public DateTime? CitizenIdIssuedDate { get; set; }
+        public string? CitizenIdIssuedPlace { get; set; }
+        public DateTime? DateOfBirth { get; set; }
         public string? TaxCode { get; set; }
         public string? Address { get; set; }
         public string CreatorName { get; set; } = string.Empty;

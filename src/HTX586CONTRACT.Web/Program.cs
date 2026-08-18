@@ -36,7 +36,7 @@ builder.Services.AddMudServices();
 builder.Services.Configure<FileStorageOptions>(
     builder.Configuration.GetSection(FileStorageOptions.SectionName));
 
-var connectionString = builder.Configuration.GetConnectionString("Default");
+var connectionString = builder.Configuration.GetConnectionString("Vps");
 
 // Tương thích ngược với cấu hình cũ nếu server vẫn dùng key Vps.
 // Bản deploy mới nên cấu hình ConnectionStrings:Default.
