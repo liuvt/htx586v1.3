@@ -103,69 +103,106 @@ else
             </MudPaper>
 
             <MudPaper Class="pa-4 mb-4 driver-contract-section" Elevation="0" Outlined="true">
-                <MudText Typo="Typo.h6" Class="mb-3">2. Khách hàng</MudText>
+                <MudText Typo="Typo.h6" Class="mb-3">2. Khách hàng/người thuê</MudText>
 
                 @if (!Id.HasValue)
                 {
-                    <MudGrid Spacing="2">
-                        <MudItem xs="12" md="9">
-                            <MudSelect T="Guid?"
-                                       Value="@_model.CustomerId"
-                                       ValueChanged="SelectCustomer"
-                                       Label="Chọn khách hàng"
-                                       Variant="Variant.Outlined"
-                                       Clearable="true">
-                                @foreach (var customer in _customers)
-                                {
-                                    <MudSelectItem T="Guid?" Value="@((Guid?)customer.Id)">@CustomerDisplay(customer)</MudSelectItem>
-                                }
-                            </MudSelect>
+                    <MudGrid Spacing="2" Class="mt-1">
+                        <MudItem xs="12">
+                            <MudCheckBox T="bool"
+                                         Value="@_model.CustomerIsCompany"
+                                         ValueChanged="SetCustomerIsCompany"
+                                         Color="Color.Primary"
+                                         Label="Khách hàng là công ty" />
                         </MudItem>
-                        <MudItem xs="12" md="3" Class="d-flex align-center">
-                            <MudButton Variant="Variant.Outlined"
-                                       Color="Color.Primary"
-                                       StartIcon="@Icons.Material.Filled.PersonAdd"
-                                       FullWidth="true"
-                                       OnClick="StartNewCustomer">
-                                Khách hàng mới
-                            </MudButton>
-                        </MudItem>
-                    </MudGrid>
 
-                    @if (_creatingNewCustomer)
-                    {
-                        <MudGrid Spacing="2" Class="mt-1">
+                        @if (_model.CustomerIsCompany)
+                        {
                             <MudItem xs="12" md="6">
                                 <MudTextField @bind-Value="_model.CustomerName"
-                                              Label="Họ tên khách hàng"
+                                              Label="Tên công ty/người thuê"
                                               Required="true"
                                               Variant="Variant.Outlined" />
                             </MudItem>
-                            <MudItem xs="12" md="6">
+                            <MudItem xs="12" md="3">
                                 <MudTextField @bind-Value="_model.CustomerPhone"
                                               Label="Số điện thoại"
                                               Required="true"
                                               Variant="Variant.Outlined" />
                             </MudItem>
-                            <MudItem xs="12" md="6">
+                            <MudItem xs="12" md="3">
+                                <MudTextField @bind-Value="_model.CustomerTaxCode"
+                                              Label="Mã số thuế"
+                                              Required="true"
+                                              Variant="Variant.Outlined" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudTextField @bind-Value="_model.CustomerRepresentativeName"
+                                              Label="Tên người đại diện"
+                                              Required="true"
+                                              Variant="Variant.Outlined" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
                                 <MudTextField @bind-Value="_model.CustomerCitizenId"
-                                              Label="CCCD/MST"
+                                              Label="CCCD người đại diện"
                                               Variant="Variant.Outlined" />
                             </MudItem>
-                            <MudItem xs="12" md="6">
+                            <MudItem xs="12" md="4">
+                                <MudDatePicker @bind-Date="_model.CustomerCitizenIdIssuedDate"
+                                               Label="Ngày cấp CCCD"
+                                               DateFormat="dd/MM/yyyy"
+                                               Editable="true"
+                                               Clearable="true"
+                                               ImmediateText="true"
+                                               Placeholder="dd/MM/yyyy"
+                                               Culture="@AppCulture.Vietnamese"
+                                               AutoClose="true"
+                                               Variant="Variant.Outlined" />
+                            </MudItem>
+                            <MudItem xs="12">
                                 <MudTextField @bind-Value="_model.CustomerAddress"
-                                              Label="Địa chỉ"
+                                              Label="Địa chỉ công ty"
                                               Variant="Variant.Outlined" />
                             </MudItem>
-                        </MudGrid>
-                    }
-                    else
-                    {
-                        <div class="driver-contract-summary-item mt-3">
-                            <MudText Typo="Typo.caption">Khách hàng đã chọn</MudText>
-                            <MudText Typo="Typo.subtitle1" Class="driver-contract-summary-value">@CustomerSummaryText</MudText>
-                        </div>
-                    }
+                        }
+                        else
+                        {
+                            <MudItem xs="12" md="4">
+                                <MudTextField @bind-Value="_model.CustomerName"
+                                              Label="Tên khách hàng/người thuê"
+                                              Required="true"
+                                              Variant="Variant.Outlined" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudTextField @bind-Value="_model.CustomerPhone"
+                                              Label="Số điện thoại"
+                                              Required="true"
+                                              Variant="Variant.Outlined" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudTextField @bind-Value="_model.CustomerCitizenId"
+                                              Label="CCCD khách hàng"
+                                              Variant="Variant.Outlined" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
+                                <MudDatePicker @bind-Date="_model.CustomerCitizenIdIssuedDate"
+                                               Label="Ngày cấp CCCD"
+                                               DateFormat="dd/MM/yyyy"
+                                               Editable="true"
+                                               Clearable="true"
+                                               ImmediateText="true"
+                                               Placeholder="dd/MM/yyyy"
+                                               Culture="@AppCulture.Vietnamese"
+                                               AutoClose="true"
+                                               Variant="Variant.Outlined" />
+                            </MudItem>
+                            <MudItem xs="12" md="8">
+                                <MudTextField @bind-Value="_model.CustomerAddress"
+                                              Label="Địa chỉ khách hàng"
+                                              Variant="Variant.Outlined" />
+                            </MudItem>
+                        }
+                    </MudGrid>
                 }
                 else
                 {
@@ -177,7 +214,7 @@ else
             </MudPaper>
 
             <MudPaper Class="pa-4 mb-4 driver-contract-section" Elevation="0" Outlined="true">
-                <MudText Typo="Typo.h6" Class="mb-3">3. Nội dung chuyến đi</MudText>
+                <MudText Typo="Typo.h6" Class="mb-3">3. Thông tin tài xế</MudText>
                 <MudGrid Spacing="2">
                     <MudItem xs="12" md="6">
                         <MudTextField @bind-Value="_model.OperatingDriverName"
@@ -211,6 +248,12 @@ else
                             }
                         </MudSelect>
                     </MudItem>
+                </MudGrid>
+            </MudPaper>
+
+            <MudPaper Class="pa-4 mb-4 driver-contract-section" Elevation="0" Outlined="true">
+                <MudText Typo="Typo.h6" Class="mb-3">4. Thông tin chuyến đi</MudText>
+                <MudGrid Spacing="2">
                     <MudItem xs="12" sm="6" md="3">
                         <MudDatePicker Date="@_startDate"
                                        DateChanged="SetStartDate"
@@ -313,10 +356,16 @@ else
                         </MudSelect>
                     </MudItem>
                     <MudItem xs="12" sm="6" md="3">
-                        <MudTextField @bind-Value="_model.PaymentTime"
-                                      Label="Thời gian thanh toán"
-                                      Variant="Variant.Outlined"
-                                      Disabled="@IsDriverEditableContentLocked" />
+                        <MudAutocomplete T="string"
+                                         @bind-Value="_model.PaymentTime"
+                                         Label="Thời gian thanh toán"
+                                         Placeholder="Nhập hoặc chọn phương án"
+                                         SearchFunc="SearchPaymentTimes"
+                                         CoerceText="true"
+                                         CoerceValue="true"
+                                         Clearable="true"
+                                         Variant="Variant.Outlined"
+                                         Disabled="@IsDriverEditableContentLocked" />
                     </MudItem>
                 </MudGrid>
             </MudPaper>
@@ -324,7 +373,7 @@ else
             <MudPaper Class="pa-4 driver-contract-section" Elevation="0" Outlined="true">
                 <MudStack Row="true" AlignItems="AlignItems.Center">
                     <div>
-                        <MudText Typo="Typo.h6">4. Danh sách hành khách</MudText>
+                        <MudText Typo="Typo.h6">5. Danh sách hành khách</MudText>
                         <MudText Typo="Typo.caption">@PassengerCount hành khách</MudText>
                     </div>
                     <MudSpacer />
@@ -559,6 +608,14 @@ else
 }
 @code {
     [Parameter] public Guid? Id { get; set; }
+
+    private static readonly string[] PaymentTimeOptions =
+    [
+        "Thanh toán ngay khi ký hợp đồng",
+        "Thanh toán trước chuyến đi",
+        "Thanh toán sau khi kết thúc chuyến đi",
+        "Thanh toán theo thỏa thuận"
+    ];
     private MudForm? _form;
     private bool _valid;
     private bool _loading = true;
@@ -570,19 +627,21 @@ else
     private string _userId = string.Empty;
     private ApplicationUser? _driver;
     private ContractDetailDto? _detail;
-    private List<Customer> _customers = [];
     private List<Vehicle> _vehicles = [];
     private List<ContractSignatureDto> _signatures = [];
     private SaveContractRequest _model = new() { Passengers = [] };
     private int PassengerCount => _model.Passengers.Count(x => !string.IsNullOrWhiteSpace(x.FullName)) + (_model.CustomerTravelsWithGroup ? 1 : 0);
-    private string TravelCompanionDisplayName => string.IsNullOrWhiteSpace(_model.CustomerName) ? string.Empty : _model.CustomerName.Trim();
+    private string TravelCompanionDisplayName => _model.CustomerIsCompany
+        ? (string.IsNullOrWhiteSpace(_model.CustomerRepresentativeName)
+            ? _model.CustomerName?.Trim() ?? string.Empty
+            : _model.CustomerRepresentativeName.Trim())
+        : string.IsNullOrWhiteSpace(_model.CustomerName) ? string.Empty : _model.CustomerName.Trim();
 
     private DateTime? _startDate;
     private DateTime? _endDate;
     private TimeSpan? _startTime;
     private TimeSpan? _endTime;
     private bool _editingContent = true;
-    private bool _creatingNewCustomer = true;
     private bool HasDriverSignature => HasSignature(SignatureParty.Driver);
     private bool HasCustomerSignature => HasSignature(SignatureParty.Customer);
     private bool HasAnyFinalPartySignature => HasDriverSignature || HasCustomerSignature;
@@ -638,11 +697,6 @@ else
     private bool CanGeneratePdf => _model.Status == ContractStatus.Completed;
     private bool IsDispatchedContract =>
         Id.HasValue && _detail?.IsSelfCreated == false;
-    private bool CanCreateNewCustomer =>
-        !Id.HasValue && !IsFinalLocked;
-    private bool CanChooseCustomer => CanCreateNewCustomer;
-    private bool CustomerFieldsDisabled =>
-        !CanCreateNewCustomer || (!_creatingNewCustomer && _model.CustomerId.HasValue);
 
     protected override async Task OnParametersSetAsync()
     {
@@ -654,10 +708,6 @@ else
             await using var db = await Factory.CreateDbContextAsync();
             _driver = await db.Users.FirstOrDefaultAsync(x =>
                 x.Id == _userId && x.IsActive && !x.IsDeleted && x.RegistrationStatus == "Approved");
-            _customers = await db.Customers.AsNoTracking()
-                .Where(x => x.CreatedByDriverId == _userId && !x.PhoneNumber.StartsWith("PEND"))
-                .OrderByDescending(x => x.LastUsedAt)
-                .ToListAsync();
             _vehicles = await db.Vehicles.AsNoTracking()
                 .Include(x => x.OfficeVehicles)
                     .ThenInclude(x => x.CompanyProfile)
@@ -670,7 +720,6 @@ else
             if (!Id.HasValue)
             {
                 _editingContent = true;
-                _creatingNewCustomer = true;
                 _model.DriverId = _userId;
                 _model.BusinessType = ContractBusinessType.Passenger;
                 _model.AreaCode = _driver?.AreaCode ?? string.Empty;
@@ -705,7 +754,6 @@ else
 
             _detail = detail;
             _editingContent = false;
-            _creatingNewCustomer = false;
 
             _model = new SaveContractRequest
             {
@@ -717,8 +765,12 @@ else
                 DriverId = detail.DriverId,
                 CustomerId = detail.CustomerId,
                 CustomerName = detail.CustomerName,
+                CustomerRepresentativeName = detail.CustomerRepresentativeName,
                 CustomerPhone = detail.CustomerPhone,
                 CustomerCitizenId = detail.CustomerCitizenId,
+                CustomerCitizenIdIssuedDate = detail.CustomerCitizenIdIssuedDate,
+                CustomerTaxCode = detail.CustomerTaxCode,
+                CustomerIsCompany = detail.CustomerIsCompany,
                 CustomerAddress = detail.CustomerAddress,
                 AreaCode = detail.AreaCode,
                 VehicleId = detail.VehicleId,
@@ -836,43 +888,14 @@ else
             _model.Passengers[index].SortOrder = index + 1;
     }
 
-    private void SelectCustomer(Guid? id)
+    private void SetCustomerIsCompany(bool isCompany)
     {
-        if (!CanChooseCustomer)
-            return;
-
-        if (!id.HasValue)
+        _model.CustomerIsCompany = isCompany;
+        if (!isCompany)
         {
-            StartNewCustomer();
-            return;
+            _model.CustomerTaxCode = null;
+            _model.CustomerRepresentativeName = null;
         }
-
-        var customer = _customers.FirstOrDefault(x => x.Id == id.Value);
-        if (customer is null)
-        {
-            StartNewCustomer();
-            return;
-        }
-
-        _model.CustomerId = customer.Id;
-        _model.CustomerName = customer.FullName;
-        _model.CustomerPhone = customer.PhoneNumber;
-        _model.CustomerCitizenId = customer.CitizenId;
-        _model.CustomerAddress = customer.Address;
-        _creatingNewCustomer = false;
-    }
-
-    private void StartNewCustomer()
-    {
-        if (!CanCreateNewCustomer)
-            return;
-
-        _model.CustomerId = null;
-        _model.CustomerName = string.Empty;
-        _model.CustomerPhone = string.Empty;
-        _model.CustomerCitizenId = null;
-        _model.CustomerAddress = null;
-        _creatingNewCustomer = true;
     }
 
     private void EnableEditing()
@@ -894,6 +917,16 @@ else
     private void SetEndDate(DateTime? value) { _endDate = value; CombineDates(); }
     private void SetEndTime(TimeSpan? value) { _endTime = value; CombineDates(); }
     private void CombineDates() { _model.StartTime = _startDate?.Date + (_startTime ?? TimeSpan.Zero); _model.EndTime = _endDate?.Date + (_endTime ?? TimeSpan.Zero); }
+
+    private Task<IEnumerable<string>> SearchPaymentTimes(string? value, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        IEnumerable<string> result = string.IsNullOrWhiteSpace(value)
+            ? PaymentTimeOptions
+            : PaymentTimeOptions.Where(x => x.Contains(value.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        return Task.FromResult(result);
+    }
 
     private async Task SaveAsync()
     {
@@ -948,10 +981,16 @@ else
             var name = string.IsNullOrWhiteSpace(_model.CustomerName)
                 ? "Chưa có khách hàng"
                 : _model.CustomerName.Trim();
+            var representative = _model.CustomerIsCompany && !string.IsNullOrWhiteSpace(_model.CustomerRepresentativeName)
+                ? $" · Đại diện: {_model.CustomerRepresentativeName.Trim()}"
+                : string.Empty;
             var phone = string.IsNullOrWhiteSpace(_model.CustomerPhone)
                 ? string.Empty
                 : $" · {_model.CustomerPhone.Trim()}";
-            return $"{name}{phone}";
+            var legalId = _model.CustomerIsCompany
+                ? (string.IsNullOrWhiteSpace(_model.CustomerTaxCode) ? string.Empty : $" · MST: {_model.CustomerTaxCode.Trim()}")
+                : (string.IsNullOrWhiteSpace(_model.CustomerCitizenId) ? string.Empty : $" · CCCD: {_model.CustomerCitizenId.Trim()}");
+            return $"{name}{representative}{phone}{legalId}";
         }
     }
     private string CompanyDisplayText => IsFinalLocked && !string.IsNullOrWhiteSpace(_detail?.CompanyName)
@@ -1025,14 +1064,6 @@ else
         : _driver?.VehicleOwnerSignedAt;
     private string? FixedDriverSignatureUrl => SignatureUrl(SignatureParty.Driver);
     private DateTime? FixedDriverSignedAt => SignatureTime(SignatureParty.Driver);
-
-    private static string CustomerDisplay(Customer customer)
-    {
-        var citizenId = string.IsNullOrWhiteSpace(customer.CitizenId)
-            ? string.Empty
-            : $" - {customer.CitizenId}";
-        return $"{customer.FullName} - {customer.PhoneNumber}{citizenId}";
-    }
 
     private async Task SaveDriverSignature(string data)
     {

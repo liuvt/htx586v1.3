@@ -353,7 +353,7 @@ public sealed class ContractService(
                     : "Đã tạo và phát hợp đồng cho tài khoản Chủ xe. Dữ liệu công ty, xe, chủ xe và khách hàng đã được chụp snapshot."
                 : customerResult.CreatedNew
                     ? "Đã tạo hợp đồng. Hồ sơ khách hàng mới đang ở trạng thái tạm và chỉ được lưu chính thức khi hoàn thành hợp đồng."
-                    : "Đã tạo hợp đồng và sử dụng lại hồ sơ khách hàng cá nhân theo số điện thoại.");
+                    : "Đã tạo hợp đồng và sử dụng lại hồ sơ khách hàng theo số điện thoại.");
     }
 
     public async Task<SaveContractResult> UpdateAsync(
@@ -1008,10 +1008,19 @@ public sealed class ContractService(
         }
 
         if (MissingCustomerInfo(request))
-            throw new InvalidOperationException("Vui lòng nhập đầy đủ họ tên và số điện thoại khách hàng.");
+            throw new InvalidOperationException("Vui lòng nhập đầy đủ họ tên/tên công ty, người đại diện (nếu là công ty) và số điện thoại khách hàng.");
+        if (request.CustomerIsCompany && string.IsNullOrWhiteSpace(request.CustomerTaxCode))
+            throw new InvalidOperationException("Khách hàng là công ty thì bắt buộc nhập mã số thuế.");
 
-        var phone = request.CustomerPhone.Trim();
-        var requestedCustomerId = request.CustomerId ?? existingCustomerId;
+        // Chủ xe khi TẠO hợp đồng mới luôn phải nhập khách hàng mới trên form.
+        // Không cho phép truyền CustomerId để chọn/đọc lại khách hàng cũ, kể cả qua request thủ công.
+        if (!existingCustomerId.HasValue && request.CustomerId.HasValue)
+            throw new InvalidOperationException("Chủ xe không được chọn khách hàng đã có khi tạo hợp đồng mới.");
+
+        // Chỉ cho phép dùng CustomerId khi đang cập nhật chính hợp đồng hiện tại.
+        var requestedCustomerId = existingCustomerId.HasValue
+            ? request.CustomerId ?? existingCustomerId
+            : null;
         Customer? selectedCustomer = null;
         if (requestedCustomerId.HasValue)
         {
@@ -1026,18 +1035,6 @@ public sealed class ContractService(
                 selectedCustomer.LastUsedAt = DateTime.UtcNow;
                 return new(selectedCustomer, false, false);
             }
-        }
-
-        var existingCustomer = await db.Customers.FirstOrDefaultAsync(x =>
-            x.CreatedByDriverId == currentUserId && x.PhoneNumber == phone &&
-            !x.PhoneNumber.StartsWith("PEND"),
-            ct);
-        if (existingCustomer is not null)
-        {
-            existingCustomer.LastUsedAt = DateTime.UtcNow;
-            if (selectedCustomer is not null)
-                SoftDeleteProvisionalCustomer(selectedCustomer, currentUserId);
-            return new(existingCustomer, false, false);
         }
 
         if (selectedCustomer is not null)
@@ -1183,7 +1180,20 @@ public sealed class ContractService(
         }
         else
         {
+            // Có thể trùng số điện thoại với khách đã từng giao dịch, nhưng hợp đồng hiện tại
+            // phải giữ đúng dữ liệu Chủ xe vừa nhập; không lấy ngược thông tin cũ lên hợp đồng.
+            finalCustomer.Type = isCompany ? CustomerType.Organization : CustomerType.Individual;
+            finalCustomer.FullName = isCompany
+                ? representativeName ?? contract.CustomerNameSnapshot
+                : contract.CustomerNameSnapshot;
+            finalCustomer.OrganizationName = companyName;
+            finalCustomer.TaxCode = isCompany ? N(snapshot?.Customer.TaxCode) : null;
+            finalCustomer.CitizenId = N(contract.CustomerCitizenIdSnapshot);
+            finalCustomer.CitizenIdIssuedDate = snapshot?.Customer.CitizenIdIssuedDate;
+            finalCustomer.Address = N(contract.CustomerAddressSnapshot);
             finalCustomer.LastUsedAt = now;
+            finalCustomer.UpdatedBy = currentUserId;
+            finalCustomer.UpdatedAt = now;
         }
 
         SoftDeleteProvisionalCustomer(current, currentUserId);

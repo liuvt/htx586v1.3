@@ -138,3 +138,11 @@ dotnet publish src/HTX586CONTRACT.Web/HTX586CONTRACT.Web.csproj \
 ```
 
 Chi tiết triển khai VPS xem [DEPLOYMENT_VPS.md](DEPLOYMENT_VPS.md).
+
+## Sửa lỗi lưu chân ký tài xế với SQL Server retry strategy (26/08/2026)
+
+- Sửa lỗi `SqlServerRetryingExecutionStrategy does not support user-initiated transactions` khi tài khoản **Chủ xe** bấm **Xác nhận chữ ký người lái**.
+- `ContractDocumentService.SaveSignatureAsync` giờ mở transaction `Serializable` bên trong `Database.CreateExecutionStrategy().ExecuteAsync(...)`, đúng với cấu hình `EnableRetryOnFailure` của SQL Server.
+- Giữ cơ chế khóa `UPDLOCK/HOLDLOCK` để không cho hai thao tác ký cùng hợp đồng chạy chồng nhau.
+- Bổ sung xử lý retry idempotent theo URL file chữ ký duy nhất để tránh báo nhầm "đã ký trước đó" nếu SQL đã commit nhưng kết nối bị ngắt đúng lúc trả kết quả.
+- File chữ ký được dọn tự động nếu giao dịch SQL thất bại.

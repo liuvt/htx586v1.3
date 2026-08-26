@@ -9,6 +9,7 @@ using HTX586CONTRACT.Domain.Enums;
 using HTX586CONTRACT.Domain.Signatures;
 using HTX586CONTRACT.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace HTX586CONTRACT.Web.Services;
 
@@ -108,163 +109,189 @@ public sealed class ContractDocumentService(
                 throw new InvalidOperationException(
                     "Chỉ tài khoản Chủ xe đang hoạt động mới được ghi nhận chữ ký người lái/khách hàng và chốt hợp đồng hoàn tất.");
 
-            // Transaction Serializable được mở TRƯỚC khi đọc hợp đồng. Nhờ đó hai
-            // thao tác ký cùng một hợp đồng không thể cùng vượt qua bước kiểm tra.
-            await using var transaction = await db.Database.BeginTransactionAsync(
-                IsolationLevel.Serializable,
-                ct);
+            // EnableRetryOnFailure đang bật cho SQL Server. EF Core không cho phép mở transaction
+            // thủ công bên ngoài execution strategy, nếu không sẽ phát sinh lỗi:
+            // "SqlServerRetryingExecutionStrategy does not support user-initiated transactions".
+            //
+            // Đưa file về tên chính thức trước khi chạy transaction. File chưa được ứng dụng tham chiếu
+            // cho đến khi INSERT ContractSignatures commit thành công; nếu SQL thất bại, catch bên ngoài
+            // sẽ xóa file này. Delegate retry vì vậy không phụ thuộc vào thao tác File.Move.
+            File.Move(tempPath, fullPath);
+            finalFileCreated = true;
 
-            try
+            var strategy = db.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
             {
-                // Không track Contract để EF không sinh UPDATE có điều kiện RowVersion
-                // từ một bản ghi đã bị thay đổi bởi thao tác ký khác.
-                var contract = await db.Contracts
-                    .FromSqlInterpolated($"""
-                        SELECT *
-                        FROM [dbo].[Contracts] WITH (UPDLOCK, HOLDLOCK, ROWLOCK)
-                        WHERE [Id] = {contractId} AND [IsDeleted] = 0
-                        """)
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(ct)
-                    ?? throw new KeyNotFoundException("Không tìm thấy hợp đồng.");
+                // Transaction Serializable phải nằm bên trong execution strategy và được mở trước khi
+                // đọc hợp đồng. Nhờ đó vừa tương thích retry, vừa khóa hai thao tác ký đồng thời.
+                await using var transaction = await db.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable,
+                    ct);
 
-                if (!string.Equals(contract.DriverId, currentUserId, StringComparison.Ordinal))
-                    throw new InvalidOperationException(
-                        "Chỉ tài khoản Chủ xe nhận hợp đồng mới được ghi nhận chữ ký người lái và khách hàng.");
-
-                if (contract.Status is ContractStatus.Cancelled or ContractStatus.Expired or ContractStatus.Invalidated)
-                    throw new InvalidOperationException("Hợp đồng đã bị hủy, hết hạn hoặc vô hiệu hóa.");
-
-                if (contract.Status == ContractStatus.Completed)
-                    throw new InvalidOperationException(
-                        "Hợp đồng đã đủ chữ ký và bị khóa. Không thể thay đổi chữ ký.");
-
-                if (contract.IsSelfCreated)
-                {
-                    if (contract.Status is not ContractStatus.Created
-                        and not ContractStatus.Assigned
-                        and not ContractStatus.Received)
-                        throw new InvalidOperationException(
-                            "Hợp đồng tự tạo không ở trạng thái cho phép ghi nhận chữ ký.");
-                }
-                else if (contract.Status != ContractStatus.Received)
-                {
-                    throw new InvalidOperationException(
-                        "Bạn phải bấm Nhận hợp đồng trước khi cập nhật và ghi nhận chữ ký người lái/khách hàng.");
-                }
-
-                if (string.IsNullOrWhiteSpace(contract.OperatingDriverName))
-                    throw new InvalidOperationException(
-                        "Vui lòng nhập và lưu họ tên người lái thực tế trước khi ghi nhận chữ ký.");
-
-                if (role == SignatureParty.Driver &&
-                    !AutomobileDrivingLicenseClasses.IsValid(contract.OperatingDriverLicenseClass))
-                    throw new InvalidOperationException(
-                        "Vui lòng nhập và lưu hạng GPLX ô tô hợp lệ của người lái thực tế trước khi ký.");
-
-                if (role == SignatureParty.Customer)
-                {
-                    var hasDriverSignature = await db.ContractSignatures
-                        .AsNoTracking()
-                        .AnyAsync(x => x.ContractId == contractId && !x.IsDeleted && x.Party == SignatureParty.Driver, ct);
-                    if (!hasDriverSignature)
-                        throw new InvalidOperationException(
-                            "Người lái thực tế chưa ký xác nhận. Vui lòng để người lái ký trước, sau đó mới ghi nhận chữ ký khách hàng.");
-                }
-
-                var signatureExists = await db.ContractSignatures
-                    .AsNoTracking()
-                    .AnyAsync(x => x.ContractId == contractId && !x.IsDeleted && x.Party == role, ct);
-
-                if (signatureExists)
-                    throw new InvalidOperationException(
-                        $"{RoleName(role)} đã ký trước đó. Chữ ký đã xác nhận không được phép ghi đè.");
-
-                var finalSnapshotJson = await EnsureCompletionSnapshotAsync(db, contract, ct);
-                contract.ContractDataJson = finalSnapshotJson;
-
-                var now = DateTime.UtcNow;
-                var signature = new ContractSignature
-                {
-                    Id = Guid.NewGuid(),
-                    ContractId = contractId,
-                    Party = role,
-                    SignerName = role == SignatureParty.Driver
-                        ? contract.OperatingDriverName!.Trim()
-                        : string.IsNullOrWhiteSpace(signerName)
-                            ? DefaultSignerName(contract, role)
-                            : signerName.Trim(),
-                    SignatureFileUrl = relativeUrl,
-                    SignatureHash = Convert.ToHexString(SHA256.HashData(bytes)),
-                    ContractHashAtSigning = ContractHash(contract),
-                    DeviceSignedAt = now,
-                    ServerSignedAt = now,
-                    CreatedAt = now,
-                    UpdatedAt = now
-                };
-
-                // INSERT trực tiếp để luồng ký tuyệt đối không đi qua ChangeTracker/SaveChanges.
-                // Vì vậy EF không thể phát sinh UPDATE Contracts kèm RowVersion cũ.
-                var insertedRows = await db.Database.ExecuteSqlInterpolatedAsync($"""
-                    INSERT INTO [dbo].[ContractSignatures]
-                    (
-                        [Id], [ContractId], [Party], [SignerName],
-                        [SignatureFileUrl], [SignatureHash], [ContractHashAtSigning],
-                        [DeviceSignedAt], [ServerSignedAt],
-                        [CreatedAt], [UpdatedAt], [IsDeleted]
-                    )
-                    VALUES
-                    (
-                        {signature.Id}, {signature.ContractId}, {(int)signature.Party}, {signature.SignerName},
-                        {signature.SignatureFileUrl}, {signature.SignatureHash}, {signature.ContractHashAtSigning},
-                        {signature.DeviceSignedAt}, {signature.ServerSignedAt},
-                        {signature.CreatedAt}, {signature.UpdatedAt}, {false}
-                    );
-                    """, ct);
-
-                if (insertedRows != 1)
-                    throw new InvalidOperationException("Không thể thêm bản ghi chữ ký vào SQL.");
-
-                // Chữ ký người lái thực tế và khách hàng được ghi nhận riêng theo từng hợp đồng.
-                // Hợp đồng chỉ chuyển sang Completed khi đã đủ cả hai chữ ký và
-                // VehicleOwner chủ động bấm nút "Hoàn thành hợp đồng".
-                var updatedRows = await db.Contracts
-                    .Where(x => x.Id == contractId &&
-                        (x.Status == ContractStatus.Created ||
-                         x.Status == ContractStatus.Assigned ||
-                         x.Status == ContractStatus.Received))
-                    .ExecuteUpdateAsync(setters => setters
-                        .SetProperty(x => x.UpdatedAt, now)
-                        .SetProperty(x => x.UpdatedBy, currentUserId)
-                        .SetProperty(x => x.ContractDataJson, finalSnapshotJson),
-                        ct);
-
-                if (updatedRows != 1)
-                    throw new InvalidOperationException(
-                        "Không thể cập nhật hợp đồng sau khi lưu chữ ký.");
-
-                File.Move(tempPath, fullPath);
-                finalFileCreated = true;
-
-                await transaction.CommitAsync(ct);
-                return relativeUrl;
-            }
-            catch
-            {
                 try
                 {
-                    await transaction.RollbackAsync(ct);
-                }
-                catch (Exception rollbackException)
-                {
-                    logger.LogError(
-                        rollbackException,
-                        "Không thể rollback giao dịch lưu chữ ký của hợp đồng {ContractId}.",
-                        contractId);
-                }
+                    // Không track Contract để EF không sinh UPDATE có điều kiện RowVersion
+                    // từ một bản ghi đã bị thay đổi bởi thao tác ký khác.
+                    var contract = await db.Contracts
+                        .FromSqlInterpolated($"""
+                            SELECT *
+                            FROM [dbo].[Contracts] WITH (UPDLOCK, HOLDLOCK, ROWLOCK)
+                            WHERE [Id] = {contractId} AND [IsDeleted] = 0
+                            """)
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(ct)
+                        ?? throw new KeyNotFoundException("Không tìm thấy hợp đồng.");
 
-                throw;
-            }
+                    if (!string.Equals(contract.DriverId, currentUserId, StringComparison.Ordinal))
+                        throw new InvalidOperationException(
+                            "Chỉ tài khoản Chủ xe nhận hợp đồng mới được ghi nhận chữ ký người lái và khách hàng.");
+
+                    if (contract.Status is ContractStatus.Cancelled or ContractStatus.Expired or ContractStatus.Invalidated)
+                        throw new InvalidOperationException("Hợp đồng đã bị hủy, hết hạn hoặc vô hiệu hóa.");
+
+                    if (contract.Status == ContractStatus.Completed)
+                        throw new InvalidOperationException(
+                            "Hợp đồng đã đủ chữ ký và bị khóa. Không thể thay đổi chữ ký.");
+
+                    if (contract.IsSelfCreated)
+                    {
+                        if (contract.Status is not ContractStatus.Created
+                            and not ContractStatus.Assigned
+                            and not ContractStatus.Received)
+                            throw new InvalidOperationException(
+                                "Hợp đồng tự tạo không ở trạng thái cho phép ghi nhận chữ ký.");
+                    }
+                    else if (contract.Status != ContractStatus.Received)
+                    {
+                        throw new InvalidOperationException(
+                            "Bạn phải bấm Nhận hợp đồng trước khi cập nhật và ghi nhận chữ ký người lái/khách hàng.");
+                    }
+
+                    if (string.IsNullOrWhiteSpace(contract.OperatingDriverName))
+                        throw new InvalidOperationException(
+                            "Vui lòng nhập và lưu họ tên người lái thực tế trước khi ghi nhận chữ ký.");
+
+                    if (role == SignatureParty.Driver &&
+                        !AutomobileDrivingLicenseClasses.IsValid(contract.OperatingDriverLicenseClass))
+                        throw new InvalidOperationException(
+                            "Vui lòng nhập và lưu hạng GPLX ô tô hợp lệ của người lái thực tế trước khi ký.");
+
+                    if (role == SignatureParty.Customer)
+                    {
+                        var hasDriverSignature = await db.ContractSignatures
+                            .AsNoTracking()
+                            .AnyAsync(x => x.ContractId == contractId && !x.IsDeleted && x.Party == SignatureParty.Driver, ct);
+                        if (!hasDriverSignature)
+                            throw new InvalidOperationException(
+                                "Người lái thực tế chưa ký xác nhận. Vui lòng để người lái ký trước, sau đó mới ghi nhận chữ ký khách hàng.");
+                    }
+
+                    var existingSignature = await db.ContractSignatures
+                        .AsNoTracking()
+                        .FirstOrDefaultAsync(x => x.ContractId == contractId && !x.IsDeleted && x.Party == role, ct);
+
+                    if (existingSignature is not null)
+                    {
+                        // ExecutionStrategy có thể chạy lại delegate nếu mất kết nối đúng lúc COMMIT.
+                        // URL file là duy nhất cho mỗi lần bấm lưu. Nếu gặp lại đúng URL này thì lần
+                        // thực thi trước đã commit thành công và retry phải được xem là idempotent.
+                        if (string.Equals(
+                                existingSignature.SignatureFileUrl,
+                                relativeUrl,
+                                StringComparison.OrdinalIgnoreCase))
+                        {
+                            await transaction.CommitAsync(ct);
+                            return;
+                        }
+
+                        throw new InvalidOperationException(
+                            $"{RoleName(role)} đã ký trước đó. Chữ ký đã xác nhận không được phép ghi đè.");
+                    }
+
+                    var finalSnapshotJson = await EnsureCompletionSnapshotAsync(db, contract, ct);
+                    contract.ContractDataJson = finalSnapshotJson;
+
+                    var now = DateTime.UtcNow;
+                    var signature = new ContractSignature
+                    {
+                        Id = Guid.NewGuid(),
+                        ContractId = contractId,
+                        Party = role,
+                        SignerName = role == SignatureParty.Driver
+                            ? contract.OperatingDriverName!.Trim()
+                            : string.IsNullOrWhiteSpace(signerName)
+                                ? DefaultSignerName(contract, role)
+                                : signerName.Trim(),
+                        SignatureFileUrl = relativeUrl,
+                        SignatureHash = Convert.ToHexString(SHA256.HashData(bytes)),
+                        ContractHashAtSigning = ContractHash(contract),
+                        DeviceSignedAt = now,
+                        ServerSignedAt = now,
+                        CreatedAt = now,
+                        UpdatedAt = now
+                    };
+
+                    // INSERT trực tiếp để luồng ký tuyệt đối không đi qua ChangeTracker/SaveChanges.
+                    // Vì vậy EF không thể phát sinh UPDATE Contracts kèm RowVersion cũ.
+                    var insertedRows = await db.Database.ExecuteSqlInterpolatedAsync($"""
+                        INSERT INTO [dbo].[ContractSignatures]
+                        (
+                            [Id], [ContractId], [Party], [SignerName],
+                            [SignatureFileUrl], [SignatureHash], [ContractHashAtSigning],
+                            [DeviceSignedAt], [ServerSignedAt],
+                            [CreatedAt], [UpdatedAt], [IsDeleted]
+                        )
+                        VALUES
+                        (
+                            {signature.Id}, {signature.ContractId}, {(int)signature.Party}, {signature.SignerName},
+                            {signature.SignatureFileUrl}, {signature.SignatureHash}, {signature.ContractHashAtSigning},
+                            {signature.DeviceSignedAt}, {signature.ServerSignedAt},
+                            {signature.CreatedAt}, {signature.UpdatedAt}, {false}
+                        );
+                        """, ct);
+
+                    if (insertedRows != 1)
+                        throw new InvalidOperationException("Không thể thêm bản ghi chữ ký vào SQL.");
+
+                    // Chữ ký người lái thực tế và khách hàng được ghi nhận riêng theo từng hợp đồng.
+                    // Hợp đồng chỉ chuyển sang Completed khi đã đủ cả hai chữ ký và
+                    // VehicleOwner chủ động bấm nút "Hoàn thành hợp đồng".
+                    var updatedRows = await db.Contracts
+                        .Where(x => x.Id == contractId &&
+                            (x.Status == ContractStatus.Created ||
+                             x.Status == ContractStatus.Assigned ||
+                             x.Status == ContractStatus.Received))
+                        .ExecuteUpdateAsync(setters => setters
+                            .SetProperty(x => x.UpdatedAt, now)
+                            .SetProperty(x => x.UpdatedBy, currentUserId)
+                            .SetProperty(x => x.ContractDataJson, finalSnapshotJson),
+                            ct);
+
+                    if (updatedRows != 1)
+                        throw new InvalidOperationException(
+                            "Không thể cập nhật hợp đồng sau khi lưu chữ ký.");
+
+                    await transaction.CommitAsync(ct);
+                }
+                catch
+                {
+                    try
+                    {
+                        await transaction.RollbackAsync(ct);
+                    }
+                    catch (Exception rollbackException)
+                    {
+                        logger.LogError(
+                            rollbackException,
+                            "Không thể rollback giao dịch lưu chữ ký của hợp đồng {ContractId}.",
+                            contractId);
+                    }
+
+                    throw;
+                }
+            });
+
+            return relativeUrl;
         }
         catch (Exception ex)
         {
