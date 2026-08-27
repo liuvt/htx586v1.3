@@ -36,7 +36,7 @@ builder.Services.AddMudServices();
 builder.Services.Configure<FileStorageOptions>(
     builder.Configuration.GetSection(FileStorageOptions.SectionName));
 
-var connectionString = builder.Configuration.GetConnectionString("Vps");
+var connectionString = builder.Configuration.GetConnectionString("Default");
 
 // Tương thích ngược với cấu hình cũ nếu server vẫn dùng key Vps.
 // Bản deploy mới nên cấu hình ConnectionStrings:Default.
@@ -47,15 +47,24 @@ if (string.IsNullOrWhiteSpace(connectionString))
     throw new InvalidOperationException(
         "Không tìm thấy connection string. Hãy cấu hình ConnectionStrings:Default bằng appsettings.Production.json, user-secrets hoặc biến môi trường ConnectionStrings__Default.");
 
-var forwardedHeadersEnabled = builder.Configuration.GetValue<bool>("ForwardedHeaders:Enabled");
+// Production của HTX586 chạy sau reverse proxy (Nginx/aaPanel).
+// Bật Forwarded Headers mặc định ở Production để ASP.NET Core nhận đúng HTTPS
+// từ X-Forwarded-Proto. Cấu hình ForwardedHeaders:Enabled vẫn có thể bật ở Development.
+var forwardedHeadersEnabled =
+    !builder.Environment.IsDevelopment() ||
+    builder.Configuration.GetValue<bool>("ForwardedHeaders:Enabled");
+
 if (forwardedHeadersEnabled)
 {
     builder.Services.Configure<ForwardedHeadersOptions>(options =>
     {
-        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        options.ForwardedHeaders =
+            ForwardedHeaders.XForwardedFor |
+            ForwardedHeaders.XForwardedProto |
+            ForwardedHeaders.XForwardedHost;
 
-        // Dùng cho VPS chạy sau reverse proxy như Nginx/Cloudflare/IIS ARR.
-        // Nếu cần siết bảo mật, hãy cấu hình KnownProxies/KnownNetworks cụ thể cho hạ tầng của bạn.
+        // VPS chạy sau reverse proxy Nginx/aaPanel.
+        // Cho phép proxy nội bộ cung cấp các X-Forwarded-* headers.
         options.KnownNetworks.Clear();
         options.KnownProxies.Clear();
     });
