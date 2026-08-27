@@ -387,19 +387,35 @@ public sealed class PdfContractTemplateRenderer(
             ["VERIFY_CODE"] = ShortHash(contract.ContractHash ?? contract.Id.ToString("N"))
         };
 
-        var passengers = contract.Passengers
+        // Khách thuê/người đặt đi cùng được dành cố định vị trí số 1 trên
+        // danh sách hành khách. Các hành khách nhập bổ sung được dời xuống từ số 2.
+        // Không ghi khách thuê vào ContractPassengers để tránh trùng dữ liệu và
+        // tránh bị cộng hai lần vào ActualPassengerCount.
+        var passengerRows = new List<(string Name, int? BirthYear, string? Note)>();
+        if (contract.CustomerTravelsWithGroup &&
+            !string.IsNullOrWhiteSpace(customerRepresentative) &&
+            !string.Equals(customerRepresentative, "...", StringComparison.Ordinal))
+        {
+            passengerRows.Add((
+                customerRepresentative.Trim(),
+                snapshot is not null ? snapshot.Customer.DateOfBirth?.Year : customer?.DateOfBirth?.Year,
+                null));
+        }
+
+        passengerRows.AddRange(contract.Passengers
             .Where(x => !x.IsDeleted && !string.IsNullOrWhiteSpace(x.FullName))
             .OrderBy(x => x.SortOrder)
             .ThenBy(x => x.CreatedAt)
-            .Take(20)
-            .ToList();
+            .Select(x => (x.FullName.Trim(), x.BirthYear, x.Note)));
+
+        passengerRows = passengerRows.Take(20).ToList();
 
         for (var index = 1; index <= 20; index++)
         {
-            var passenger = index <= passengers.Count ? passengers[index - 1] : null;
-            values[$"P{index:00}_NAME"] = passenger?.FullName?.Trim() ?? string.Empty;
-            values[$"P{index:00}_BIRTH_YEAR"] = passenger?.BirthYear?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
-            values[$"P{index:00}_NOTE"] = passenger?.Note?.Trim() ?? string.Empty;
+            var passenger = index <= passengerRows.Count ? passengerRows[index - 1] : default;
+            values[$"P{index:00}_NAME"] = passenger.Name ?? string.Empty;
+            values[$"P{index:00}_BIRTH_YEAR"] = passenger.BirthYear?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+            values[$"P{index:00}_NOTE"] = passenger.Note?.Trim() ?? string.Empty;
         }
 
         return values;

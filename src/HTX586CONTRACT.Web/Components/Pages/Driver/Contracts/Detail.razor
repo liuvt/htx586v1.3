@@ -115,6 +115,15 @@ else
                 <MudSpacer />
                 <MudChip T="string" Variant="Variant.Outlined">Số lượng: @FormatNumber(_detail.ActualPassengerCount)</MudChip>
             </MudStack>
+            @if (_detail.CustomerTravelsWithGroup)
+            {
+                <MudAlert Severity="Severity.Success" Dense="true" Variant="Variant.Outlined" Class="mb-3">
+                    <strong>STT 1 - Khách thuê/người đặt:</strong>
+                    @(_detail.CustomerIsCompany
+                        ? (_detail.CustomerRepresentativeName ?? _detail.CustomerName)
+                        : _detail.CustomerName)
+                </MudAlert>
+            }
             <MudTable T="ContractPassengerDto" Items="_detail.Passengers" Dense="true" Hover="true">
                 <HeaderContent>
                     <MudTh>STT</MudTh>
@@ -123,7 +132,7 @@ else
                     <MudTh>Ghi chú</MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd DataLabel="STT">@context.SortOrder</MudTd>
+                    <MudTd DataLabel="STT">@(context.SortOrder + (_detail.CustomerTravelsWithGroup ? 1 : 0))</MudTd>
                     <MudTd DataLabel="Họ tên">@context.FullName</MudTd>
                     <MudTd DataLabel="Năm sinh">@context.BirthYear</MudTd>
                     <MudTd DataLabel="Ghi chú">@context.Note</MudTd>

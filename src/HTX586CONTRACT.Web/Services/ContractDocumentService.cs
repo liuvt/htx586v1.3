@@ -440,7 +440,8 @@ public sealed class ContractDocumentService(
             throw new InvalidOperationException(
                 $"Chưa thể tạo PDF cuối cùng. Còn thiếu: {string.Join(", ", missingSignatures)}.");
 
-        var passengerCount = contract.Passengers.Count(x => !x.IsDeleted && !string.IsNullOrWhiteSpace(x.FullName));
+        var passengerCount = contract.Passengers.Count(x => !x.IsDeleted && !string.IsNullOrWhiteSpace(x.FullName)) +
+            (contract.CustomerTravelsWithGroup ? 1 : 0);
         if (passengerCount > 20)
             throw new InvalidOperationException(
                 "Mẫu PDF 2 trang chỉ hỗ trợ tối đa 20 hành khách. Vui lòng giảm danh sách trước khi tạo PDF.");

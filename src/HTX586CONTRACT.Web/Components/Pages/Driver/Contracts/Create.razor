@@ -393,7 +393,7 @@ else
                              Disabled="@IsDriverEditableContentLocked"
                              Class="mt-3" />
                 <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Outlined" Class="mt-2">
-                    Tài xế được phép điều chỉnh Tổng km và danh sách hành khách trước khi ký/chốt hợp đồng. Số người thực tế = danh sách bên dưới + 1 khi khách hàng được đánh dấu đi cùng.
+                    Khi tick khách đi theo, khách thuê/người đặt được tự động xếp ở vị trí số 1. Các hành khách thêm bên dưới bắt đầu từ vị trí số 2.
                 </MudAlert>
 
                 @if (_model.CustomerTravelsWithGroup && !string.IsNullOrWhiteSpace(TravelCompanionDisplayName))
@@ -401,11 +401,11 @@ else
                     <MudPaper Class="pa-3 mt-3" Elevation="0" Outlined="true">
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
                             <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Success" />
-                            <MudText Typo="Typo.subtitle2">Khách hàng/người đặt đi cùng:</MudText>
+                            <MudText Typo="Typo.subtitle2">STT 1 - Khách thuê/người đặt đi cùng:</MudText>
                             <MudText Typo="Typo.body1"><strong>@TravelCompanionDisplayName</strong></MudText>
                         </MudStack>
                         <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
-                            Họ tên được tự động lấy từ thông tin khách hàng và được tính thêm 1 người vào tổng số hành khách thực tế.
+                            Họ tên được tự động lấy từ thông tin khách hàng và sẽ nằm ở dòng số 1 trên danh sách hành khách/PDF.
                         </MudText>
                     </MudPaper>
                 }
@@ -418,7 +418,7 @@ else
                         <MudTh></MudTh>
                     </HeaderContent>
                     <RowTemplate>
-                        <MudTd DataLabel="STT">@context.SortOrder</MudTd>
+                        <MudTd DataLabel="STT">@(context.SortOrder + (_model.CustomerTravelsWithGroup ? 1 : 0))</MudTd>
                         <MudTd DataLabel="Họ tên">
                             <MudTextField @bind-Value="context.FullName"
                                           Immediate="true"
