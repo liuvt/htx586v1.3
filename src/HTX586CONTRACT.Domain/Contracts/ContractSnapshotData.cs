@@ -81,6 +81,7 @@ public sealed class ContractSnapshotData
                 CitizenId = customer.CitizenId,
                 CitizenIdIssuedDate = customer.CitizenIdIssuedDate,
                 CitizenIdIssuedPlace = customer.CitizenIdIssuedPlace,
+                DateOfBirth = customer.DateOfBirth,
                 Address = customer.Address,
                 Email = customer.Email
             },
@@ -181,6 +182,7 @@ public sealed class ContractSnapshotData
                 CitizenId = First(contract.CustomerCitizenIdSnapshot, customer?.CitizenId),
                 CitizenIdIssuedDate = customer?.CitizenIdIssuedDate,
                 CitizenIdIssuedPlace = customer?.CitizenIdIssuedPlace,
+                DateOfBirth = customer?.DateOfBirth,
                 Address = First(contract.CustomerAddressSnapshot, customer?.Address),
                 Email = customer?.Email
             },
@@ -280,6 +282,7 @@ public sealed class CustomerSnapshot
     public string? CitizenId { get; set; }
     public DateTime? CitizenIdIssuedDate { get; set; }
     public string? CitizenIdIssuedPlace { get; set; }
+    public DateTime? DateOfBirth { get; set; }
     public string? Address { get; set; }
     public string? Email { get; set; }
 }
