@@ -47,24 +47,17 @@ if (string.IsNullOrWhiteSpace(connectionString))
     throw new InvalidOperationException(
         "Không tìm thấy connection string. Hãy cấu hình ConnectionStrings:Default bằng appsettings.Production.json, user-secrets hoặc biến môi trường ConnectionStrings__Default.");
 
-// Production của HTX586 chạy sau reverse proxy (Nginx/aaPanel).
-// Bật Forwarded Headers mặc định ở Production để ASP.NET Core nhận đúng HTTPS
-// từ X-Forwarded-Proto. Cấu hình ForwardedHeaders:Enabled vẫn có thể bật ở Development.
-var forwardedHeadersEnabled =
-    !builder.Environment.IsDevelopment() ||
-    builder.Configuration.GetValue<bool>("ForwardedHeaders:Enabled");
-
+var forwardedHeadersEnabled = builder.Configuration.GetValue<bool>("ForwardedHeaders:Enabled");
 if (forwardedHeadersEnabled)
 {
     builder.Services.Configure<ForwardedHeadersOptions>(options =>
     {
-        options.ForwardedHeaders =
-            ForwardedHeaders.XForwardedFor |
-            ForwardedHeaders.XForwardedProto |
-            ForwardedHeaders.XForwardedHost;
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor |
+                                   ForwardedHeaders.XForwardedProto |
+                                   ForwardedHeaders.XForwardedHost;
 
-        // VPS chạy sau reverse proxy Nginx/aaPanel.
-        // Cho phép proxy nội bộ cung cấp các X-Forwarded-* headers.
+        // Dùng cho VPS chạy sau reverse proxy như Nginx/Cloudflare/IIS ARR.
+        // Nếu cần siết bảo mật, hãy cấu hình KnownProxies/KnownNetworks cụ thể cho hạ tầng của bạn.
         options.KnownNetworks.Clear();
         options.KnownProxies.Clear();
     });
@@ -103,9 +96,10 @@ builder.Services.Configure<SecurityStampValidatorOptions>(options =>
     options.ValidationInterval = TimeSpan.FromMinutes(1));
 
 #region Cấu hình cookie authentication 
-var cookieSecurePolicy = builder.Environment.IsDevelopment()
-    ? CookieSecurePolicy.SameAsRequest
-    : CookieSecurePolicy.Always;
+// Cho phép Production hoạt động cả HTTP trực tiếp lẫn HTTPS.
+// SameAsRequest: request HTTP dùng cookie thường; request HTTPS dùng cookie Secure.
+// Khi triển khai chính thức chỉ HTTPS, có thể đổi cấu hình thành Always.
+var cookieSecurePolicy = CookieSecurePolicy.SameAsRequest;
 
 var configuredCookieSecurePolicy = builder.Configuration["Authentication:CookieSecurePolicy"];
 if (Enum.TryParse<CookieSecurePolicy>(configuredCookieSecurePolicy, ignoreCase: true, out var parsedCookieSecurePolicy))
@@ -189,10 +183,19 @@ if (forwardedHeadersEnabled)
     app.UseForwardedHeaders();
 }
 
+var httpsRedirectionEnabled = builder.Configuration.GetValue<bool>("Https:RedirectToHttps");
+var hstsEnabled = builder.Configuration.GetValue<bool>("Https:HstsEnabled");
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/error/500");
-    app.UseHsts();
+
+    // HSTS chỉ bật khi hệ thống đã chuyển sang HTTPS-only.
+    // Khi cần cho phép cả HTTP và HTTPS thì để Https:HstsEnabled = false.
+    if (hstsEnabled)
+    {
+        app.UseHsts();
+    }
 }
 
 // Giữ người dùng trong giao diện HTX586 khi truy cập URL không tồn tại
@@ -237,7 +240,12 @@ app.UseStatusCodePages(async statusCodeContext =>
     await Task.CompletedTask;
 });
 
-app.UseHttpsRedirection();
+// Không ép HTTP -> HTTPS khi Production đang cần hỗ trợ đồng thời cả hai giao thức.
+// Có thể bật lại bằng Https:RedirectToHttps = true khi đã có domain + SSL ổn định.
+if (httpsRedirectionEnabled)
+{
+    app.UseHttpsRedirection();
+}
 
 app.UseStaticFiles();
 
