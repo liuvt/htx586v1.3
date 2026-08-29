@@ -36,6 +36,8 @@ public class Contract : BaseEntity
     public string? CargoUnit { get; set; }
     public int? ActualPassengerCount { get; set; }
     public bool CustomerTravelsWithGroup { get; set; }
+    public int? CustomerTravelBirthYear { get; set; }
+    public string? CustomerTravelNote { get; set; }
 
     // Người trực tiếp điều khiển xe được nhập tay trên HĐ, không phụ thuộc hồ sơ tài khoản.
     public string? OperatingDriverName { get; set; }

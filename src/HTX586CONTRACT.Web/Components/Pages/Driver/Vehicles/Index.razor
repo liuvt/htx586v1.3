@@ -9,7 +9,7 @@
     <div>
         <MudText Typo="Typo.h4">Xe</MudText>
         <MudText Typo="Typo.body2" Color="Color.Secondary">
-            Danh sách xe thuộc tài khoản. Thông tin Chủ xe và chân ký được lấy trực tiếp từ hồ sơ tài khoản Chủ xe, không ký riêng theo từng xe.
+            Danh sách xe được gán cho tài khoản Chủ xe. Chân ký hợp đồng được quản lý tại hồ sơ tài khoản, không quản lý riêng trên từng xe.
         </MudText>
     </div>
 </div>
@@ -40,16 +40,13 @@ else
                             <MudText Typo="Typo.h6">@vehicle.PlateNumber</MudText>
                             <MudText Typo="Typo.caption">@CompanyDisplay(vehicle)</MudText>
                         </div>
-                        <MudSpacer />
-                        <MudChip T="string" Size="Size.Small" Color="@(!string.IsNullOrWhiteSpace(owner?.VehicleOwnerSignatureFileUrl) ? Color.Success : Color.Warning)">
-                            @(!string.IsNullOrWhiteSpace(owner?.VehicleOwnerSignatureFileUrl) ? "Đã có chân ký" : "Chưa có chân ký")
-                        </MudChip>
                     </MudStack>
 
                     <MudText Typo="Typo.subtitle2" Class="mb-2">Thông tin xe</MudText>
                     <MudSimpleTable Dense="true" Hover="false">
                         <tbody>
                             <tr><td>Mã xe</td><td>@Text(vehicle.VehicleCode)</td></tr>
+                            <tr><td>Số phù hiệu</td><td>@Text(vehicle.PermitNumber)</td></tr>
                             <tr><td>Loại xe</td><td>@Text($"{vehicle.Brand} {vehicle.Model}".Trim())</td></tr>
                             <tr><td>Số chỗ</td><td>@(vehicle.SeatCount?.ToString() ?? "—")</td></tr>
                         </tbody>
@@ -73,24 +70,6 @@ else
                                 <tr><td>Địa chỉ</td><td>@Text(owner.Address)</td></tr>
                             </tbody>
                         </MudSimpleTable>
-
-                        <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2">Chân ký Chủ xe</MudText>
-                        @if (!string.IsNullOrWhiteSpace(owner.VehicleOwnerSignatureFileUrl))
-                        {
-                            <SignaturePad Disabled="true"
-                                          ExistingSignatureUrl="@owner.VehicleOwnerSignatureFileUrl"
-                                          SignerName="@owner.FullName"
-                                          SignedAt="@owner.VehicleOwnerSignedAt" />
-                            <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
-                                Chân ký này lấy trực tiếp từ tài khoản Chủ xe và được dùng khi tạo hợp đồng.
-                            </MudAlert>
-                        }
-                        else
-                        {
-                            <MudAlert Severity="Severity.Warning" Dense="true">
-                                Tài khoản Chủ xe chưa có chân ký. Vui lòng cập nhật trong Hồ sơ cá nhân hoặc Tài khoản Quản lý/Chủ xe.
-                            </MudAlert>
-                        }
                     }
                 </MudPaper>
             </MudItem>

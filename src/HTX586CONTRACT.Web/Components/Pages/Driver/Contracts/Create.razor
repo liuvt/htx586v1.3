@@ -55,7 +55,7 @@ else
             <MudPaper Class="pa-4 mb-4 driver-contract-section" Elevation="0" Outlined="true">
                 <MudText Typo="Typo.h6" Class="mb-3">1. Thông tin cố định</MudText>
                 <MudGrid Spacing="2">
-                    @if (!Id.HasValue)
+                    @if (!Id.HasValue && _vehicles.Count > 1)
                     {
                         <MudItem xs="12">
                             <MudSelect T="Guid?"
@@ -67,22 +67,8 @@ else
                                 @foreach (var vehicle in _vehicles)
                                 {
                                     <MudSelectItem T="Guid?" Value="@((Guid?)vehicle.Id)">
-                                        @($"{vehicle.PlateNumber} · {CompanyName(vehicle)} · Chủ xe: {vehicle.OwnerName}")
+                                        @($"{vehicle.PlateNumber} · {CompanyName(vehicle)}")
                                     </MudSelectItem>
-                                }
-                            </MudSelect>
-                        </MudItem>
-                        <MudItem xs="12">
-                            <MudSelect T="Guid?"
-                                       Value="@_model.CompanyProfileId"
-                                       ValueChanged="OfficeChanged"
-                                       Label="Công ty/Văn phòng thực hiện hợp đồng"
-                                       Required="true"
-                                       Variant="Variant.Outlined"
-                                       Disabled="@(SelectedVehicle is null)">
-                                @foreach (var office in SelectedVehicleOffices)
-                                {
-                                    <MudSelectItem T="Guid?" Value="@((Guid?)office.Id)">@OfficeDisplay(office)</MudSelectItem>
                                 }
                             </MudSelect>
                         </MudItem>
@@ -396,51 +382,77 @@ else
                     Khi tick khách đi theo, khách thuê/người đặt được tự động xếp ở vị trí số 1. Các hành khách thêm bên dưới bắt đầu từ vị trí số 2.
                 </MudAlert>
 
-                @if (_model.CustomerTravelsWithGroup && !string.IsNullOrWhiteSpace(TravelCompanionDisplayName))
-                {
-                    <MudPaper Class="pa-3 mt-3" Elevation="0" Outlined="true">
-                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                            <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Success" />
-                            <MudText Typo="Typo.subtitle2">STT 1 - Khách thuê/người đặt đi cùng:</MudText>
-                            <MudText Typo="Typo.body1"><strong>@TravelCompanionDisplayName</strong></MudText>
-                        </MudStack>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
-                            Họ tên được tự động lấy từ thông tin khách hàng và sẽ nằm ở dòng số 1 trên danh sách hành khách/PDF.
-                        </MudText>
-                    </MudPaper>
-                }
-
-                <MudTable T="ContractPassengerDto" Items="_model.Passengers" Dense="true" Class="mt-3 driver-passenger-table">
+                <MudTable T="ContractPassengerDto" Items="PassengerRows" Dense="true" Class="mt-3 driver-passenger-table">
                     <HeaderContent>
                         <MudTh>STT</MudTh>
                         <MudTh>Họ tên</MudTh>
                         <MudTh>Năm sinh</MudTh>
+                        <MudTh>Ghi chú</MudTh>
                         <MudTh></MudTh>
                     </HeaderContent>
                     <RowTemplate>
-                        <MudTd DataLabel="STT">@(context.SortOrder + (_model.CustomerTravelsWithGroup ? 1 : 0))</MudTd>
-                        <MudTd DataLabel="Họ tên">
-                            <MudTextField @bind-Value="context.FullName"
-                                          Immediate="true"
-                                          Variant="Variant.Outlined"
-                                          Margin="Margin.Dense"
-                                          Disabled="@IsDriverEditableContentLocked" />
-                        </MudTd>
-                        <MudTd DataLabel="Năm sinh">
-                            <MudNumericField T="int?"
-                                             @bind-Value="context.BirthYear"
-                                             Variant="Variant.Outlined"
-                                             Margin="Margin.Dense"
-                                             Disabled="@IsDriverEditableContentLocked" />
-                        </MudTd>
-                        <MudTd>
-                            @if (!IsDriverEditableContentLocked)
-                            {
-                                <MudIconButton Icon="@Icons.Material.Filled.Delete"
-                                               Color="Color.Error"
-                                               OnClick="@(() => RemovePassenger(context))" />
-                            }
-                        </MudTd>
+                        @if (IsCustomerTravelRow(context))
+                        {
+                            <MudTd DataLabel="STT">1</MudTd>
+                            <MudTd DataLabel="Họ tên">
+                                <MudTextField Value="@TravelCompanionDisplayName"
+                                              ReadOnly="true"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense" />
+                            </MudTd>
+                            <MudTd DataLabel="Năm sinh">
+                                <MudNumericField T="int?"
+                                                 @bind-Value="_model.CustomerTravelBirthYear"
+                                                 Min="1900"
+                                                 Max="2100"
+                                                 Variant="Variant.Outlined"
+                                                 Margin="Margin.Dense"
+                                                 Disabled="@IsDriverEditableContentLocked" />
+                            </MudTd>
+                            <MudTd DataLabel="Ghi chú">
+                                <MudTextField @bind-Value="_model.CustomerTravelNote"
+                                              MaxLength="500"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense"
+                                              Disabled="@IsDriverEditableContentLocked" />
+                            </MudTd>
+                            <MudTd></MudTd>
+                        }
+                        else
+                        {
+                            <MudTd DataLabel="STT">@(context.SortOrder + (_model.CustomerTravelsWithGroup ? 1 : 0))</MudTd>
+                            <MudTd DataLabel="Họ tên">
+                                <MudTextField @bind-Value="context.FullName"
+                                              Immediate="true"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense"
+                                              Disabled="@IsDriverEditableContentLocked" />
+                            </MudTd>
+                            <MudTd DataLabel="Năm sinh">
+                                <MudNumericField T="int?"
+                                                 @bind-Value="context.BirthYear"
+                                                 Min="1900"
+                                                 Max="2100"
+                                                 Variant="Variant.Outlined"
+                                                 Margin="Margin.Dense"
+                                                 Disabled="@IsDriverEditableContentLocked" />
+                            </MudTd>
+                            <MudTd DataLabel="Ghi chú">
+                                <MudTextField @bind-Value="context.Note"
+                                              MaxLength="500"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense"
+                                              Disabled="@IsDriverEditableContentLocked" />
+                            </MudTd>
+                            <MudTd>
+                                @if (!IsDriverEditableContentLocked)
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                   Color="Color.Error"
+                                                   OnClick="@(() => RemovePassenger(context))" />
+                                }
+                            </MudTd>
+                        }
                     </RowTemplate>
                     <NoRecordsContent>
                         <MudText Class="pa-3">Chưa có hành khách.</MudText>
@@ -524,6 +536,8 @@ else
                                 Người ký: <b>@_model.OperatingDriverName</b> — Hạng GPLX: <b>@_model.OperatingDriverLicenseClass</b>
                             </MudAlert>
                             <SignaturePad SignerName="@_model.OperatingDriverName"
+                                          StrokeColor="#0066CC"
+                                          StrokeWidth="1.5"
                                           SignedAt="@SignatureTime(SignatureParty.Driver)"
                                           OnSignatureSaved="SaveDriverSignature"
                                           Disabled="@(_saving || _savingSignature || _completing)"
@@ -552,6 +566,8 @@ else
                         {
                             <SignaturePad ExistingSignatureUrl="@SignatureUrl(SignatureParty.Customer)"
                                           SignerName="@_model.CustomerName"
+                                          StrokeColor="#0066CC"
+                                          StrokeWidth="1.5"
                                           SignedAt="@SignatureTime(SignatureParty.Customer)"
                                           OnSignatureSaved="SaveCustomerSignature"
                                           Disabled="@(_saving || _savingSignature || _completing)"
@@ -630,7 +646,13 @@ else
     private List<Vehicle> _vehicles = [];
     private List<ContractSignatureDto> _signatures = [];
     private SaveContractRequest _model = new() { Passengers = [] };
+    private readonly ContractPassengerDto _customerTravelRow = new() { SortOrder = 0 };
     private int PassengerCount => _model.Passengers.Count(x => !string.IsNullOrWhiteSpace(x.FullName)) + (_model.CustomerTravelsWithGroup ? 1 : 0);
+    private IEnumerable<ContractPassengerDto> PassengerRows =>
+        _model.CustomerTravelsWithGroup && !string.IsNullOrWhiteSpace(TravelCompanionDisplayName)
+            ? new[] { _customerTravelRow }.Concat(_model.Passengers)
+            : _model.Passengers;
+    private bool IsCustomerTravelRow(ContractPassengerDto row) => object.ReferenceEquals(row, _customerTravelRow);
     private string TravelCompanionDisplayName => _model.CustomerIsCompany
         ? (string.IsNullOrWhiteSpace(_model.CustomerRepresentativeName)
             ? _model.CustomerName?.Trim() ?? string.Empty
@@ -723,8 +745,20 @@ else
                 _model.DriverId = _userId;
                 _model.BusinessType = ContractBusinessType.Passenger;
                 _model.AreaCode = _driver?.AreaCode ?? string.Empty;
-                _model.VehicleId = _vehicles.FirstOrDefault()?.Id;
-                _model.CompanyProfileId = PrimaryOfficeId(_vehicles.FirstOrDefault());
+                // Chủ xe chỉ cần chọn xe khi tài khoản được gán từ 2 xe trở lên.
+                // Nếu chỉ có 1 xe, tự động lấy xe đó và Công ty/Văn phòng chính của xe.
+                if (_vehicles.Count == 1)
+                {
+                    var assignedVehicle = _vehicles[0];
+                    _model.VehicleId = assignedVehicle.Id;
+                    _model.CompanyProfileId = PrimaryOfficeId(assignedVehicle);
+                }
+                else
+                {
+                    // Có nhiều xe: yêu cầu Chủ xe chủ động chọn xe; văn phòng sẽ tự đi theo xe.
+                    _model.VehicleId = null;
+                    _model.CompanyProfileId = null;
+                }
                 if (_model.Passengers.Count == 0)
                     AddPassenger();
                 return;
@@ -776,6 +810,8 @@ else
                 VehicleId = detail.VehicleId,
                 ActualPassengerCount = detail.ActualPassengerCount,
                 CustomerTravelsWithGroup = detail.CustomerTravelsWithGroup,
+                CustomerTravelBirthYear = detail.CustomerTravelBirthYear,
+                CustomerTravelNote = detail.CustomerTravelNote,
                 OperatingDriverName = detail.OperatingDriverName,
                 OperatingDriverPhoneNumber = detail.OperatingDriverPhoneNumber,
                 OperatingDriverLicenseNumber = detail.OperatingDriverLicenseNumber,
@@ -812,16 +848,6 @@ else
         _model.CompanyProfileId = PrimaryOfficeId(vehicle);
     }
 
-    private void OfficeChanged(Guid? companyProfileId)
-    {
-        if (companyProfileId.HasValue && SelectedVehicleOffices.All(x => x.Id != companyProfileId.Value))
-        {
-            Snackbar.Add("Văn phòng không được gán cho xe đã chọn.", Severity.Error);
-            return;
-        }
-        _model.CompanyProfileId = companyProfileId;
-    }
-
     private async Task ReceiveContractAsync()
     {
         if (!Id.HasValue || _receiving)
@@ -850,15 +876,14 @@ else
 
     private static string CompanyName(Vehicle vehicle)
     {
-        var names = vehicle.OfficeVehicles
+        var office = vehicle.OfficeVehicles
             .Where(x => x.IsActive && !x.IsDeleted && x.AssignedTo == null &&
                         x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
             .OrderByDescending(x => x.IsPrimary)
-            .ThenBy(x => x.CompanyProfile.CompanyName)
-            .Select(x => OfficeDisplay(x.CompanyProfile))
-            .Distinct()
-            .ToArray();
-        return names.Length == 0 ? "Chưa gán Công ty/Văn phòng" : string.Join(", ", names);
+            .ThenBy(x => x.AssignedFrom)
+            .Select(x => x.CompanyProfile)
+            .FirstOrDefault();
+        return office is null ? "Chưa gán Công ty/Văn phòng" : OfficeDisplay(office);
     }
 
     private static Guid? PrimaryOfficeId(Vehicle? vehicle)
@@ -1006,9 +1031,9 @@ else
         ContractBusinessType.Cargo => "HỢP ĐỒNG VẬN CHUYỂN HÀNG HÓA BẰNG XE Ô TÔ",
         _ => "Loại hợp đồng"
     };
-    private string ContractNumberDisplayText => string.IsNullOrWhiteSpace(_model.ContractNumber)
-        ? "Hệ thống tự sinh khi lưu"
-        : _model.ContractNumber;
+    private string ContractNumberDisplayText => _model.Status == ContractStatus.Completed && !string.IsNullOrWhiteSpace(_model.ContractNumber)
+        ? _model.ContractNumber
+        : "Số hợp đồng chính thức sẽ được cấp khi hoàn thành";
     private string ContractSourceDisplayText => !Id.HasValue
         ? "Chủ xe tự tạo"
         : IsDispatchedContract

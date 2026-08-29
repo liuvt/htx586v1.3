@@ -31,6 +31,13 @@ public sealed class ContractSignatureDto
     public DateTime ServerSignedAt { get; set; }
 }
 
+public sealed class ContractPdfVersionDto
+{
+    public string FileName { get; set; } = string.Empty;
+    public string FileUrl { get; set; } = string.Empty;
+    public DateTime GeneratedAtUtc { get; set; }
+}
+
 public sealed class ContractDetailDto
 {
     public Guid Id { get; set; }
@@ -63,6 +70,8 @@ public sealed class ContractDetailDto
     public bool CustomerIsCompany { get; set; }
     public string? CustomerAddress { get; set; }
     public bool CustomerTravelsWithGroup { get; set; }
+    public int? CustomerTravelBirthYear { get; set; }
+    public string? CustomerTravelNote { get; set; }
 
     public string AreaCode { get; set; } = string.Empty;
     public Guid? VehicleId { get; set; }
@@ -133,6 +142,8 @@ public sealed class SaveContractRequest
     public bool CustomerIsCompany { get; set; }
     public string? CustomerTaxCode { get; set; }
     public bool CustomerTravelsWithGroup { get; set; }
+    public int? CustomerTravelBirthYear { get; set; }
+    public string? CustomerTravelNote { get; set; }
 
     public string AreaCode { get; set; } = string.Empty;
     public Guid? VehicleId { get; set; }

@@ -115,16 +115,7 @@ else
                 <MudSpacer />
                 <MudChip T="string" Variant="Variant.Outlined">Số lượng: @FormatNumber(_detail.ActualPassengerCount)</MudChip>
             </MudStack>
-            @if (_detail.CustomerTravelsWithGroup)
-            {
-                <MudAlert Severity="Severity.Success" Dense="true" Variant="Variant.Outlined" Class="mb-3">
-                    <strong>STT 1 - Khách thuê/người đặt:</strong>
-                    @(_detail.CustomerIsCompany
-                        ? (_detail.CustomerRepresentativeName ?? _detail.CustomerName)
-                        : _detail.CustomerName)
-                </MudAlert>
-            }
-            <MudTable T="ContractPassengerDto" Items="_detail.Passengers" Dense="true" Hover="true">
+            <MudTable T="ContractPassengerDto" Items="PassengerRows" Dense="true" Hover="true">
                 <HeaderContent>
                     <MudTh>STT</MudTh>
                     <MudTh>Họ tên</MudTh>
@@ -132,12 +123,22 @@ else
                     <MudTh>Ghi chú</MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd DataLabel="STT">@(context.SortOrder + (_detail.CustomerTravelsWithGroup ? 1 : 0))</MudTd>
-                    <MudTd DataLabel="Họ tên">@context.FullName</MudTd>
-                    <MudTd DataLabel="Năm sinh">@context.BirthYear</MudTd>
-                    <MudTd DataLabel="Ghi chú">@context.Note</MudTd>
+                    @if (IsCustomerTravelRow(context))
+                    {
+                        <MudTd DataLabel="STT">1</MudTd>
+                        <MudTd DataLabel="Họ tên">@TravelCompanionDisplayName</MudTd>
+                        <MudTd DataLabel="Năm sinh">@(_detail.CustomerTravelBirthYear?.ToString() ?? "-")</MudTd>
+                        <MudTd DataLabel="Ghi chú">@(string.IsNullOrWhiteSpace(_detail.CustomerTravelNote) ? "-" : _detail.CustomerTravelNote)</MudTd>
+                    }
+                    else
+                    {
+                        <MudTd DataLabel="STT">@(context.SortOrder + (_detail.CustomerTravelsWithGroup ? 1 : 0))</MudTd>
+                        <MudTd DataLabel="Họ tên">@context.FullName</MudTd>
+                        <MudTd DataLabel="Năm sinh">@(context.BirthYear?.ToString() ?? "-")</MudTd>
+                        <MudTd DataLabel="Ghi chú">@(string.IsNullOrWhiteSpace(context.Note) ? "-" : context.Note)</MudTd>
+                    }
                 </RowTemplate>
-                <NoRecordsContent><MudText>Không có hành khách bổ sung.</MudText></NoRecordsContent>
+                <NoRecordsContent><MudText>Không có hành khách.</MudText></NoRecordsContent>
             </MudTable>
         </MudPaper>
 
@@ -188,6 +189,17 @@ else
     private bool _canEditCurrentContract;
     private string _userId = string.Empty;
     private ContractDetailDto? _detail;
+    private readonly ContractPassengerDto _customerTravelRow = new() { SortOrder = 0 };
+    private IEnumerable<ContractPassengerDto> PassengerRows =>
+        _detail is not null && _detail.CustomerTravelsWithGroup && !string.IsNullOrWhiteSpace(TravelCompanionDisplayName)
+            ? new[] { _customerTravelRow }.Concat(_detail.Passengers)
+            : _detail?.Passengers ?? [];
+    private bool IsCustomerTravelRow(ContractPassengerDto row) => object.ReferenceEquals(row, _customerTravelRow);
+    private string TravelCompanionDisplayName => _detail is null
+        ? string.Empty
+        : _detail.CustomerIsCompany
+            ? (string.IsNullOrWhiteSpace(_detail.CustomerRepresentativeName) ? _detail.CustomerName : _detail.CustomerRepresentativeName)
+            : _detail.CustomerName;
 
     protected override async Task OnParametersSetAsync()
     {

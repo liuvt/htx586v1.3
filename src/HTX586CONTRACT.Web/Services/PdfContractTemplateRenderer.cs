@@ -52,6 +52,7 @@ public sealed class PdfContractTemplateRenderer(
 
         var textValues = BuildTextValues(contract);
         var imageValues = BuildImageValues(contract);
+        var fixedFontFiles = ResolveFixedFontFiles();
         var tempOutputPath = outputPdfPath + $".{Guid.NewGuid():N}.tmp";
 
         Directory.CreateDirectory(Path.GetDirectoryName(outputPdfPath)!);
@@ -100,7 +101,8 @@ public sealed class PdfContractTemplateRenderer(
                         text,
                         field,
                         layout.FontFamily,
-                        layout.FallbackFontFamilies);
+                        layout.FallbackFontFamilies,
+                        fixedFontFiles);
 
                     using var stream = new MemoryStream(
                         renderedText.PngBytes,
@@ -128,6 +130,9 @@ public sealed class PdfContractTemplateRenderer(
                         !File.Exists(imagePath))
                         continue;
 
+                    // Giữ nguyên màu/nét của ảnh chữ ký gốc khi đưa vào PDF.
+                    // Không recolor tại bước render vì xử lý pixel có thể làm nét ký dày,
+                    // đặc biệt với chữ ký/con dấu Đại diện HTX và ảnh có anti-alias.
                     using var image = XImage.FromFile(imagePath);
                     DrawContainedImage(graphics, image, field);
                 }
@@ -204,6 +209,38 @@ public sealed class PdfContractTemplateRenderer(
             : Path.GetFullPath(Path.Combine(environment.ContentRootPath, path));
     }
 
+    private FixedPdfFontFiles ResolveFixedFontFiles()
+    {
+        string? ResolveOptional(string key, string defaultRelativePath)
+        {
+            var configured = configuration[key];
+            var path = string.IsNullOrWhiteSpace(configured)
+                ? defaultRelativePath
+                : configured.Trim();
+
+            var fullPath = Path.IsPathRooted(path)
+                ? path
+                : Path.GetFullPath(Path.Combine(environment.ContentRootPath, path));
+
+            return File.Exists(fullPath) ? fullPath : null;
+        }
+
+        var fonts = new FixedPdfFontFiles(
+            ResolveOptional("DocumentGeneration:PdfFontFiles:Regular", Path.Combine("Templates", "Fonts", "times.ttf")),
+            ResolveOptional("DocumentGeneration:PdfFontFiles:Bold", Path.Combine("Templates", "Fonts", "timesbd.ttf")),
+            ResolveOptional("DocumentGeneration:PdfFontFiles:Italic", Path.Combine("Templates", "Fonts", "timesi.ttf")),
+            ResolveOptional("DocumentGeneration:PdfFontFiles:BoldItalic", Path.Combine("Templates", "Fonts", "timesbi.ttf")));
+
+        if (!fonts.HasAny)
+        {
+            logger.LogWarning(
+                "Không tìm thấy bộ font PDF cố định Times New Roman trong Templates/Fonts. " +
+                "Renderer sẽ fallback theo fontFamily trong layout; trên VPS Linux có thể sai kiểu chữ.");
+        }
+
+        return fonts;
+    }
+
     private static double ResolveAlignedX(PdfTextFieldLayout field, double renderedWidth)
     {
         if (field.Alignment.Equals("Center", StringComparison.OrdinalIgnoreCase))
@@ -257,19 +294,21 @@ public sealed class PdfContractTemplateRenderer(
         var companyName = snapshot is not null
             ? First(snapshot.Company.Name, "...")
             : First(contract.CompanyNameSnapshot, company?.CompanyName, "...");
+        // Sau cụm "tại Văn phòng" chỉ in đúng một tên đơn vị/văn phòng.
+        // Không ghép CompanyName + BranchName vì dữ liệu thực tế có thể đã chứa
+        // tên chi nhánh trong CompanyName, gây lặp như "... CẦN THƠ - HTX VT 586 - CẦN THƠ".
         var companyOfficeName = snapshot is not null
-            ? First(snapshot.Company.DisplayName, "...")
-            : company is null
-                ? companyName
-                : First(string.IsNullOrWhiteSpace(company.BranchName)
-                    ? company.CompanyName
-                    : $"{company.CompanyName} - {company.BranchName}", companyName);
+            ? First(snapshot.Company.Name, snapshot.Company.BranchName, "...")
+            : First(company?.CompanyName, company?.BranchName, companyName, "...");
         var customerName = snapshot is not null
             ? First(snapshot.Customer.OrganizationName, snapshot.Customer.FullName, "...")
             : First(contract.CustomerNameSnapshot, customer?.OrganizationName, customer?.FullName, "...");
         var customerRepresentative = snapshot is not null
             ? First(snapshot.Customer.FullName, "...")
-            : First(contract.CustomerNameSnapshot, customer?.FullName, "...");
+            : First(customer?.FullName, contract.CustomerNameSnapshot, "...");
+        var customerIsCompany = snapshot is not null
+            ? !string.IsNullOrWhiteSpace(snapshot.Customer.OrganizationName)
+            : customer?.Type == CustomerType.Organization || !string.IsNullOrWhiteSpace(customer?.OrganizationName);
         var ownerName = snapshot is not null
             ? First(snapshot.Vehicle.OwnerName, "...")
             : First(contract.VehicleOwnerNameSnapshot, vehicle?.OwnerName, "...");
@@ -382,7 +421,11 @@ public sealed class PdfContractTemplateRenderer(
                 company?.RepresentativeName,
                 "..."),
             ["SIG_OWNER_NAME"] = ownerName,
-            ["SIG_CUSTOMER_NAME"] = SignatureName(contract, SignatureParty.Customer, customerRepresentative),
+            // Với B2B, chân ký Đại diện bên B luôn ghi TÊN NGƯỜI ĐẠI DIỆN
+            // từ snapshot, không dùng tên công ty đã từng được lưu trong SignerName.
+            ["SIG_CUSTOMER_NAME"] = customerIsCompany
+                ? customerRepresentative
+                : SignatureName(contract, SignatureParty.Customer, customerRepresentative),
             ["SIG_DRIVER_NAME"] = driverName,
             ["VERIFY_CODE"] = ShortHash(contract.ContractHash ?? contract.Id.ToString("N"))
         };
@@ -398,8 +441,9 @@ public sealed class PdfContractTemplateRenderer(
         {
             passengerRows.Add((
                 customerRepresentative.Trim(),
-                snapshot is not null ? snapshot.Customer.DateOfBirth?.Year : customer?.DateOfBirth?.Year,
-                null));
+                contract.CustomerTravelBirthYear ??
+                    (snapshot is not null ? snapshot.Customer.DateOfBirth?.Year : customer?.DateOfBirth?.Year),
+                contract.CustomerTravelNote));
         }
 
         passengerRows.AddRange(contract.Passengers
@@ -617,6 +661,28 @@ public sealed class PdfContractTemplateRenderer(
         public string Fit { get; set; } = "Contain";
     }
 
+    private sealed record FixedPdfFontFiles(
+        string? Regular,
+        string? Bold,
+        string? Italic,
+        string? BoldItalic)
+    {
+        public bool HasAny =>
+            !string.IsNullOrWhiteSpace(Regular) ||
+            !string.IsNullOrWhiteSpace(Bold) ||
+            !string.IsNullOrWhiteSpace(Italic) ||
+            !string.IsNullOrWhiteSpace(BoldItalic);
+
+        public string? Resolve(bool bold, bool italic)
+            => (bold, italic) switch
+            {
+                (true, true) => BoldItalic ?? Bold ?? Italic ?? Regular,
+                (true, false) => Bold ?? Regular,
+                (false, true) => Italic ?? Regular,
+                _ => Regular
+            };
+    }
+
     private static class TextPngRenderer
     {
         private const float Scale = 4f;
@@ -627,7 +693,8 @@ public sealed class PdfContractTemplateRenderer(
             string value,
             PdfTextFieldLayout field,
             string primaryFontFamily,
-            IReadOnlyList<string> fallbackFontFamilies)
+            IReadOnlyList<string> fallbackFontFamilies,
+            FixedPdfFontFiles fixedFontFiles)
         {
             var maxWidth = Math.Max(1f, (float)(field.Width * Scale) - (PaddingX * 2f * Scale));
             var maxHeight = Math.Max(1f, (float)(field.Height * Scale) - (PaddingY * 2f * Scale));
@@ -635,6 +702,7 @@ public sealed class PdfContractTemplateRenderer(
             using var typeface = ResolveTypeface(
                 primaryFontFamily,
                 fallbackFontFamilies,
+                fixedFontFiles,
                 field.Bold,
                 field.Italic);
             using var paint = new SKPaint
@@ -709,9 +777,18 @@ public sealed class PdfContractTemplateRenderer(
         private static SKTypeface ResolveTypeface(
             string primary,
             IEnumerable<string> fallbacks,
+            FixedPdfFontFiles fixedFontFiles,
             bool bold,
             bool italic)
         {
+            var fixedPath = fixedFontFiles.Resolve(bold, italic);
+            if (!string.IsNullOrWhiteSpace(fixedPath))
+            {
+                var fixedTypeface = SKTypeface.FromFile(fixedPath);
+                if (fixedTypeface is not null)
+                    return fixedTypeface;
+            }
+
             var style = (bold, italic) switch
             {
                 (true, true) => SKFontStyle.BoldItalic,

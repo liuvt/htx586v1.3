@@ -1,3 +1,4 @@
+using System.Data;
 using System.Security.Cryptography;
 using System.Text;
 using HTX586CONTRACT.Application.Abstractions;
@@ -71,6 +72,7 @@ public sealed class ContractService(
                 StartTime = x.StartTime,
                 ContractValue = x.ContractValue,
                 Status = x.Status,
+                PdfFileUrl = x.PdfFileUrl,
                 CreatedAt = x.CreatedAt
             })
             .ToListAsync(ct);
@@ -111,6 +113,8 @@ public sealed class ContractService(
                 CustomerIsCompany = x.Customer != null && x.Customer.Type == CustomerType.Organization,
                 CustomerAddress = x.CustomerAddressSnapshot,
                 CustomerTravelsWithGroup = x.CustomerTravelsWithGroup,
+                CustomerTravelBirthYear = x.CustomerTravelBirthYear,
+                CustomerTravelNote = x.CustomerTravelNote,
                 AreaCode = x.AreaCode,
                 VehicleId = x.VehicleId,
                 VehiclePlate = x.VehiclePlateSnapshot,
@@ -184,7 +188,25 @@ public sealed class ContractService(
             .FirstOrDefaultAsync(ct);
         var snapshot = ContractSnapshotData.FromJson(snapshotJson);
         if (snapshot is not null)
+        {
             ApplyImmutableSnapshot(detail, snapshot);
+
+            // Hợp đồng B2B: card/chân ký Đại diện bên B phải hiển thị tên người đại diện.
+            // Không sửa dữ liệu chữ ký lịch sử trong DB; chỉ chuẩn hóa DTO hiển thị theo snapshot đã khóa.
+            if (detail.CustomerIsCompany && !string.IsNullOrWhiteSpace(detail.CustomerRepresentativeName))
+            {
+                foreach (var signature in detail.Signatures.Where(x => x.Party == SignatureParty.Customer))
+                    signature.SignerName = detail.CustomerRepresentativeName;
+            }
+        }
+        else if (detail.CustomerTravelsWithGroup && !detail.CustomerTravelBirthYear.HasValue)
+        {
+            var customerBirthDate = await db.Customers.AsNoTracking()
+                .Where(x => x.Id == detail.CustomerId)
+                .Select(x => x.DateOfBirth)
+                .FirstOrDefaultAsync(ct);
+            detail.CustomerTravelBirthYear = customerBirthDate?.Year;
+        }
 
         // Chữ ký người lái thực tế là chữ ký riêng theo từng hợp đồng,
         // được Chủ xe ghi nhận trên điện thoại; không lấy từ chân ký Chủ xe.
@@ -550,6 +572,29 @@ public sealed class ContractService(
         CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        var strategy = db.Database.CreateExecutionStrategy();
+
+        return await strategy.ExecuteAsync(async () =>
+        {
+            db.ChangeTracker.Clear();
+            await using var transaction = await db.Database.BeginTransactionAsync(
+                IsolationLevel.Serializable,
+                ct);
+
+            var result = await CompleteCoreAsync(db, id, currentUserId, ct);
+            if (result.Succeeded)
+                await transaction.CommitAsync(ct);
+
+            return result;
+        });
+    }
+
+    private async Task<SaveContractResult> CompleteCoreAsync(
+        ApplicationDbContext db,
+        Guid id,
+        string currentUserId,
+        CancellationToken ct)
+    {
         var entity = await db.Contracts
             .Include(x => x.CompanyProfile)
             .Include(x => x.Driver)
@@ -569,6 +614,8 @@ public sealed class ContractService(
             return new(false, id, "Hợp đồng tự tạo không ở trạng thái cho phép hoàn thành.");
         if (entity.CompanyProfile is null || entity.Driver is null || entity.Customer is null || entity.Vehicle is null)
             return new(false, id, "Dữ liệu Công ty/Văn phòng, Chủ xe, khách hàng hoặc xe của hợp đồng không còn đầy đủ.");
+        if (string.IsNullOrWhiteSpace(entity.Vehicle.PermitNumber))
+            return new(false, id, "Xe chưa có số phù hiệu. Vui lòng cập nhật số phù hiệu xe trước khi hoàn thành hợp đồng.");
 
         var existingSnapshot = ContractSnapshotData.FromJson(entity.ContractDataJson);
 
@@ -590,6 +637,25 @@ public sealed class ContractService(
             return new(false, id, "Người lái thực tế chưa ký xác nhận hợp đồng trên điện thoại Chủ xe.");
         if (!entity.Signatures.Any(x => !x.IsDeleted && x.Party == SignatureParty.Customer))
             return new(false, id, "Khách hàng chưa ký xác nhận hợp đồng trên điện thoại Chủ xe.");
+
+        // Khóa riêng dòng Vehicle bằng UPDLOCK để các hợp đồng của cùng một xe
+        // không thể cùng lúc bước vào đoạn cấp số. Transaction Serializable giữ khóa đến commit.
+        var lockedVehicleId = await db.Vehicles
+            .FromSqlInterpolated($"""
+                SELECT *
+                FROM [dbo].[Vehicles] WITH (UPDLOCK, HOLDLOCK, ROWLOCK)
+                WHERE [Id] = {entity.Vehicle.Id}
+                """)
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Select(x => x.Id)
+            .FirstOrDefaultAsync(ct);
+        if (lockedVehicleId == Guid.Empty)
+            return new(false, id, "Không thể khóa xe để cấp số hợp đồng.");
+
+        // Số hợp đồng chính thức chỉ được cấp khi hoàn tất. CompleteAsync đã mở
+        // transaction Serializable bên trong SQL Server execution strategy để tránh cấp trùng số.
+        entity.ContractNumber = await BuildFinalContractNumberAsync(db, entity, entity.Vehicle, ct);
 
         var now = DateTime.UtcNow;
         var completedCustomer = await FinalizeSelfCreatedCustomerAsync(db, entity, currentUserId, now, ct);
@@ -650,7 +716,7 @@ public sealed class ContractService(
             CreatedAt = now
         });
         await db.SaveChangesAsync(ct);
-        return new(true, id, "Đã hoàn thành và khóa cố định hợp đồng. Hợp đồng không thể chỉnh sửa hoặc hủy.");
+        return new(true, id, $"Đã hoàn thành và khóa cố định hợp đồng số {entity.ContractNumber}. Hợp đồng không thể chỉnh sửa hoặc hủy.");
     }
 
     public async Task<SaveContractResult> CancelByDriverAsync(
@@ -1245,12 +1311,25 @@ public sealed class ContractService(
         if (allowedOfficeLinks.Count == 0)
             return (vehicle, null, null, "Xe không thuộc Công ty/Văn phòng trong phạm vi quản lý.");
 
+        // Chủ xe không tự chọn Công ty/Văn phòng độc lập với xe.
+        // Văn phòng của hợp đồng luôn đi theo liên kết chính của xe.
+        // Owner/Admin vẫn được giữ hành vi chọn văn phòng trong phạm vi được phép.
         var requestedOfficeId = request.CompanyProfileId;
-        var selectedOfficeLink = requestedOfficeId.HasValue
-            ? allowedOfficeLinks.FirstOrDefault(x => x.CompanyProfileId == requestedOfficeId.Value)
-            : allowedOfficeLinks.OrderByDescending(x => x.IsPrimary).ThenBy(x => x.AssignedFrom).FirstOrDefault();
+        var selectedOfficeLink = !canManage
+            ? allowedOfficeLinks
+                .OrderByDescending(x => x.IsPrimary)
+                .ThenBy(x => x.AssignedFrom)
+                .FirstOrDefault()
+            : requestedOfficeId.HasValue
+                ? allowedOfficeLinks.FirstOrDefault(x => x.CompanyProfileId == requestedOfficeId.Value)
+                : allowedOfficeLinks
+                    .OrderByDescending(x => x.IsPrimary)
+                    .ThenBy(x => x.AssignedFrom)
+                    .FirstOrDefault();
         if (selectedOfficeLink is null)
-            return (vehicle, null, null, "Công ty/Văn phòng đã chọn không được gán cho xe hoặc nằm ngoài phạm vi quản lý.");
+            return (vehicle, null, null, canManage
+                ? "Công ty/Văn phòng đã chọn không được gán cho xe hoặc nằm ngoài phạm vi quản lý."
+                : "Xe chưa xác định được Công ty/Văn phòng chính đang hoạt động.");
 
         string vehicleOwnerId;
         if (canManage)
@@ -1374,6 +1453,7 @@ public sealed class ContractService(
         detail.CustomerCitizenIdIssuedDate = snapshot.Customer.CitizenIdIssuedDate;
         detail.CustomerTaxCode = snapshot.Customer.TaxCode;
         detail.CustomerAddress = snapshot.Customer.Address;
+        detail.CustomerTravelBirthYear ??= snapshot.Customer.DateOfBirth?.Year;
         detail.VehiclePlate = snapshot.Vehicle.PlateNumber;
         detail.VehicleCode = snapshot.Vehicle.VehicleCode;
         detail.VehicleBrand = string.IsNullOrWhiteSpace(snapshot.Vehicle.BrandModel)
@@ -1393,6 +1473,8 @@ public sealed class ContractService(
             entity.ContractNumber = request.ContractNumber.Trim();
         entity.AreaCode = string.IsNullOrWhiteSpace(request.AreaCode) ? "N/A" : request.AreaCode.Trim();
         entity.CustomerTravelsWithGroup = request.CustomerTravelsWithGroup;
+        entity.CustomerTravelBirthYear = request.CustomerTravelBirthYear;
+        entity.CustomerTravelNote = N(request.CustomerTravelNote);
         entity.CargoName = N(request.CargoName);
         entity.CargoWeight = request.CargoWeight;
         entity.CargoUnit = N(request.CargoUnit);
@@ -1481,6 +1563,47 @@ public sealed class ContractService(
 
     private static string BusinessCode(ContractBusinessType type)
         => type == ContractBusinessType.Cargo ? "HH" : "HK";
+
+    private static async Task<string> BuildFinalContractNumberAsync(
+        ApplicationDbContext db,
+        Contract currentContract,
+        Vehicle vehicle,
+        CancellationToken ct)
+    {
+        var permitNumber = N(vehicle.PermitNumber);
+        if (permitNumber is null)
+            throw new InvalidOperationException("Xe chưa có số phù hiệu.");
+
+        // Đếm toàn bộ HĐ Completed trước đây của chính xe, kể cả bản ghi đã soft-delete,
+        // đúng nghĩa số lượng HĐ của xe từ trước tới nay. Đồng thời đọc suffix cũ để
+        // không tái sử dụng số nếu lịch sử từng bị thiếu/gãy chuỗi.
+        var previousNumbers = await db.Contracts
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(x => x.VehicleId == vehicle.Id &&
+                        x.Id != currentContract.Id &&
+                        x.Status == ContractStatus.Completed)
+            .Select(x => x.ContractNumber)
+            .ToListAsync(ct);
+
+        var nextFromCount = previousNumbers.Count + 1;
+        var prefix = permitNumber + "-";
+        var maxExistingSequence = 0;
+
+        foreach (var contractNumber in previousNumbers)
+        {
+            if (string.IsNullOrWhiteSpace(contractNumber) ||
+                !contractNumber.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var suffix = contractNumber[prefix.Length..];
+            if (int.TryParse(suffix, out var parsed) && parsed > maxExistingSequence)
+                maxExistingSequence = parsed;
+        }
+
+        var nextSequence = Math.Max(nextFromCount, maxExistingSequence + 1);
+        return $"{permitNumber}-{nextSequence:D2}";
+    }
 
     private static int CountPassengers(
         IEnumerable<ContractPassengerDto> passengers,

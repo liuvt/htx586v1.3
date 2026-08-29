@@ -23,7 +23,7 @@ public sealed class VehicleExcelImportService(
     [
         "PlateNumber", "VehicleOwnerUserName", "OfficeTaxCode",
         "VehicleCode", "VehicleType", "Brand", "Model", "SeatCount", "Color",
-        "ChassisNumber", "EngineNumber", "IsActive"
+        "ChassisNumber", "EngineNumber", "IsActive", "PermitNumber"
     ];
 
     public async Task<VehicleImportPreview> PreviewAsync(
@@ -67,7 +67,8 @@ public sealed class VehicleExcelImportService(
                     Color = ExcelImportUtility.NullIfWhiteSpace(values[8]),
                     ChassisNumber = ExcelImportUtility.NullIfWhiteSpace(values[9]),
                     EngineNumber = ExcelImportUtility.NullIfWhiteSpace(values[10]),
-                    IsActive = true
+                    IsActive = true,
+                    PermitNumber = ExcelImportUtility.NullIfWhiteSpace(values[12])
                 };
 
                 row.IsActive = ExcelImportUtility.ParseBoolean(values[11], true, "IsActive", row.Errors);
@@ -127,8 +128,6 @@ public sealed class VehicleExcelImportService(
                         select user).FirstOrDefaultAsync(ct);
                     if (owner is null)
                         throw new InvalidOperationException("Không tìm thấy tài khoản Chủ xe hợp lệ.");
-                    if (!HasCompleteLegalProfile(owner))
-                        throw new InvalidOperationException("Hồ sơ Chủ xe chưa đủ CCCD, ngày cấp, nơi cấp hoặc địa chỉ.");
                 }
 
                 var plate = row.PlateNumber.Trim().ToUpperInvariant();
@@ -150,6 +149,7 @@ public sealed class VehicleExcelImportService(
                     Id = Guid.NewGuid(),
                     PlateNumber = plate,
                     VehicleCode = N(row.VehicleCode),
+                    PermitNumber = N(row.PermitNumber),
                     VehicleType = N(row.VehicleType),
                     Brand = N(row.Brand),
                     Model = N(row.Model),
@@ -266,8 +266,6 @@ public sealed class VehicleExcelImportService(
                     row.VehicleOwnerName = owner.FullName;
                     if (!owner.IsActive || owner.RegistrationStatus != "Approved")
                         ExcelImportUtility.AddError(row.Errors, "Tài khoản Chủ xe đã khóa hoặc chưa được duyệt.");
-                    if (!HasCompleteLegalProfile(owner))
-                        ExcelImportUtility.AddError(row.Errors, "Hồ sơ Chủ xe chưa đủ CCCD, ngày cấp, nơi cấp hoặc địa chỉ.");
                 }
             }
 
@@ -282,10 +280,12 @@ public sealed class VehicleExcelImportService(
     {
         ExcelImportUtility.Required(row.Errors, row.PlateNumber, "PlateNumber");
         ExcelImportUtility.Required(row.Errors, row.OfficeTaxCode, "OfficeTaxCode");
+        ExcelImportUtility.Required(row.Errors, row.PermitNumber, "PermitNumber");
         ExcelImportUtility.Maximum(row.Errors, row.PlateNumber, 20, "PlateNumber");
         ExcelImportUtility.Maximum(row.Errors, row.VehicleOwnerUserName, 256, "VehicleOwnerUserName");
         ExcelImportUtility.Maximum(row.Errors, row.OfficeTaxCode, 50, "OfficeTaxCode");
         ExcelImportUtility.Maximum(row.Errors, row.VehicleCode, 50, "VehicleCode");
+        ExcelImportUtility.Maximum(row.Errors, row.PermitNumber, 50, "PermitNumber");
         ExcelImportUtility.Maximum(row.Errors, row.VehicleType, 100, "VehicleType");
         ExcelImportUtility.Maximum(row.Errors, row.Brand, 100, "Brand");
         ExcelImportUtility.Maximum(row.Errors, row.Model, 100, "Model");
@@ -325,13 +325,6 @@ public sealed class VehicleExcelImportService(
         vehicle.OwnerAddress = null;
     }
 
-    private static bool HasCompleteLegalProfile(ApplicationUser user) =>
-        !string.IsNullOrWhiteSpace(user.FullName) &&
-        !string.IsNullOrWhiteSpace(user.PhoneNumber) &&
-        !string.IsNullOrWhiteSpace(user.CitizenId) &&
-        user.CitizenIdIssuedDate.HasValue &&
-        !string.IsNullOrWhiteSpace(user.CitizenIdIssuedPlace) &&
-        !string.IsNullOrWhiteSpace(user.Address);
 
     private static string? N(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
@@ -353,6 +346,7 @@ public sealed class VehicleImportRowPreview
     public string? VehicleOwnerName { get; set; }
     public string OfficeTaxCode { get; set; } = string.Empty;
     public string? VehicleCode { get; set; }
+    public string? PermitNumber { get; set; }
     public string? VehicleType { get; set; }
     public string? Brand { get; set; }
     public string? Model { get; set; }

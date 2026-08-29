@@ -15,5 +15,6 @@ public sealed class ContractListItemDto
     public DateTime? StartTime { get; set; }
     public decimal? ContractValue { get; set; }
     public ContractStatus Status { get; set; }
+    public string? PdfFileUrl { get; set; }
     public DateTime CreatedAt { get; set; }
 }

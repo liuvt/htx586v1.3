@@ -70,6 +70,9 @@ public sealed class ContractConfiguration : IEntityTypeConfiguration<Contract>
         builder.Property(x => x.Note)
             .HasMaxLength(2000);
 
+        builder.Property(x => x.CustomerTravelNote)
+            .HasMaxLength(500);
+
         builder.Property(x => x.CompanyNameSnapshot)
             .HasMaxLength(300)
             .IsRequired();

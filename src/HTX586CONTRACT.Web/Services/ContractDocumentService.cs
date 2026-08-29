@@ -2,6 +2,7 @@ using System.Data;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using HTX586CONTRACT.Application.Abstractions;
 using HTX586CONTRACT.Application.Contracts;
 using HTX586CONTRACT.Domain.Contracts;
@@ -219,9 +220,11 @@ public sealed class ContractDocumentService(
                         Party = role,
                         SignerName = role == SignatureParty.Driver
                             ? contract.OperatingDriverName!.Trim()
-                            : string.IsNullOrWhiteSpace(signerName)
-                                ? DefaultSignerName(contract, role)
-                                : signerName.Trim(),
+                            : role == SignatureParty.Customer
+                                ? ResolveCustomerSignerName(contract, signerName)
+                                : string.IsNullOrWhiteSpace(signerName)
+                                    ? DefaultSignerName(contract, role)
+                                    : signerName.Trim(),
                         SignatureFileUrl = relativeUrl,
                         SignatureHash = Convert.ToHexString(SHA256.HashData(bytes)),
                         ContractHashAtSigning = ContractHash(contract),
@@ -455,7 +458,12 @@ public sealed class ContractDocumentService(
         var directory = storage.GetPhysicalDirectory(pdfFolderSegments);
         Directory.CreateDirectory(directory);
 
-        var fileName = $"hop-dong-{SafeFileName(contract.ContractNumber)}-{contractId:N}.pdf";
+        var plateNumber = SafeFileName(
+            snapshot.Vehicle.PlateNumber ?? contract.VehiclePlateSnapshot ?? contract.Vehicle?.PlateNumber ?? "xe");
+        var businessCode = contract.BusinessType == ContractBusinessType.Cargo ? "HH" : "HK";
+        var contractNumber = SafeFileName(contract.ContractNumber);
+        var completedDate = VietnamTime(contract.CompletedAt ?? contract.CreatedAt).ToString("yyyyMMdd");
+        var fileName = $"{plateNumber}-{businessCode}-{contractNumber}-{completedDate}-{contractId:N}.pdf";
         var fullPath = Path.Combine(directory, fileName);
         var relativeUrl = storage.BuildRelativeUrl(pdfFolderSegments, fileName);
 
@@ -483,6 +491,175 @@ public sealed class ContractDocumentService(
         return relativeUrl;
     }
 
+    // Owner dùng chức năng này khi template/layout đã thay đổi nhưng muốn giữ nguyên
+    // toàn bộ dữ liệu snapshot của hợp đồng cũ. Bản PDF đồng bộ là một file độc lập:
+    // tuyệt đối không ghi đè PdfFileUrl/PdfSha256/PdfGeneratedAt của PDF chính thức.
+    public async Task<string> GenerateSyncedPdfAsync(Guid contractId, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        db.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+
+        var contract = await db.Contracts.AsNoTracking()
+            .Include(x => x.CompanyProfile)
+            .Include(x => x.Driver)
+            .Include(x => x.Customer)
+            .Include(x => x.Vehicle)
+            .Include(x => x.Signatures)
+            .Include(x => x.Passengers)
+            .FirstOrDefaultAsync(x => x.Id == contractId && !x.IsDeleted, ct)
+            ?? throw new KeyNotFoundException("Không tìm thấy hợp đồng.");
+
+        if (contract.Status != ContractStatus.Completed)
+            throw new InvalidOperationException("Chỉ hợp đồng đã hoàn tất mới được đồng bộ PDF.");
+
+        // Không tự dựng snapshot legacy ở chức năng đồng bộ. Nếu hợp đồng chưa có
+        // snapshot đã chốt thì dừng lại để tránh vô tình lấy dữ liệu danh mục hiện tại.
+        var snapshot = ContractSnapshotData.FromJson(contract.ContractDataJson)
+            ?? throw new InvalidOperationException(
+                "Hợp đồng chưa có snapshot đã chốt nên không thể đồng bộ PDF an toàn.");
+
+        if (string.IsNullOrWhiteSpace(contract.PdfFileUrl) || !storage.FileExists(contract.PdfFileUrl))
+            throw new InvalidOperationException(
+                "Không tìm thấy PDF chính thức của hợp đồng. Hãy tạo/mở PDF chính thức trước khi đồng bộ.");
+
+        var missingSignatures = new List<string>();
+        var signedRoles = contract.Signatures.Where(x => !x.IsDeleted).Select(x => x.Party).ToHashSet();
+
+        if (!StoredSignatureExists(snapshot.Company.RepresentativeSignatureFileUrl))
+            missingSignatures.Add("chữ ký Văn phòng đại diện trong snapshot");
+        if (!StoredSignatureExists(snapshot.Vehicle.OwnerSignatureFileUrl))
+            missingSignatures.Add("chữ ký Chủ xe trong snapshot");
+        if (!signedRoles.Contains(SignatureParty.Driver))
+            missingSignatures.Add("chữ ký người lái thực tế");
+        if (!signedRoles.Contains(SignatureParty.Customer))
+            missingSignatures.Add("chữ ký khách hàng");
+
+        if (missingSignatures.Count > 0)
+            throw new InvalidOperationException(
+                $"Không thể đồng bộ PDF vì thiếu: {string.Join(", ", missingSignatures)}.");
+
+        var passengerCount = contract.Passengers.Count(x => !x.IsDeleted && !string.IsNullOrWhiteSpace(x.FullName)) +
+            (contract.CustomerTravelsWithGroup ? 1 : 0);
+        if (passengerCount > 20)
+            throw new InvalidOperationException(
+                "Mẫu PDF 2 trang chỉ hỗ trợ tối đa 20 hành khách.");
+
+        var officialPath = storage.ToPhysicalPath(contract.PdfFileUrl)
+            ?? throw new InvalidOperationException("Đường dẫn PDF chính thức không hợp lệ.");
+        var directory = Path.GetDirectoryName(officialPath)
+            ?? throw new InvalidOperationException("Không xác định được thư mục PDF hợp đồng.");
+        Directory.CreateDirectory(directory);
+
+        var officialFileName = Path.GetFileName(officialPath);
+        var officialBaseName = Path.GetFileNameWithoutExtension(officialFileName);
+        var syncDate = VietnamTime(DateTime.UtcNow).ToString("yyyyMMdd", CultureInfo.InvariantCulture);
+
+        // Chỉ giữ 2 version cho mỗi hợp đồng:
+        // 1) PDF chính thức (bất biến) và 2) PDF đồng bộ mới nhất.
+        // Mỗi lần đồng bộ sau sẽ thay thế bản đồng bộ trước. Nếu sang ngày mới,
+        // tên file đổi hậu tố ngày và bản đồng bộ ngày cũ được xóa.
+        var fileName = $"{officialBaseName}-[{syncDate}].pdf";
+        var fullPath = Path.Combine(directory, fileName);
+        var tempPath = Path.Combine(directory, $".{officialBaseName}-sync-{Guid.NewGuid():N}.tmp.pdf");
+
+        try
+        {
+            // Render ra file tạm trước để nếu render lỗi thì bản đồng bộ hiện tại vẫn còn nguyên.
+            await pdfTemplateRenderer.RenderPdfAsync(contract, tempPath, ct);
+
+            var syncedPattern = new Regex(
+                $@"^{Regex.Escape(officialBaseName)}(?:-\d{{2,}})?-\[\d{{8}}\]\.pdf$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+            foreach (var oldPath in Directory.EnumerateFiles(directory, "*.pdf", SearchOption.TopDirectoryOnly))
+            {
+                ct.ThrowIfCancellationRequested();
+                var oldFileName = Path.GetFileName(oldPath);
+                if (!syncedPattern.IsMatch(oldFileName))
+                    continue;
+
+                TryDeleteFile(oldPath);
+            }
+
+            File.Move(tempPath, fullPath, overwrite: true);
+        }
+        finally
+        {
+            TryDeleteFile(tempPath);
+        }
+
+        var relativeUrl = BuildSiblingUrl(contract.PdfFileUrl, fileName);
+        logger.LogInformation(
+            "Owner đã đồng bộ PDF mới nhất từ snapshot. Chỉ giữ PDF chính thức và bản đồng bộ mới nhất. ContractId={ContractId}, Output={Output}",
+            contractId,
+            fullPath);
+
+        return relativeUrl;
+    }
+
+    public async Task<IReadOnlyList<ContractPdfVersionDto>> GetSyncedPdfsAsync(
+        Guid contractId,
+        CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        db.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+
+        var contract = await db.Contracts.AsNoTracking()
+            .Where(x => x.Id == contractId && !x.IsDeleted)
+            .Select(x => new { x.Status, x.PdfFileUrl })
+            .FirstOrDefaultAsync(ct);
+
+        if (contract is null ||
+            contract.Status != ContractStatus.Completed ||
+            string.IsNullOrWhiteSpace(contract.PdfFileUrl))
+            return Array.Empty<ContractPdfVersionDto>();
+
+        var officialPath = storage.ToPhysicalPath(contract.PdfFileUrl);
+        if (string.IsNullOrWhiteSpace(officialPath))
+            return Array.Empty<ContractPdfVersionDto>();
+
+        var directory = Path.GetDirectoryName(officialPath);
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+            return Array.Empty<ContractPdfVersionDto>();
+
+        var officialBaseName = Path.GetFileNameWithoutExtension(officialPath);
+        var pattern = new Regex(
+            $@"^{Regex.Escape(officialBaseName)}(?:-\d{{2,}})?-\[(\d{{8}})\]\.pdf$",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+        var result = new List<ContractPdfVersionDto>();
+        foreach (var path in Directory.EnumerateFiles(directory, "*.pdf", SearchOption.TopDirectoryOnly))
+        {
+            ct.ThrowIfCancellationRequested();
+            var fileName = Path.GetFileName(path);
+            if (!pattern.IsMatch(fileName))
+                continue;
+
+            result.Add(new ContractPdfVersionDto
+            {
+                FileName = fileName,
+                FileUrl = BuildSiblingUrl(contract.PdfFileUrl, fileName),
+                GeneratedAtUtc = File.GetLastWriteTimeUtc(path)
+            });
+        }
+
+        var latest = result
+            .OrderByDescending(x => x.GeneratedAtUtc)
+            .ThenByDescending(x => x.FileName, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+
+        return latest is null
+            ? Array.Empty<ContractPdfVersionDto>()
+            : new[] { latest };
+    }
+
+    private static string BuildSiblingUrl(string officialUrl, string fileName)
+    {
+        var normalized = officialUrl.Trim().Replace('\\', '/');
+        var slash = normalized.LastIndexOf('/');
+        var folder = slash >= 0 ? normalized[..slash] : string.Empty;
+        return $"{folder}/{fileName}";
+    }
 
     private bool StoredSignatureExists(string? relativeUrl)
         => storage.FileExists(relativeUrl);
@@ -678,6 +855,22 @@ public sealed class ContractDocumentService(
             return ".jpg";
 
         return null;
+    }
+
+    // B2B: tên người ký bên B phải là người đại diện, không phải tên doanh nghiệp.
+    // Ưu tiên snapshot đã khóa để cả hợp đồng cũ lẫn hợp đồng mới dùng đúng người đại diện.
+    private static string ResolveCustomerSignerName(HTX586CONTRACT.Domain.Contracts.Contract contract, string? suppliedSignerName)
+    {
+        var snapshot = ContractSnapshotData.FromJson(contract.ContractDataJson);
+        if (!string.IsNullOrWhiteSpace(snapshot?.Customer.OrganizationName) &&
+            !string.IsNullOrWhiteSpace(snapshot.Customer.FullName))
+        {
+            return snapshot.Customer.FullName.Trim();
+        }
+
+        return string.IsNullOrWhiteSpace(suppliedSignerName)
+            ? DefaultSignerName(contract, SignatureParty.Customer)
+            : suppliedSignerName.Trim();
     }
 
     // Lấy tên người ký mặc định từ dữ liệu snapshot của hợp đồng. Nếu không có snapshot, trả về chuỗi rỗng.

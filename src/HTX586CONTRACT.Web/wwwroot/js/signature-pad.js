@@ -8,7 +8,7 @@
         return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     }
 
-    api.initialize = async function (canvasId) {
+    api.initialize = async function (canvasId, strokeColor, strokeWidth) {
         // Step 4 is conditionally rendered by Blazor. Wait until layout has a real width.
         await nextFrame();
 
@@ -25,6 +25,16 @@
         let activePointerId = null;
         let lastWidth = 0;
         let lastHeight = 0;
+
+        // Mặc định giữ đúng style của version trước cho các chữ ký hệ thống/Đại diện HTX.
+        // Các chữ ký Chủ xe, Tài xế và Đại diện B truyền màu xanh + nét mảnh từ component.
+        const resolvedStrokeColor = (typeof strokeColor === "string" && strokeColor.trim())
+            ? strokeColor.trim()
+            : "#172B28";
+        const parsedStrokeWidth = Number(strokeWidth);
+        const resolvedStrokeWidth = Number.isFinite(parsedStrokeWidth) && parsedStrokeWidth > 0
+            ? parsedStrokeWidth
+            : 2.2;
 
         const applyCanvasSize = () => {
             const rect = canvas.getBoundingClientRect();
@@ -44,10 +54,10 @@
             canvas.style.height = cssHeight + "px";
 
             context.setTransform(ratio, 0, 0, ratio, 0, 0);
-            context.lineWidth = 2.2;
+            context.lineWidth = resolvedStrokeWidth;
             context.lineCap = "round";
             context.lineJoin = "round";
-            context.strokeStyle = "#172B28";
+            context.strokeStyle = resolvedStrokeColor;
 
             lastWidth = cssWidth;
             lastHeight = cssHeight;

@@ -68,6 +68,7 @@ else
                 <MudList T="string" Dense="true">
                     <InfoListItem Label="Biển số" Value="@_item.PlateNumber" Icon="@Icons.Material.Filled.ConfirmationNumber" />
                     <InfoListItem Label="Mã xe" Value="@Display(_item.VehicleCode)" Icon="@Icons.Material.Filled.Pin" />
+                    <InfoListItem Label="Số phù hiệu" Value="@Display(_item.PermitNumber)" Icon="@Icons.Material.Filled.Badge" />
                     <InfoListItem Label="Nhãn hiệu" Value="@Display(_item.Brand)" Icon="@Icons.Material.Filled.LocalOffer" />
                     <InfoListItem Label="Dòng xe" Value="@Display(_item.Model)" Icon="@Icons.Material.Filled.ViewInAr" />
                     <InfoListItem Label="Số chỗ" Value="@(_item.SeatCount?.ToString() ?? "—")" Icon="@Icons.Material.Filled.EventSeat" />
@@ -89,7 +90,7 @@ else
             </MudPaper>
         </MudItem>
 
-        <MudItem xs="12" md="7">
+        <MudItem xs="12">
             <MudPaper Class="detail-section pa-4 fill-height" Elevation="1">
                 <MudText Typo="Typo.h6">Thông tin tài khoản Chủ xe</MudText>
                 <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Lấy trực tiếp từ tài khoản Chủ xe đang được gán cho xe.</MudText>
@@ -123,31 +124,6 @@ else
             </MudPaper>
         </MudItem>
 
-        <MudItem xs="12" md="5">
-            <MudPaper Class="detail-section pa-4 fill-height" Elevation="1">
-                <MudText Typo="Typo.h6">Chân ký Chủ xe</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Hợp đồng lấy trực tiếp chân ký này từ tài khoản Chủ xe.</MudText>
-                <MudDivider Class="mb-3" />
-
-                @if (_item.AssignedDriver is null)
-                {
-                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Chưa có tài khoản Chủ xe nên chưa có chân ký để hiển thị.</MudAlert>
-                }
-                else if (!string.IsNullOrWhiteSpace(_item.AssignedDriver.VehicleOwnerSignatureFileUrl))
-                {
-                    <SignaturePad Disabled="true"
-                                  ExistingSignatureUrl="@_item.AssignedDriver.VehicleOwnerSignatureFileUrl"
-                                  SignerName="@_item.AssignedDriver.FullName"
-                                  SignedAt="@_item.AssignedDriver.VehicleOwnerSignedAt" />
-                }
-                else
-                {
-                    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
-                        Tài khoản Chủ xe hiện chưa có chân ký. Cần cập nhật chân ký tại hồ sơ tài khoản Chủ xe trước khi phát hành hợp đồng.
-                    </MudAlert>
-                }
-            </MudPaper>
-        </MudItem>
 
         <MudItem xs="12">
             <MudPaper Class="pa-3" Elevation="1">

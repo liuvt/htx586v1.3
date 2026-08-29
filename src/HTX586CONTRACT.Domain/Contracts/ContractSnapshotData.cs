@@ -89,6 +89,7 @@ public sealed class ContractSnapshotData
             {
                 PlateNumber = vehicle.PlateNumber,
                 VehicleCode = vehicle.VehicleCode,
+                PermitNumber = vehicle.PermitNumber,
                 Brand = vehicle.Brand,
                 Model = vehicle.Model,
                 VehicleType = vehicle.VehicleType,
@@ -190,6 +191,7 @@ public sealed class ContractSnapshotData
             {
                 PlateNumber = First(contract.VehiclePlateSnapshot, vehicle?.PlateNumber),
                 VehicleCode = vehicle?.VehicleCode,
+                PermitNumber = vehicle?.PermitNumber,
                 Brand = First(contract.VehicleBrandSnapshot, vehicle?.Brand),
                 Model = vehicle?.Model,
                 VehicleType = vehicle?.VehicleType,
@@ -291,6 +293,7 @@ public sealed class VehicleSnapshot
 {
     public string? PlateNumber { get; set; }
     public string? VehicleCode { get; set; }
+    public string? PermitNumber { get; set; }
     public string? Brand { get; set; }
     public string? Model { get; set; }
     public string? VehicleType { get; set; }

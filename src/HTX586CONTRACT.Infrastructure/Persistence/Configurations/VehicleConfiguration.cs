@@ -13,6 +13,7 @@ public sealed class VehicleConfiguration : IEntityTypeConfiguration<Vehicle>
 
         builder.Property(x => x.PlateNumber).HasMaxLength(20).IsRequired();
         builder.Property(x => x.VehicleCode).HasMaxLength(50);
+        builder.Property(x => x.PermitNumber).HasMaxLength(50);
         builder.Property(x => x.Brand).HasMaxLength(100);
         builder.Property(x => x.Model).HasMaxLength(100);
         builder.Property(x => x.VehicleType).HasMaxLength(100);

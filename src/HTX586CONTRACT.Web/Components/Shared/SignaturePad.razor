@@ -175,6 +175,18 @@
     [Parameter]
     public bool AllowRemoveSavedSignature { get; set; }
 
+    /// <summary>
+    /// Màu nét khi ký trực tiếp trên canvas. Mặc định giữ style version trước.
+    /// </summary>
+    [Parameter]
+    public string StrokeColor { get; set; } = "#172B28";
+
+    /// <summary>
+    /// Độ dày nét theo CSS pixel. Có thể giảm cho chữ ký cá nhân để nét tự nhiên hơn.
+    /// </summary>
+    [Parameter]
+    public double StrokeWidth { get; set; } = 2.2d;
+
     [Parameter]
     public EventCallback OnSavedSignatureRemoved { get; set; }
 
@@ -199,7 +211,9 @@
         {
             _padInitialized = await JSRuntime.InvokeAsync<bool>(
                 "signaturePad.initialize",
-                CanvasId);
+                CanvasId,
+                StrokeColor,
+                StrokeWidth);
 
             // Conditional steps can render before the mobile browser finishes layout.
             // Retry once on the next render when the canvas did not get a usable size.
@@ -208,7 +222,9 @@
                 await Task.Delay(80);
                 _padInitialized = await JSRuntime.InvokeAsync<bool>(
                     "signaturePad.initialize",
-                    CanvasId);
+                    CanvasId,
+                    StrokeColor,
+                    StrokeWidth);
             }
         }
         catch (JSException)

@@ -60,8 +60,9 @@ else
                 </MudItem>
                 <MudItem xs="12" md="4">
                     <MudTextField @bind-Value="_model.ContractNumber"
-                                  Label="Số hợp đồng"
-                                  HelperText="Để trống để hệ thống tự sinh."
+                                  Label="Số hợp đồng (tạm)"
+                                  HelperText="Số hợp đồng chính thức được tự động chốt theo Số phù hiệu xe khi hợp đồng hoàn thành."
+                                  ReadOnly="true"
                                   Variant="Variant.Outlined" />
                 </MudItem>
             </MudGrid>
@@ -443,21 +444,7 @@ else
                 Khi tick khách đi theo, khách thuê/người đặt được tự động xếp ở vị trí số 1. Các hành khách thêm bên dưới bắt đầu từ vị trí số 2.
             </MudAlert>
 
-            @if (_model.CustomerTravelsWithGroup && !string.IsNullOrWhiteSpace(TravelCompanionDisplayName))
-            {
-                <MudPaper Class="pa-3 mt-3" Elevation="0" Style="border:1px dashed var(--mud-palette-success); background:rgba(var(--mud-palette-success-rgb), 0.06);">
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                        <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Success" />
-                        <MudText Typo="Typo.subtitle2">STT 1 - Khách thuê/người đặt đi cùng:</MudText>
-                        <MudText Typo="Typo.body1"><strong>@TravelCompanionDisplayName</strong></MudText>
-                    </MudStack>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
-                        Họ tên được tự động lấy từ thông tin khách hàng và sẽ nằm ở dòng số 1 trên danh sách hành khách/PDF.
-                    </MudText>
-                </MudPaper>
-            }
-
-            <MudTable T="ContractPassengerDto" Items="_model.Passengers" Dense="true" Class="mt-3">
+            <MudTable T="ContractPassengerDto" Items="PassengerRows" Dense="true" Class="mt-3">
                 <HeaderContent>
                     <MudTh>STT</MudTh>
                     <MudTh>Họ tên</MudTh>
@@ -466,11 +453,28 @@ else
                     <MudTh></MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd DataLabel="STT">@(context.SortOrder + (_model.CustomerTravelsWithGroup ? 1 : 0))</MudTd>
-                    <MudTd DataLabel="Họ tên"><MudTextField @bind-Value="context.FullName" Immediate="true" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudTd>
-                    <MudTd DataLabel="Năm sinh"><MudNumericField T="int?" @bind-Value="context.BirthYear" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudTd>
-                    <MudTd DataLabel="Ghi chú"><MudTextField @bind-Value="context.Note" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudTd>
-                    <MudTd><MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => RemovePassenger(context))" /></MudTd>
+                    @if (IsCustomerTravelRow(context))
+                    {
+                        <MudTd DataLabel="STT">1</MudTd>
+                        <MudTd DataLabel="Họ tên">
+                            <MudTextField Value="@TravelCompanionDisplayName" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        </MudTd>
+                        <MudTd DataLabel="Năm sinh">
+                            <MudNumericField T="int?" @bind-Value="_model.CustomerTravelBirthYear" Min="1900" Max="2100" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        </MudTd>
+                        <MudTd DataLabel="Ghi chú">
+                            <MudTextField @bind-Value="_model.CustomerTravelNote" MaxLength="500" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                        </MudTd>
+                        <MudTd></MudTd>
+                    }
+                    else
+                    {
+                        <MudTd DataLabel="STT">@(context.SortOrder + (_model.CustomerTravelsWithGroup ? 1 : 0))</MudTd>
+                        <MudTd DataLabel="Họ tên"><MudTextField @bind-Value="context.FullName" Immediate="true" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudTd>
+                        <MudTd DataLabel="Năm sinh"><MudNumericField T="int?" @bind-Value="context.BirthYear" Min="1900" Max="2100" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudTd>
+                        <MudTd DataLabel="Ghi chú"><MudTextField @bind-Value="context.Note" MaxLength="500" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudTd>
+                        <MudTd><MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => RemovePassenger(context))" /></MudTd>
+                    }
                 </RowTemplate>
             </MudTable>
         </MudPaper>
@@ -578,11 +582,17 @@ else
     private bool _showNewCustomerForm;
     private HashSet<Guid> _managedCompanyProfileIds = [];
     private SaveContractRequest _model = new() { Passengers = [] };
+    private readonly ContractPassengerDto _customerTravelRow = new() { SortOrder = 0 };
     private bool IsHistoryLocked => _model.Status is ContractStatus.Completed
         or ContractStatus.Cancelled
         or ContractStatus.Expired
         or ContractStatus.Invalidated;
     private int PassengerCount => _model.Passengers.Count(x => !string.IsNullOrWhiteSpace(x.FullName)) + (_model.CustomerTravelsWithGroup ? 1 : 0);
+    private IEnumerable<ContractPassengerDto> PassengerRows =>
+        _model.CustomerTravelsWithGroup && !string.IsNullOrWhiteSpace(TravelCompanionDisplayName)
+            ? new[] { _customerTravelRow }.Concat(_model.Passengers)
+            : _model.Passengers;
+    private bool IsCustomerTravelRow(ContractPassengerDto row) => object.ReferenceEquals(row, _customerTravelRow);
     private string TravelCompanionDisplayName => _model.CustomerIsCompany
         ? (string.IsNullOrWhiteSpace(_model.CustomerRepresentativeName) ? _model.CustomerName : _model.CustomerRepresentativeName)
         : _model.CustomerName;
@@ -726,6 +736,8 @@ else
             VehicleId = detail.VehicleId,
             ActualPassengerCount = detail.ActualPassengerCount,
             CustomerTravelsWithGroup = detail.CustomerTravelsWithGroup,
+            CustomerTravelBirthYear = detail.CustomerTravelBirthYear,
+            CustomerTravelNote = detail.CustomerTravelNote,
             OperatingDriverName = detail.OperatingDriverName,
             OperatingDriverPhoneNumber = detail.OperatingDriverPhoneNumber,
             OperatingDriverLicenseNumber = detail.OperatingDriverLicenseNumber,
@@ -750,6 +762,7 @@ else
         var currentCustomer = _customers.FirstOrDefault(x => x.Id == detail.CustomerId);
         if (currentCustomer is not null)
         {
+            _model.CustomerTravelBirthYear ??= currentCustomer.DateOfBirth?.Year;
             _model.CustomerCitizenIdIssuedDate = currentCustomer.CitizenIdIssuedDate;
             _model.CustomerIsCompany = currentCustomer.Type == CustomerType.Organization;
             _model.CustomerTaxCode = currentCustomer.TaxCode;
@@ -862,6 +875,8 @@ else
         _model.CustomerCitizenIdIssuedDate = customer.CitizenIdIssuedDate;
         _model.CustomerAddress = customer.Address;
         _model.CustomerTaxCode = customer.TaxCode;
+        _model.CustomerTravelBirthYear = customer.DateOfBirth?.Year;
+        _model.CustomerTravelNote = null;
         _customerSearch = string.Empty;
     }
 
@@ -900,6 +915,8 @@ else
         _model.CustomerAddress = null;
         _model.CustomerIsCompany = false;
         _model.CustomerTaxCode = null;
+        _model.CustomerTravelBirthYear = null;
+        _model.CustomerTravelNote = null;
         _customerSearch = string.Empty;
     }
 

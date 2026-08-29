@@ -53,7 +53,7 @@ public sealed class OfficeAccessService(IDbContextFactory<ApplicationDbContext> 
         await using var db = await factory.CreateDbContextAsync(ct);
         return await db.OfficeVehicles.AsNoTracking().AnyAsync(x =>
             x.VehicleId == vehicleId &&
-            x.Vehicle.IsActive && !x.Vehicle.IsDeleted &&
+            !x.Vehicle.IsDeleted &&
             x.IsActive && !x.IsDeleted && x.AssignedTo == null &&
             x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted &&
             db.AdminOffices.Any(a =>

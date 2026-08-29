@@ -13,6 +13,8 @@ public class Vehicle : BaseEntity
 {
     public string PlateNumber { get; set; } = string.Empty;
     public string? VehicleCode { get; set; }
+    /// <summary>Số phù hiệu vận tải của xe, dùng làm tiền tố số hợp đồng khi hoàn tất.</summary>
+    public string? PermitNumber { get; set; }
     public string? Brand { get; set; }
     public string? Model { get; set; }
     public string? VehicleType { get; set; }

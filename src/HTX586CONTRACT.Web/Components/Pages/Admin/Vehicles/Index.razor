@@ -13,7 +13,7 @@
 <MudPaper Class="pa-4 mb-4" Elevation="1">
     <MudGrid>
         <MudItem xs="12" md="5">
-            <MudTextField T="string" @bind-Value="_keyword" Placeholder="Tìm biển số, Chủ xe, tài khoản, văn phòng..."
+            <MudTextField T="string" @bind-Value="_keyword" Placeholder="Tìm biển số, số phù hiệu, Chủ xe, tài khoản, văn phòng..."
                           Immediate="true" Clearable="true" Adornment="Adornment.Start"
                           AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" />
         </MudItem>
@@ -57,9 +57,9 @@
             @(_importPreview.InvalidRows > 0 ? "Chỉ các dòng hợp lệ được import. Chủ xe là tùy chọn; mỗi xe chỉ được gán một Công ty/Văn phòng." : "Toàn bộ dữ liệu hợp lệ, có thể xác nhận import.")
         </MudAlert>
         <MudTable T="VehicleImportRowPreview" Items="_importPreview.Rows" Dense="true" Hover="true" Striped="true" RowsPerPage="10" Loading="_importing">
-            <HeaderContent><MudTh>Dòng</MudTh><MudTh>Biển số</MudTh><MudTh>Tài khoản Chủ xe</MudTh><MudTh>Công ty/Văn phòng</MudTh><MudTh>Loại xe</MudTh><MudTh>Số chỗ</MudTh><MudTh>Trạng thái</MudTh><MudTh>Lỗi</MudTh></HeaderContent>
+            <HeaderContent><MudTh>Dòng</MudTh><MudTh>Biển số</MudTh><MudTh>Số phù hiệu</MudTh><MudTh>Tài khoản Chủ xe</MudTh><MudTh>Công ty/Văn phòng</MudTh><MudTh>Loại xe</MudTh><MudTh>Số chỗ</MudTh><MudTh>Trạng thái</MudTh><MudTh>Lỗi</MudTh></HeaderContent>
             <RowTemplate>
-                <MudTd>@context.RowNumber</MudTd><MudTd><b>@context.PlateNumber</b></MudTd>
+                <MudTd>@context.RowNumber</MudTd><MudTd><b>@context.PlateNumber</b></MudTd><MudTd>@context.PermitNumber</MudTd>
                 <MudTd>@context.VehicleOwnerUserName<br /><small>@context.VehicleOwnerName</small></MudTd>
                 <MudTd>@context.OfficeTaxCode</MudTd><MudTd>@context.VehicleType</MudTd><MudTd>@context.SeatCount</MudTd>
                 <MudTd><MudChip T="string" Size="Size.Small" Color="@(context.IsValid ? Color.Success : Color.Error)">@(context.IsValid ? "Hợp lệ" : "Lỗi")</MudChip></MudTd>
@@ -77,18 +77,16 @@
 }
 
 <MudTable T="VehicleRow" Items="FilteredItems" Loading="_loading" Hover="true" Striped="true" RowsPerPage="20" Breakpoint="Breakpoint.Sm">
-    <HeaderContent><MudTh>Biển số</MudTh><MudTh>Công ty/Văn phòng</MudTh><MudTh>Tài khoản Chủ xe</MudTh><MudTh>Nhãn hiệu</MudTh><MudTh>Số chỗ</MudTh><MudTh>Chân ký Chủ xe</MudTh><MudTh>Trạng thái</MudTh><MudTh></MudTh></HeaderContent>
+    <HeaderContent><MudTh>Biển số</MudTh><MudTh>Số phù hiệu</MudTh><MudTh>Công ty/Văn phòng</MudTh><MudTh>Tài khoản Chủ xe</MudTh><MudTh>Nhãn hiệu</MudTh><MudTh>Số chỗ</MudTh><MudTh>Trạng thái</MudTh><MudTh></MudTh></HeaderContent>
     <RowTemplate>
         <MudTd DataLabel="Biển số"><b>@context.PlateNumber</b><br /><small>@(context.VehicleCode ?? "—")</small></MudTd>
+        <MudTd DataLabel="Số phù hiệu">@Display(context.PermitNumber)</MudTd>
         <MudTd DataLabel="Công ty/Văn phòng">@Display(context.OfficeNames)</MudTd><MudTd DataLabel="Tài khoản Chủ xe">@Display(context.VehicleOwnerName)</MudTd>
         <MudTd DataLabel="Nhãn hiệu">@Display(context.Brand)</MudTd><MudTd DataLabel="Số chỗ">@(context.SeatCount?.ToString() ?? "—")</MudTd>
-        <MudTd DataLabel="Chân ký Chủ xe"><MudChip T="string" Size="Size.Small" Color="@(context.HasOwnerSignature ? Color.Success : Color.Warning)">@(context.HasOwnerSignature ? "Đã có" : "Chưa có")</MudChip></MudTd><MudTd DataLabel="Trạng thái"><MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">@(context.IsActive ? "Hoạt động" : "Ngừng")</MudChip></MudTd>
+        <MudTd DataLabel="Trạng thái"><MudChip T="string" Size="Size.Small" Color="@(context.IsActive ? Color.Success : Color.Default)">@(context.IsActive ? "Hoạt động" : "Ngừng")</MudChip></MudTd>
         <MudTd><MudIconButton Icon="@Icons.Material.Filled.Visibility" Color="Color.Info" OnClick="@(() => Navigation.NavigateTo($"/admin/vehicles/{context.Id}"))" />
             <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="@(() => Navigation.NavigateTo($"/admin/vehicles/{context.Id}/edit"))" />
-            @if (_isOwner)
-            {
-                <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" OnClick="@(() => DeleteAsync(context.Id))" />
-            }
+            <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" OnClick="@(() => DeleteAsync(context.Id))" />
         </MudTd>
     </RowTemplate>
     <PagerContent><MudTablePager PageSizeOptions="@(new int[] { 10, 20, 50, 100 })" /></PagerContent>
@@ -107,7 +105,7 @@
     private MudFileUpload<IBrowserFile>? _fileUpload;
 
     private IEnumerable<VehicleRow> FilteredItems => string.IsNullOrWhiteSpace(_keyword) ? _items : _items.Where(x =>
-        Contains(x.PlateNumber) || Contains(x.VehicleCode) || Contains(x.VehicleOwnerName) || Contains(x.OwnerPhoneNumber) || Contains(x.OfficeNames));
+        Contains(x.PlateNumber) || Contains(x.VehicleCode) || Contains(x.PermitNumber) || Contains(x.VehicleOwnerName) || Contains(x.OwnerPhoneNumber) || Contains(x.OfficeNames));
 
     protected override async Task OnInitializedAsync()
     {
@@ -129,9 +127,8 @@
                 .OrderBy(x => x.PlateNumber).ToListAsync();
             _items = vehicles.Select(x => new VehicleRow
             {
-                Id = x.Id, PlateNumber = x.PlateNumber, VehicleCode = x.VehicleCode, Brand = x.Brand, SeatCount = x.SeatCount,
+                Id = x.Id, PlateNumber = x.PlateNumber, VehicleCode = x.VehicleCode, PermitNumber = x.PermitNumber, Brand = x.Brand, SeatCount = x.SeatCount,
                 VehicleOwnerName = x.AssignedDriver?.FullName, OwnerPhoneNumber = x.AssignedDriver?.PhoneNumber,
-                HasOwnerSignature = !string.IsNullOrWhiteSpace(x.AssignedDriver?.VehicleOwnerSignatureFileUrl),
                 OfficeNames = string.Join(", ", x.OfficeVehicles.Where(ov => ov.IsActive && !ov.IsDeleted && ov.AssignedTo == null && _managedOfficeIds.Contains(ov.CompanyProfileId))
                     .OrderByDescending(ov => ov.IsPrimary).ThenBy(ov => ov.CompanyProfile.CompanyName)
                     .Select(ov => string.IsNullOrWhiteSpace(ov.CompanyProfile.BranchName) ? ov.CompanyProfile.CompanyName : $"{ov.CompanyProfile.CompanyName} - {ov.CompanyProfile.BranchName}")),
@@ -187,8 +184,8 @@
     {
         try
         {
-            if (!_isOwner) throw new InvalidOperationException("Chỉ tài khoản Owner được phép xóa toàn bộ xe khỏi hệ thống.");
-            if (!await OfficeAccessService.CanManageVehicleAsync(_currentUserId, id, true)) throw new InvalidOperationException("Xe nằm ngoài phạm vi quản lý.");
+            if (!await OfficeAccessService.CanManageVehicleAsync(_currentUserId, id, _isOwner))
+                throw new InvalidOperationException("Xe nằm ngoài phạm vi quản lý.");
             await using var db = await Factory.CreateDbContextAsync();
             var vehicle = await db.Vehicles.Include(x => x.Contracts).FirstOrDefaultAsync(x => x.Id == id); if (vehicle is null) return;
             var hasOpenContract = vehicle.Contracts.Any(x => x.Status is not ContractStatus.Completed and not ContractStatus.Cancelled and not ContractStatus.Expired and not ContractStatus.Invalidated);
@@ -207,8 +204,8 @@
     private sealed class VehicleRow
     {
         public Guid Id { get; set; } public string PlateNumber { get; set; } = string.Empty; public string? VehicleCode { get; set; }
-        public string? Brand { get; set; } public int? SeatCount { get; set; }
-        public string? VehicleOwnerName { get; set; } public string? OwnerPhoneNumber { get; set; } public bool HasOwnerSignature { get; set; }
+        public string? PermitNumber { get; set; } public string? Brand { get; set; } public int? SeatCount { get; set; }
+        public string? VehicleOwnerName { get; set; } public string? OwnerPhoneNumber { get; set; }
         public string OfficeNames { get; set; } = string.Empty; public bool IsActive { get; set; }
     }
 }

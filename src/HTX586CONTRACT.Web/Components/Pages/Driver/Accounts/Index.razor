@@ -55,6 +55,8 @@ else
                         </MudText>
                         <SignaturePad ExistingSignatureUrl="@SignatureUrl"
                                       SignerName="@_model.FullName"
+                                      StrokeColor="#0066CC"
+                                      StrokeWidth="1.5"
                                       SignedAt="@_model.VehicleOwnerSignedAt"
                                       OnSignatureSaved="SaveVehicleOwnerSignatureAsync"
                                       ConfirmationButtonText="Lưu chân ký Chủ xe" />

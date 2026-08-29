@@ -50,14 +50,7 @@
                         <MudItem xs="12" md="4"><InfoListItem Label="Ngày cấp CCCD" Value="@DateText(SelectedVehicleOwner.CitizenIdIssuedDate)" /></MudItem>
                         <MudItem xs="12" md="4"><InfoListItem Label="Nơi cấp CCCD" Value="@Display(SelectedVehicleOwner.CitizenIdIssuedPlace)" /></MudItem>
                         <MudItem xs="12" md="4"><InfoListItem Label="Địa chỉ" Value="@Display(SelectedVehicleOwner.Address)" /></MudItem>
-                        <MudItem xs="12" md="4"><InfoListItem Label="Chân ký Chủ xe" Value="@(!string.IsNullOrWhiteSpace(SelectedVehicleOwner.VehicleOwnerSignatureFileUrl) ? "Đã khai báo" : "Chưa khai báo")" /></MudItem>
                     </MudGrid>
-                    @if (string.IsNullOrWhiteSpace(SelectedVehicleOwner.VehicleOwnerSignatureFileUrl))
-                    {
-                        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true" Class="mt-2">
-                            Tài khoản Chủ xe chưa có chân ký. Xe vẫn được lưu, nhưng cần bổ sung chân ký trước khi hoàn thiện hợp đồng có sử dụng chữ ký Chủ xe.
-                        </MudAlert>
-                    }
                 </MudPaper>
             </MudItem>
         }
@@ -73,6 +66,7 @@
         <MudItem xs="12"><MudDivider Class="my-2" /></MudItem>
         <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.PlateNumber" Label="Biển số" Required="true" Variant="Variant.Outlined" /></MudItem>
         <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.VehicleCode" Label="Mã xe" Variant="Variant.Outlined" /></MudItem>
+        <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.PermitNumber" Label="Số phù hiệu" Required="true" Variant="Variant.Outlined" HelperText="Dùng làm tiền tố số hợp đồng khi hoàn tất." /></MudItem>
         <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.VehicleType" Label="Loại xe" Variant="Variant.Outlined" /></MudItem>
         <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.Brand" Label="Nhãn hiệu" Variant="Variant.Outlined" /></MudItem>
         <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.Model" Label="Dòng xe" Variant="Variant.Outlined" /></MudItem>
@@ -128,10 +122,9 @@
             return;
         }
 
-        var selectedOwner = SelectedVehicleOwner;
-        if (selectedOwner is not null && !HasCompleteLegalProfile(selectedOwner))
+        if (string.IsNullOrWhiteSpace(_model.PermitNumber))
         {
-            Snackbar.Add("Hồ sơ Chủ xe chưa đủ CCCD, ngày cấp, nơi cấp hoặc địa chỉ. Hãy cập nhật tài khoản trước khi gán vào xe.", Severity.Warning);
+            Snackbar.Add("Vui lòng nhập số phù hiệu xe.", Severity.Warning);
             return;
         }
 
@@ -149,11 +142,10 @@
                 validOwner = await FindValidVehicleOwnerAsync(db, _model.AssignedDriverId);
                 if (validOwner is null)
                     throw new InvalidOperationException("Tài khoản Chủ xe không hợp lệ, đã khóa hoặc chưa được duyệt.");
-                if (!HasCompleteLegalProfile(validOwner))
-                    throw new InvalidOperationException("Hồ sơ Chủ xe chưa đủ thông tin pháp lý.");
             }
 
             _model.PlateNumber = _model.PlateNumber.Trim().ToUpperInvariant();
+            _model.PermitNumber = _model.PermitNumber.Trim();
             if (await db.Vehicles.IgnoreQueryFilters().AnyAsync(x => !x.IsDeleted && x.PlateNumber == _model.PlateNumber))
                 throw new InvalidOperationException("Biển số xe đã tồn tại.");
 
@@ -262,16 +254,9 @@
         vehicle.OwnerAddress = null;
     }
 
-    private static bool HasCompleteLegalProfile(ApplicationUser owner) =>
-        !string.IsNullOrWhiteSpace(owner.FullName) &&
-        !string.IsNullOrWhiteSpace(owner.PhoneNumber) &&
-        !string.IsNullOrWhiteSpace(owner.CitizenId) &&
-        owner.CitizenIdIssuedDate.HasValue &&
-        !string.IsNullOrWhiteSpace(owner.CitizenIdIssuedPlace) &&
-        !string.IsNullOrWhiteSpace(owner.Address);
 
     private static string OfficeDisplay(CompanyProfile x) => string.IsNullOrWhiteSpace(x.BranchName) ? x.CompanyName : $"{x.CompanyName} - {x.BranchName}";
-    private static string UserDisplay(ApplicationUser x) => $"{x.FullName} - {Display(x.PhoneNumber)}";
+    private static string? UserDisplay(ApplicationUser? x) => x is null ? null : $"{x.FullName} - {Display(x.PhoneNumber)}";
     private static string Display(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
     private static string DateText(DateTime? value) => value?.ToString("dd/MM/yyyy") ?? "—";
     private static string? N(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

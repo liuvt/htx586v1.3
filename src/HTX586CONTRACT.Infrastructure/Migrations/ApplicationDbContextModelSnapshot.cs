@@ -278,6 +278,13 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                     b.Property<bool>("CustomerTravelsWithGroup")
                         .HasColumnType("bit");
 
+                    b.Property<int?>("CustomerTravelBirthYear")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CustomerTravelNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("datetime2");
 
@@ -1554,6 +1561,10 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("VehicleCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("PermitNumber")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 

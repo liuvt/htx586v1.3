@@ -2,9 +2,6 @@
 @page "/owner/contracts"
 @attribute [Authorize(Roles = "Owner")]
 @inject IContractService ContractService
-@inject IDialogService Dialog
-@inject ISnackbar Snackbar
-@inject AuthenticationStateProvider AuthenticationStateProvider
 
 <PageTitle>Hợp đồng</PageTitle>
 <PageHeader Title="Hợp đồng" Subtitle="Owner quản lý hợp đồng của tất cả Công ty/Văn phòng trong hệ thống." />
@@ -58,7 +55,12 @@
             <MudTd DataLabel="Trạng thái"><ContractStatusChip Status="context.Status" /></MudTd>
             <MudTd>
                 <MudIconButton Icon="@Icons.Material.Filled.Edit" Href="@($"/owner/contracts/{context.Id}")" />
-                <MudIconButton Icon="@Icons.Material.Filled.VisibilityOff" Color="Color.Warning" OnClick="@(() => DeleteAsync(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.PictureAsPdf"
+                               Color="Color.Error"
+                               Href="@context.PdfFileUrl"
+                               Target="_blank"
+                               Disabled="@string.IsNullOrWhiteSpace(context.PdfFileUrl)"
+                               Title="@(string.IsNullOrWhiteSpace(context.PdfFileUrl) ? "Chưa có file PDF hợp đồng" : "Mở file PDF hợp đồng ở tab mới")" />
             </MudTd>
         </RowTemplate>
         <NoRecordsContent><MudText>Chưa có hợp đồng.</MudText></NoRecordsContent>
@@ -72,12 +74,9 @@
     private string? _search;
     private ContractStatus? _status;
     private bool _loading;
-    private string _currentUserId = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
-        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        _currentUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
         await LoadAsync();
     }
 
@@ -97,28 +96,6 @@
         {
             _loading = false;
         }
-    }
-
-    private async Task DeleteAsync(ContractListItemDto item)
-    {
-        var confirmed = await Dialog.ShowMessageBoxAsync(
-            "Ẩn hợp đồng",
-            $"Ẩn hợp đồng {item.ContractNumber} khỏi danh sách? Dữ liệu vẫn được giữ nguyên trong database và không bị xóa vật lý.",
-            yesText: "Ẩn khỏi giao diện",
-            cancelText: "Hủy");
-
-        if (confirmed != true)
-            return;
-
-        var hidden = await ContractService.DeleteAsync(item.Id, _currentUserId);
-        if (!hidden)
-        {
-            Snackbar.Add("Không thể ẩn hợp đồng ở trạng thái hiện tại hoặc bạn không có quyền thao tác.", Severity.Warning);
-            return;
-        }
-
-        Snackbar.Add("Đã ẩn hợp đồng khỏi giao diện. Dữ liệu gốc vẫn còn trong database.", Severity.Success);
-        await LoadAsync();
     }
 
     private static string StatusText(ContractStatus status) => status switch

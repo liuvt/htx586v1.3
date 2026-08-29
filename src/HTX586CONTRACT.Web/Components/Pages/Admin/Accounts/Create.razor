@@ -77,6 +77,8 @@
                 </MudText>
                 <SignaturePad ExistingSignatureUrl="@_vehicleOwnerSignatureDataUrl"
                               SignerName="@_model.FullName"
+                              StrokeColor="#0066CC"
+                              StrokeWidth="1.5"
                               OnSignatureSaved="CaptureVehicleOwnerSignatureAsync"
                               OnSavedSignatureRemoved="ClearCapturedVehicleOwnerSignatureAsync"
                               AllowRemoveSavedSignature="true"

@@ -173,20 +173,13 @@
             <MudChip T="string" Variant="Variant.Filled" Color="Color.Primary">Tổng số: @FormatNumber(Detail.ActualPassengerCount)</MudChip>
         </div>
 
-        @if (Detail.CustomerTravelsWithGroup && !string.IsNullOrWhiteSpace(TravelCompanionDisplayName))
+        @if (!PassengerRows.Any())
         {
-            <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Dense="true" Class="mb-3">
-                Khách hàng/người đặt trực tiếp đi cùng: <strong>@TravelCompanionDisplayName</strong>
-            </MudAlert>
-        }
-
-        @if (Detail.Passengers.Count == 0)
-        {
-            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Không có hành khách bổ sung.</MudAlert>
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Không có hành khách.</MudAlert>
         }
         else
         {
-            <MudTable T="ContractPassengerDto" Items="Detail.Passengers" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
+            <MudTable T="ContractPassengerDto" Items="PassengerRows" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm">
                 <HeaderContent>
                     <MudTh>STT</MudTh>
                     <MudTh>Họ tên</MudTh>
@@ -194,10 +187,20 @@
                     <MudTh>Ghi chú</MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd DataLabel="STT">@context.SortOrder</MudTd>
-                    <MudTd DataLabel="Họ tên">@context.FullName</MudTd>
-                    <MudTd DataLabel="Năm sinh">@(context.BirthYear?.ToString() ?? "-")</MudTd>
-                    <MudTd DataLabel="Ghi chú">@(string.IsNullOrWhiteSpace(context.Note) ? "-" : context.Note)</MudTd>
+                    @if (IsCustomerTravelRow(context))
+                    {
+                        <MudTd DataLabel="STT">1</MudTd>
+                        <MudTd DataLabel="Họ tên">@TravelCompanionDisplayName</MudTd>
+                        <MudTd DataLabel="Năm sinh">@(Detail.CustomerTravelBirthYear?.ToString() ?? "-")</MudTd>
+                        <MudTd DataLabel="Ghi chú">@(string.IsNullOrWhiteSpace(Detail.CustomerTravelNote) ? "-" : Detail.CustomerTravelNote)</MudTd>
+                    }
+                    else
+                    {
+                        <MudTd DataLabel="STT">@(context.SortOrder + (Detail.CustomerTravelsWithGroup ? 1 : 0))</MudTd>
+                        <MudTd DataLabel="Họ tên">@context.FullName</MudTd>
+                        <MudTd DataLabel="Năm sinh">@(context.BirthYear?.ToString() ?? "-")</MudTd>
+                        <MudTd DataLabel="Ghi chú">@(string.IsNullOrWhiteSpace(context.Note) ? "-" : context.Note)</MudTd>
+                    }
                 </RowTemplate>
             </MudTable>
         }
@@ -243,18 +246,46 @@
     </MudPaper>
 
     <MudPaper Class="contract-actions" Elevation="0">
-        <MudButton Href="@BackUrl" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack">
-            Quay lại danh sách
-        </MudButton>
-        @if (Detail.Status == ContractStatus.Completed)
-        {
-            <MudButton Color="Color.Error"
-                       Variant="Variant.Filled"
-                       StartIcon="@Icons.Material.Filled.PictureAsPdf"
-                       OnClick="OpenPdfAsync">
-                Mở PDF chính thức
+        <div class="contract-actions__sync">
+            @if (AllowPdfSync && Detail.Status == ContractStatus.Completed)
+            {
+                <MudButton Color="Color.Primary"
+                           Variant="Variant.Filled"
+                           StartIcon="@Icons.Material.Filled.Sync"
+                           Disabled="@_syncingPdf"
+                           OnClick="SyncPdfAsync">
+                    @(_syncingPdf ? "Đang đồng bộ..." : "Đồng bộ PDF")
+                </MudButton>
+
+                @foreach (var pdf in _syncedPdfs)
+                {
+                    <MudTooltip Text="@pdf.FileName">
+                        <MudButton Color="Color.Info"
+                                   Variant="Variant.Outlined"
+                                   StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                                   Href="@pdf.FileUrl"
+                                   Target="_blank">
+                            @SyncPdfButtonText(pdf)
+                        </MudButton>
+                    </MudTooltip>
+                }
+            }
+        </div>
+
+        <div class="contract-actions__right">
+            <MudButton Href="@BackUrl" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack">
+                Quay lại danh sách
             </MudButton>
-        }
+            @if (Detail.Status == ContractStatus.Completed)
+            {
+                <MudButton Color="Color.Error"
+                           Variant="Variant.Filled"
+                           StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                           OnClick="OpenPdfAsync">
+                    Mở PDF chính thức
+                </MudButton>
+            }
+        </div>
     </MudPaper>
 </div>
 
@@ -436,8 +467,22 @@
 
     .contract-actions {
         display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .contract-actions__sync,
+    .contract-actions__right {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .contract-actions__right {
         justify-content: flex-end;
-        gap: 12px;
+        margin-left: auto;
     }
 
     @@media (max-width: 1280px) {
@@ -477,8 +522,16 @@
             align-items: stretch;
         }
 
-        .contract-actions > * {
+        .contract-actions__sync,
+        .contract-actions__right {
             width: 100%;
+            margin-left: 0;
+            justify-content: stretch;
+        }
+
+        .contract-actions__sync > *,
+        .contract-actions__right > * {
+            flex: 1 1 auto;
         }
 
         .data-grid,
@@ -500,6 +553,11 @@
 @code {
     [Parameter, EditorRequired] public ContractDetailDto Detail { get; set; } = null!;
     [Parameter, EditorRequired] public string BackUrl { get; set; } = "/";
+    [Parameter] public bool AllowPdfSync { get; set; }
+
+    private IReadOnlyList<ContractPdfVersionDto> _syncedPdfs = Array.Empty<ContractPdfVersionDto>();
+    private Guid? _loadedSyncContractId;
+    private bool _syncingPdf;
 
     private ContractSignatureDto? CustomerSignature
         => Detail.Signatures.FirstOrDefault(x => x.Party == SignatureParty.Customer);
@@ -508,6 +566,65 @@
         <span class="data-label">@label</span>
         <span class="data-value">@DisplayText(value)</span>
     </div>;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (AllowPdfSync &&
+            Detail.Status == ContractStatus.Completed &&
+            _loadedSyncContractId != Detail.Id)
+        {
+            await ReloadSyncedPdfsAsync();
+            _loadedSyncContractId = Detail.Id;
+        }
+        else if (!AllowPdfSync)
+        {
+            _syncedPdfs = Array.Empty<ContractPdfVersionDto>();
+            _loadedSyncContractId = null;
+        }
+    }
+
+    private async Task SyncPdfAsync()
+    {
+        if (_syncingPdf)
+            return;
+
+        try
+        {
+            _syncingPdf = true;
+            await DocumentService.GenerateSyncedPdfAsync(Detail.Id);
+            await ReloadSyncedPdfsAsync();
+            Snackbar.Add("Đã cập nhật PDF đồng bộ mới nhất. PDF chính thức vẫn được giữ nguyên.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _syncingPdf = false;
+        }
+    }
+
+    private async Task ReloadSyncedPdfsAsync()
+    {
+        try
+        {
+            _syncedPdfs = await DocumentService.GetSyncedPdfsAsync(Detail.Id);
+        }
+        catch (Exception ex)
+        {
+            _syncedPdfs = Array.Empty<ContractPdfVersionDto>();
+            Snackbar.Add($"Không thể đọc danh sách PDF đồng bộ: {ex.Message}", Severity.Warning);
+        }
+    }
+
+    private static string SyncPdfButtonText(ContractPdfVersionDto pdf)
+    {
+        var local = pdf.GeneratedAtUtc.Kind == DateTimeKind.Utc
+            ? pdf.GeneratedAtUtc.AddHours(7)
+            : pdf.GeneratedAtUtc;
+        return $"PDF đồng bộ mới nhất {local:dd/MM/yyyy HH:mm}";
+    }
 
     private async Task OpenPdfAsync()
     {
@@ -549,6 +666,12 @@
         _ => status.ToString()
     };
 
+    private readonly ContractPassengerDto _customerTravelRow = new() { SortOrder = 0 };
+    private IEnumerable<ContractPassengerDto> PassengerRows =>
+        Detail.CustomerTravelsWithGroup && !string.IsNullOrWhiteSpace(TravelCompanionDisplayName)
+            ? new[] { _customerTravelRow }.Concat(Detail.Passengers)
+            : Detail.Passengers;
+    private bool IsCustomerTravelRow(ContractPassengerDto row) => object.ReferenceEquals(row, _customerTravelRow);
     private string TravelCompanionDisplayName => Detail.CustomerIsCompany
         ? (string.IsNullOrWhiteSpace(Detail.CustomerRepresentativeName) ? Detail.CustomerName : Detail.CustomerRepresentativeName)
         : Detail.CustomerName;
