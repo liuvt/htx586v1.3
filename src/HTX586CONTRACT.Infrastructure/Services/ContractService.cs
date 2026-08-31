@@ -104,7 +104,11 @@ public sealed class ContractService(
                 DriverName = x.DriverNameSnapshot,
                 DriverLicenseClass = x.DriverLicenseClassSnapshot,
                 CustomerId = x.CustomerId,
-                CustomerName = x.CustomerNameSnapshot,
+                CustomerName = x.Customer != null &&
+                               x.Customer.Type == CustomerType.Organization &&
+                               !string.IsNullOrWhiteSpace(x.Customer.OrganizationName)
+                    ? x.Customer.OrganizationName
+                    : x.CustomerNameSnapshot,
                 CustomerRepresentativeName = x.Customer != null && x.Customer.Type == CustomerType.Organization ? x.Customer.FullName : null,
                 CustomerPhone = x.CustomerPhoneSnapshot,
                 CustomerCitizenId = x.CustomerCitizenIdSnapshot,
@@ -189,10 +193,32 @@ public sealed class ContractService(
         var snapshot = ContractSnapshotData.FromJson(snapshotJson);
         if (snapshot is not null)
         {
+            // Giữ lại nhận diện B2B/tên đại diện từ entity Customer làm fallback duy nhất
+            // cho snapshot legacy. Một số HĐ cũ đã chụp Customer.FullName = tên công ty.
+            var liveCustomerIsCompany = detail.CustomerIsCompany;
+            var liveCustomerRepresentativeName = detail.CustomerRepresentativeName;
+            var legacyCustomerName = detail.CustomerName;
+
             ApplyImmutableSnapshot(detail, snapshot);
 
-            // Hợp đồng B2B: card/chân ký Đại diện bên B phải hiển thị tên người đại diện.
-            // Không sửa dữ liệu chữ ký lịch sử trong DB; chỉ chuẩn hóa DTO hiển thị theo snapshot đã khóa.
+            if (liveCustomerIsCompany)
+            {
+                detail.CustomerIsCompany = true;
+                if (string.IsNullOrWhiteSpace(snapshot.Customer.OrganizationName))
+                    detail.CustomerName = legacyCustomerName;
+
+                var snapshotRepresentativeIsCompany =
+                    string.IsNullOrWhiteSpace(snapshot.Customer.FullName) ||
+                    SameText(snapshot.Customer.FullName, snapshot.Customer.OrganizationName) ||
+                    SameText(snapshot.Customer.FullName, detail.CustomerName);
+
+                if (snapshotRepresentativeIsCompany && !string.IsNullOrWhiteSpace(liveCustomerRepresentativeName))
+                    detail.CustomerRepresentativeName = liveCustomerRepresentativeName;
+            }
+
+            // Hợp đồng B2B: card/chân ký Đại diện bên B luôn hiển thị tên người đại diện.
+            // Không ghi đè dữ liệu chữ ký lịch sử trong DB; DTO hiển thị được chuẩn hóa
+            // để cả Owner/Admin và hợp đồng cũ đều thấy đúng tên người ký.
             if (detail.CustomerIsCompany && !string.IsNullOrWhiteSpace(detail.CustomerRepresentativeName))
             {
                 foreach (var signature in detail.Signatures.Where(x => x.Party == SignatureParty.Customer))
@@ -1629,6 +1655,11 @@ public sealed class ContractService(
 
     private static string EscapeJson(string? value)
         => (value ?? string.Empty).Replace("\\", "\\\\").Replace("\"", "\\\"");
+
+    private static bool SameText(string? left, string? right)
+        => !string.IsNullOrWhiteSpace(left) &&
+           !string.IsNullOrWhiteSpace(right) &&
+           string.Equals(left.Trim(), right.Trim(), StringComparison.OrdinalIgnoreCase);
 
     private static string? N(string? value)
         => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

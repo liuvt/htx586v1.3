@@ -378,6 +378,27 @@ public sealed class ContractDocumentService(
 
         }
 
+        // Sửa snapshot B2B legacy trước khi lưu chữ ký mới. Các bản cũ có thể đã
+        // chụp Customer.FullName từ CustomerNameSnapshot (tức tên công ty), làm
+        // SignerName của Đại diện Bên B tiếp tục bị sai. Chỉ sửa đúng trường đại diện.
+        if (customer is not null &&
+            (customer.Type == CustomerType.Organization || !string.IsNullOrWhiteSpace(customer.OrganizationName)))
+        {
+            if (string.IsNullOrWhiteSpace(snapshot.Customer.OrganizationName))
+            {
+                snapshot.Customer.OrganizationName = !string.IsNullOrWhiteSpace(customer.OrganizationName)
+                    ? customer.OrganizationName.Trim()
+                    : contract.CustomerNameSnapshot?.Trim();
+            }
+
+            var snapshotRepresentativeIsCompany =
+                string.IsNullOrWhiteSpace(snapshot.Customer.FullName) ||
+                SameText(snapshot.Customer.FullName, snapshot.Customer.OrganizationName);
+
+            if (snapshotRepresentativeIsCompany && !string.IsNullOrWhiteSpace(customer.FullName))
+                snapshot.Customer.FullName = customer.FullName.Trim();
+        }
+
         if (string.IsNullOrWhiteSpace(snapshot.Company.RepresentativeSignatureFileUrl))
             throw new InvalidOperationException("Công ty/Văn phòng chưa có chữ ký đại diện cố định.");
         if (string.IsNullOrWhiteSpace(snapshot.Vehicle.OwnerSignatureFileUrl))
@@ -862,16 +883,32 @@ public sealed class ContractDocumentService(
     private static string ResolveCustomerSignerName(HTX586CONTRACT.Domain.Contracts.Contract contract, string? suppliedSignerName)
     {
         var snapshot = ContractSnapshotData.FromJson(contract.ContractDataJson);
-        if (!string.IsNullOrWhiteSpace(snapshot?.Customer.OrganizationName) &&
-            !string.IsNullOrWhiteSpace(snapshot.Customer.FullName))
+        if (!string.IsNullOrWhiteSpace(snapshot?.Customer.OrganizationName))
         {
-            return snapshot.Customer.FullName.Trim();
+            // B2B: chỉ chấp nhận FullName khi đó thực sự là tên người đại diện.
+            // Snapshot legacy từng có thể lưu FullName = tên công ty.
+            if (!string.IsNullOrWhiteSpace(snapshot.Customer.FullName) &&
+                !SameText(snapshot.Customer.FullName, snapshot.Customer.OrganizationName))
+            {
+                return snapshot.Customer.FullName.Trim();
+            }
+
+            if (!string.IsNullOrWhiteSpace(suppliedSignerName) &&
+                !SameText(suppliedSignerName, snapshot.Customer.OrganizationName))
+            {
+                return suppliedSignerName.Trim();
+            }
         }
 
         return string.IsNullOrWhiteSpace(suppliedSignerName)
             ? DefaultSignerName(contract, SignatureParty.Customer)
             : suppliedSignerName.Trim();
     }
+
+    private static bool SameText(string? left, string? right)
+        => !string.IsNullOrWhiteSpace(left) &&
+           !string.IsNullOrWhiteSpace(right) &&
+           string.Equals(left.Trim(), right.Trim(), StringComparison.OrdinalIgnoreCase);
 
     // Lấy tên người ký mặc định từ dữ liệu snapshot của hợp đồng. Nếu không có snapshot, trả về chuỗi rỗng.
     private static string DefaultSignerName(HTX586CONTRACT.Domain.Contracts.Contract contract, SignatureParty role) => role switch

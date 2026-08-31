@@ -24,6 +24,7 @@ public sealed class DriverAccountService(
     public async Task<string> CreateAsync(CreateDriverAccountRequest request, CancellationToken ct = default)
     {
         ValidateBaseAccount(request.UserName, request.Password, request.FullName);
+        ValidateRequiredVehicleOwnerIdentity(request.CitizenId, request.CitizenIdIssuedDate);
         var phone = VietnamPhoneNumber.NormalizeOrThrow(request.PhoneNumber);
         await EnsureLoginIdentifiersAvailableAsync(request.UserName, phone, null, ct);
 
@@ -67,6 +68,7 @@ public sealed class DriverAccountService(
     public async Task<string> SubmitRegistrationAsync(SelfRegisterDriverRequest request, CancellationToken ct = default)
     {
         ValidateBaseAccount(request.UserName, request.Password, request.FullName);
+        ValidateRequiredVehicleOwnerIdentity(request.CitizenId, request.CitizenIdIssuedDate);
         var phone = VietnamPhoneNumber.NormalizeOrThrow(request.PhoneNumber);
         await EnsureLoginIdentifiersAvailableAsync(request.UserName, phone, null, ct);
 
@@ -75,6 +77,8 @@ public sealed class DriverAccountService(
             UserName = request.UserName.Trim(),
             FullName = request.FullName.Trim(),
             PhoneNumber = phone,
+            CitizenId = N(request.CitizenId),
+            CitizenIdIssuedDate = request.CitizenIdIssuedDate?.Date,
             RegistrationStatus = "Pending",
             RegistrationRequestedAt = DateTime.UtcNow,
             IsActive = false,
@@ -522,6 +526,14 @@ public sealed class DriverAccountService(
             RequestedAt = x.RegistrationRequestedAt ?? x.CreatedAt,
             ViewedAt = x.RegistrationViewedAt
         };
+
+    private static void ValidateRequiredVehicleOwnerIdentity(string? citizenId, DateTime? citizenIdIssuedDate)
+    {
+        if (string.IsNullOrWhiteSpace(citizenId))
+            throw new InvalidOperationException("Tài khoản Chủ xe bắt buộc nhập số CCCD.");
+        if (!citizenIdIssuedDate.HasValue)
+            throw new InvalidOperationException("Tài khoản Chủ xe bắt buộc nhập Ngày cấp CCCD.");
+    }
 
     private static void ValidateBaseAccount(string userName, string password, string fullName)
     {

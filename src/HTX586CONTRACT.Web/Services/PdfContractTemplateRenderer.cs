@@ -300,15 +300,38 @@ public sealed class PdfContractTemplateRenderer(
         var companyOfficeName = snapshot is not null
             ? First(snapshot.Company.Name, snapshot.Company.BranchName, "...")
             : First(company?.CompanyName, company?.BranchName, companyName, "...");
+        var liveCustomerIsCompany = customer?.Type == CustomerType.Organization ||
+            !string.IsNullOrWhiteSpace(customer?.OrganizationName);
+        var snapshotCustomerIsCompany = snapshot is not null &&
+            !string.IsNullOrWhiteSpace(snapshot.Customer.OrganizationName);
+        var customerIsCompany = snapshotCustomerIsCompany || liveCustomerIsCompany;
+
         var customerName = snapshot is not null
-            ? First(snapshot.Customer.OrganizationName, snapshot.Customer.FullName, "...")
+            ? First(
+                snapshot.Customer.OrganizationName,
+                customerIsCompany ? customer?.OrganizationName : null,
+                customerIsCompany ? contract.CustomerNameSnapshot : null,
+                snapshot.Customer.FullName,
+                "...")
             : First(contract.CustomerNameSnapshot, customer?.OrganizationName, customer?.FullName, "...");
-        var customerRepresentative = snapshot is not null
-            ? First(snapshot.Customer.FullName, "...")
-            : First(customer?.FullName, contract.CustomerNameSnapshot, "...");
-        var customerIsCompany = snapshot is not null
-            ? !string.IsNullOrWhiteSpace(snapshot.Customer.OrganizationName)
-            : customer?.Type == CustomerType.Organization || !string.IsNullOrWhiteSpace(customer?.OrganizationName);
+
+        // Một số snapshot B2B legacy được tạo từ CustomerNameSnapshot nên
+        // Customer.FullName bị lưu thành chính tên công ty. Với trường hợp này,
+        // chỉ riêng tên dưới chân ký Bên B được phép fallback sang hồ sơ Customer
+        // hiện tại để khôi phục đúng tên NGƯỜI ĐẠI DIỆN khi Owner đồng bộ PDF cũ.
+        var snapshotRepresentative = RepresentativeCandidate(
+            snapshot?.Customer.FullName,
+            snapshot?.Customer.OrganizationName,
+            customer?.OrganizationName);
+        var liveRepresentative = RepresentativeCandidate(
+            liveCustomerIsCompany ? customer?.FullName : null,
+            customer?.OrganizationName,
+            snapshot?.Customer.OrganizationName);
+        var customerRepresentative = customerIsCompany
+            ? First(snapshotRepresentative, liveRepresentative, "...")
+            : snapshot is not null
+                ? First(snapshot.Customer.FullName, "...")
+                : First(customer?.FullName, contract.CustomerNameSnapshot, "...");
         var ownerName = snapshot is not null
             ? First(snapshot.Vehicle.OwnerName, "...")
             : First(contract.VehicleOwnerNameSnapshot, vehicle?.OwnerName, "...");
@@ -520,6 +543,19 @@ public sealed class PdfContractTemplateRenderer(
         => businessType == ContractBusinessType.Cargo
             ? "Hợp đồng vận chuyển hàng hóa"
             : "Hợp đồng vận chuyển hành khách";
+
+    private static string? RepresentativeCandidate(string? candidate, params string?[] organizationNames)
+    {
+        if (string.IsNullOrWhiteSpace(candidate))
+            return null;
+
+        var value = candidate.Trim();
+        return organizationNames.Any(x =>
+                !string.IsNullOrWhiteSpace(x) &&
+                string.Equals(value, x.Trim(), StringComparison.OrdinalIgnoreCase))
+            ? null
+            : value;
+    }
 
     private static string First(params string?[] values)
         => values.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))?.Trim() ?? string.Empty;

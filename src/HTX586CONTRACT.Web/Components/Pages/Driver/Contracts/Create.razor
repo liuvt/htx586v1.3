@@ -565,7 +565,7 @@ else
                         else if (CanCustomerSign)
                         {
                             <SignaturePad ExistingSignatureUrl="@SignatureUrl(SignatureParty.Customer)"
-                                          SignerName="@_model.CustomerName"
+                                          SignerName="@CustomerSignatureSignerName"
                                           StrokeColor="#0066CC"
                                           StrokeWidth="1.5"
                                           SignedAt="@SignatureTime(SignatureParty.Customer)"
@@ -658,6 +658,13 @@ else
             ? _model.CustomerName?.Trim() ?? string.Empty
             : _model.CustomerRepresentativeName.Trim())
         : string.IsNullOrWhiteSpace(_model.CustomerName) ? string.Empty : _model.CustomerName.Trim();
+
+    // B2B: người ký là người đại diện, không phải tên pháp nhân/doanh nghiệp.
+    private string CustomerSignatureSignerName => _model.CustomerIsCompany
+        ? (string.IsNullOrWhiteSpace(_model.CustomerRepresentativeName)
+            ? _model.CustomerName?.Trim() ?? "Khách hàng"
+            : _model.CustomerRepresentativeName.Trim())
+        : string.IsNullOrWhiteSpace(_model.CustomerName) ? "Khách hàng" : _model.CustomerName.Trim();
 
     private DateTime? _startDate;
     private DateTime? _endDate;
@@ -1133,7 +1140,7 @@ else
 
         await SaveSignature(
             "Customer",
-            _model.CustomerName,
+            CustomerSignatureSignerName,
             data,
             "Đã lưu chữ ký khách hàng. Đã đủ 2 chữ ký cuối; hãy bấm Hoàn thành hợp đồng để chốt và khóa dữ liệu.");
     }
@@ -1201,7 +1208,9 @@ else
         => GetSignature(party)?.SignatureFileUrl;
 
     private string? SignatureName(SignatureParty party)
-        => GetSignature(party)?.SignerName;
+        => party == SignatureParty.Customer && _model.CustomerIsCompany
+            ? CustomerSignatureSignerName
+            : GetSignature(party)?.SignerName;
 
     private DateTime? SignatureTime(SignatureParty party)
         => GetSignature(party)?.ServerSignedAt;

@@ -51,6 +51,25 @@
                               Variant="Variant.Outlined"
                               Class="mb-3" />
 
+                <MudTextField @bind-Value="_model.CitizenId"
+                              Label="CCCD"
+                              Required="true"
+                              RequiredError="Vui lòng nhập số CCCD"
+                              Immediate="true"
+                              Variant="Variant.Outlined"
+                              Class="mb-3" />
+
+                <MudDatePicker @bind-Date="_model.CitizenIdIssuedDate"
+                               Label="Ngày cấp CCCD"
+                               DateFormat="dd/MM/yyyy"
+                               Editable="true"
+                               ImmediateText="true"
+                               Culture="@AppCulture.Vietnamese"
+                               Required="true"
+                               RequiredError="Vui lòng nhập ngày cấp CCCD"
+                               Variant="Variant.Outlined"
+                               Class="mb-3" />
+
                 <MudTextField @bind-Value="_model.Password"
                               Label="Mật khẩu"
                               Required="true"

@@ -1284,7 +1284,9 @@ else
         => GetSignature(party)?.SignatureFileUrl;
 
     private string? SignatureName(SignatureParty party)
-        => GetSignature(party)?.SignerName;
+        => party == SignatureParty.Customer && _model.CustomerIsCompany && !string.IsNullOrWhiteSpace(_model.CustomerRepresentativeName)
+            ? _model.CustomerRepresentativeName.Trim()
+            : GetSignature(party)?.SignerName;
 
     private DateTime? SignatureTime(SignatureParty party)
         => GetSignature(party)?.ServerSignedAt;

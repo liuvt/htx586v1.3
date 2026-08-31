@@ -239,7 +239,7 @@
                 <div class="signature-card__title">Khách hàng</div>
                 <SignaturePad Disabled="true"
                               ExistingSignatureUrl="@(CustomerSignature?.SignatureFileUrl)"
-                              SignerName="@(CustomerSignature?.SignerName ?? Detail.CustomerName)"
+                              SignerName="@CustomerSignatureSignerName"
                               SignedAt="@(CustomerSignature?.ServerSignedAt)" />
             </div>
         </div>
@@ -561,6 +561,14 @@
 
     private ContractSignatureDto? CustomerSignature
         => Detail.Signatures.FirstOrDefault(x => x.Party == SignatureParty.Customer);
+
+    private string CustomerSignatureSignerName
+        => Detail.CustomerIsCompany && !string.IsNullOrWhiteSpace(Detail.CustomerRepresentativeName)
+            ? Detail.CustomerRepresentativeName.Trim()
+            : !string.IsNullOrWhiteSpace(CustomerSignature?.SignerName)
+                ? CustomerSignature!.SignerName.Trim()
+                : Detail.CustomerName;
+
 
     private RenderFragment DataBlock(string label, string? value, string cssClass = "") => @<div class="data-card @cssClass">
         <span class="data-label">@label</span>

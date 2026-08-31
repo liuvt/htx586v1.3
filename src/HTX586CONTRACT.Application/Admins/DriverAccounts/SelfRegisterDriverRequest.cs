@@ -11,7 +11,8 @@ public sealed class SelfRegisterDriverRequest
     public string FullName { get; set; } = string.Empty;
     public string? PhoneNumber { get; set; }
 
-    // Thông tin hồ sơ tùy chọn, có thể bổ sung sau khi tài khoản được duyệt.
+    // Hồ sơ Chủ xe: CCCD và ngày cấp là bắt buộc ngay khi đăng ký;
+    // các thông tin còn lại có thể bổ sung sau khi tài khoản được duyệt.
     public DateTime? DateOfBirth { get; set; }
     public string? AreaCode { get; set; }
     public string? Address { get; set; }
