@@ -105,7 +105,12 @@
                 x.RegistrationStatus,
                 x.VehicleOwnerSignatureFileUrl,
                 HasActiveCompany = db.AdminOffices.Any(a => a.AdminUserId == x.Id &&
-                    a.IsActive && !a.IsDeleted && a.CompanyProfile.IsActive && !a.CompanyProfile.IsDeleted)
+                    a.IsActive && !a.IsDeleted && a.CompanyProfile.IsActive && !a.CompanyProfile.IsDeleted),
+                HasAssignedVehicleWithoutPermit = db.Vehicles.Any(v =>
+                    v.AssignedDriverId == x.Id &&
+                    v.IsActive &&
+                    !v.IsDeleted &&
+                    (v.PermitNumber == null || v.PermitNumber.Trim() == string.Empty))
             })
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -135,7 +140,29 @@
             var path = new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/');
             if (!string.Equals(path, "/vehicle-owner/account", StringComparison.OrdinalIgnoreCase))
                 await InvokeAsync(() => Navigation.NavigateTo("/vehicle-owner/account?signatureRequired=1"));
+            return;
         }
+
+        // Xe được phép tạo/import/gán khi chưa có Số phù hiệu. Sau khi tài khoản
+        // VehicleOwner nhận xe, bắt buộc nhập Số phù hiệu đúng một lần trước khi
+        // tiếp tục sử dụng các chức năng khác. Xe đã có PermitNumber sẽ không hỏi lại.
+        if (isVehicleOwner && userState!.HasAssignedVehicleWithoutPermit)
+        {
+            var path = new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/');
+            if (!string.Equals(path, "/vehicle-owner/vehicles", StringComparison.OrdinalIgnoreCase))
+            {
+                var returnUrl = GetCurrentLocalUrl();
+                await InvokeAsync(() => Navigation.NavigateTo(
+                    "/vehicle-owner/vehicles?permitRequired=1&returnUrl=" +
+                    Uri.EscapeDataString(returnUrl)));
+            }
+        }
+    }
+
+    private string GetCurrentLocalUrl()
+    {
+        var relativeUrl = Navigation.ToBaseRelativePath(Navigation.Uri);
+        return string.IsNullOrWhiteSpace(relativeUrl) ? "/" : "/" + relativeUrl;
     }
 
     private void RedirectToInactiveLogin()

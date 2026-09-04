@@ -2,6 +2,8 @@
 @attribute [Authorize(Roles = "VehicleOwner")]
 @inject IDbContextFactory<ApplicationDbContext> Factory
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
 
 <PageTitle>Xe</PageTitle>
 
@@ -26,6 +28,22 @@ else if (_vehicles.Count == 0)
 }
 else
 {
+    @if (HasMissingPermitNumber)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
+            <MudText Typo="Typo.subtitle2">Xe được gán chưa có Số phù hiệu</MudText>
+            <MudText Typo="Typo.body2">
+                Vui lòng nhập Số phù hiệu cho các xe bên dưới. Thông tin này chỉ yêu cầu khi xe chưa có Số phù hiệu; sau khi lưu thành công hệ thống sẽ không yêu cầu nhập lại.
+            </MudText>
+        </MudAlert>
+    }
+    else if (PermitRequired)
+    {
+        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mb-4">
+            Tất cả xe được gán đã có Số phù hiệu. Bạn có thể tiếp tục sử dụng hệ thống.
+        </MudAlert>
+    }
+
     <MudGrid>
         @foreach (var vehicle in _vehicles)
         {
@@ -46,7 +64,40 @@ else
                     <MudSimpleTable Dense="true" Hover="false">
                         <tbody>
                             <tr><td>Mã xe</td><td>@Text(vehicle.VehicleCode)</td></tr>
-                            <tr><td>Số phù hiệu</td><td>@Text(vehicle.PermitNumber)</td></tr>
+                            <tr>
+                                <td>Số phù hiệu</td>
+                                <td>
+                                    @if (string.IsNullOrWhiteSpace(vehicle.PermitNumber))
+                                    {
+                                        <MudStack Spacing="1">
+                                            <MudTextField T="string"
+                                                          Value="@PermitInput(vehicle.Id)"
+                                                          ValueChanged="@(value => SetPermitInput(vehicle.Id, value))"
+                                                          Label="Nhập Số phù hiệu"
+                                                          Variant="Variant.Outlined"
+                                                          Required="true"
+                                                          RequiredError="Vui lòng nhập Số phù hiệu."
+                                                          MaxLength="50"
+                                                          Immediate="true"
+                                                          Disabled="@IsSaving(vehicle.Id)" />
+                                            <MudButton Color="Color.Primary"
+                                                       Variant="Variant.Filled"
+                                                       Size="Size.Small"
+                                                       StartIcon="@Icons.Material.Filled.Save"
+                                                       Disabled="@(IsSaving(vehicle.Id) || string.IsNullOrWhiteSpace(PermitInput(vehicle.Id)))"
+                                                       OnClick="@(() => SavePermitNumberAsync(vehicle.Id))">
+                                                @(IsSaving(vehicle.Id) ? "Đang lưu..." : "Lưu Số phù hiệu")
+                                            </MudButton>
+                                        </MudStack>
+                                    }
+                                    else
+                                    {
+                                        <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined" Size="Size.Small">
+                                            @vehicle.PermitNumber
+                                        </MudChip>
+                                    }
+                                </td>
+                            </tr>
                             <tr><td>Loại xe</td><td>@Text($"{vehicle.Brand} {vehicle.Model}".Trim())</td></tr>
                             <tr><td>Số chỗ</td><td>@(vehicle.SeatCount?.ToString() ?? "—")</td></tr>
                         </tbody>
@@ -78,8 +129,19 @@ else
 }
 
 @code {
+    [SupplyParameterFromQuery(Name = "permitRequired")]
+    public bool PermitRequired { get; set; }
+
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
     private readonly List<Vehicle> _vehicles = [];
+    private readonly Dictionary<Guid, string> _permitInputs = [];
+    private readonly HashSet<Guid> _savingVehicleIds = [];
     private bool _loading = true;
+    private string _userId = string.Empty;
+
+    private bool HasMissingPermitNumber => _vehicles.Any(x => string.IsNullOrWhiteSpace(x.PermitNumber));
 
     protected override async Task OnInitializedAsync() => await LoadAsync();
 
@@ -89,7 +151,7 @@ else
         try
         {
             var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-            var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+            _userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
 
             await using var db = await Factory.CreateDbContextAsync();
             _vehicles.Clear();
@@ -97,14 +159,107 @@ else
                 .Include(x => x.AssignedDriver)
                 .Include(x => x.OfficeVehicles)
                     .ThenInclude(x => x.CompanyProfile)
-                .Where(x => x.AssignedDriverId == userId && x.IsActive)
+                .Where(x => x.AssignedDriverId == _userId && x.IsActive && !x.IsDeleted)
                 .OrderBy(x => x.PlateNumber)
                 .ToListAsync());
+
+            foreach (var vehicle in _vehicles.Where(x => string.IsNullOrWhiteSpace(x.PermitNumber)))
+                _permitInputs.TryAdd(vehicle.Id, string.Empty);
+
+            var activeIds = _vehicles.Select(x => x.Id).ToHashSet();
+            foreach (var staleId in _permitInputs.Keys.Where(x => !activeIds.Contains(x)).ToArray())
+                _permitInputs.Remove(staleId);
         }
         finally
         {
             _loading = false;
         }
+    }
+
+    private string PermitInput(Guid vehicleId)
+        => _permitInputs.TryGetValue(vehicleId, out var value) ? value : string.Empty;
+
+    private void SetPermitInput(Guid vehicleId, string? value)
+        => _permitInputs[vehicleId] = value ?? string.Empty;
+
+    private bool IsSaving(Guid vehicleId) => _savingVehicleIds.Contains(vehicleId);
+
+    private async Task SavePermitNumberAsync(Guid vehicleId)
+    {
+        var permitNumber = PermitInput(vehicleId).Trim();
+        if (string.IsNullOrWhiteSpace(permitNumber))
+        {
+            Snackbar.Add("Vui lòng nhập Số phù hiệu.", Severity.Warning);
+            return;
+        }
+        if (permitNumber.Length > 50)
+        {
+            Snackbar.Add("Số phù hiệu tối đa 50 ký tự.", Severity.Warning);
+            return;
+        }
+
+        if (!_savingVehicleIds.Add(vehicleId))
+            return;
+
+        try
+        {
+            await using var db = await Factory.CreateDbContextAsync();
+            var vehicle = await db.Vehicles.FirstOrDefaultAsync(x =>
+                x.Id == vehicleId &&
+                x.AssignedDriverId == _userId &&
+                x.IsActive &&
+                !x.IsDeleted);
+
+            if (vehicle is null)
+            {
+                Snackbar.Add("Xe không còn được gán cho tài khoản này.", Severity.Error);
+                await LoadAsync();
+                return;
+            }
+
+            // Chỉ cho Chủ xe nhập lần đầu. Nếu Owner/Admin đã bổ sung trước đó
+            // thì không ghi đè dữ liệu hiện có.
+            if (!string.IsNullOrWhiteSpace(vehicle.PermitNumber))
+            {
+                Snackbar.Add($"Xe {vehicle.PlateNumber} đã có Số phù hiệu, không cần nhập lại.", Severity.Info);
+                await LoadAsync();
+                return;
+            }
+
+            vehicle.PermitNumber = permitNumber;
+            vehicle.UpdatedAt = DateTime.UtcNow;
+            vehicle.UpdatedBy = _userId;
+            await db.SaveChangesAsync();
+
+            Snackbar.Add($"Đã cập nhật Số phù hiệu cho xe {vehicle.PlateNumber}.", Severity.Success);
+            await LoadAsync();
+
+            if (!HasMissingPermitNumber && PermitRequired)
+            {
+                var target = SafeReturnUrl(ReturnUrl) ?? "/vehicle-owner/dashboard";
+                Navigation.NavigateTo(target);
+            }
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            Snackbar.Add("Dữ liệu xe vừa được cập nhật ở nơi khác. Vui lòng thử lại.", Severity.Warning);
+            await LoadAsync();
+        }
+        finally
+        {
+            _savingVehicleIds.Remove(vehicleId);
+        }
+    }
+
+    private static string? SafeReturnUrl(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var trimmed = value.Trim();
+        return trimmed.StartsWith('/') && !trimmed.StartsWith("//", StringComparison.Ordinal)
+            ? trimmed
+            : null;
     }
 
     private static string CompanyDisplay(Vehicle vehicle)

@@ -280,7 +280,8 @@ public sealed class VehicleExcelImportService(
     {
         ExcelImportUtility.Required(row.Errors, row.PlateNumber, "PlateNumber");
         ExcelImportUtility.Required(row.Errors, row.OfficeTaxCode, "OfficeTaxCode");
-        ExcelImportUtility.Required(row.Errors, row.PermitNumber, "PermitNumber");
+        // PermitNumber (Số phù hiệu) được phép để trống khi import xe.
+        // Hệ thống sẽ kiểm tra bắt buộc ở thời điểm tạo hợp đồng.
         ExcelImportUtility.Maximum(row.Errors, row.PlateNumber, 20, "PlateNumber");
         ExcelImportUtility.Maximum(row.Errors, row.VehicleOwnerUserName, 256, "VehicleOwnerUserName");
         ExcelImportUtility.Maximum(row.Errors, row.OfficeTaxCode, 50, "OfficeTaxCode");

@@ -292,6 +292,11 @@ public sealed class ContractService(
         var vehicleOwner = assignment.VehicleOwner!;
         var company = assignment.CompanyProfile!;
 
+        // Số phù hiệu có thể để trống khi tạo/import xe, nhưng là điều kiện bắt buộc
+        // trước khi tạo hợp đồng vì được dùng để sinh số hợp đồng chính thức.
+        if (string.IsNullOrWhiteSpace(vehicle.PermitNumber))
+            return new(false, null, $"Xe {vehicle.PlateNumber} chưa có Số phù hiệu. Vui lòng cập nhật Số phù hiệu xe trước khi tạo Hợp đồng.");
+
         if (canManage)
         {
             var dispatchError = ValidateDispatchPrerequisites(company, vehicleOwner, request);
