@@ -350,9 +350,10 @@ public sealed class ContractService(
         var entity = new Contract
         {
             Id = Guid.NewGuid(),
-            ContractNumber = string.IsNullOrWhiteSpace(request.ContractNumber)
-                ? $"{DateTime.Now:yyyyMMddHHmmss}/{BusinessCode(request.BusinessType)}"
-                : request.ContractNumber.Trim(),
+            // Số hợp đồng không cho phép nhập thủ công. Trước khi hoàn tất chỉ dùng
+            // mã nội bộ duy nhất để đáp ứng ràng buộc DB; số chính thức sẽ được
+            // BuildFinalContractNumberAsync cấp theo Số phù hiệu xe khi hoàn thành.
+            ContractNumber = $"TMP-{Guid.NewGuid():N}",
             BusinessType = request.BusinessType,
             ContractTypeId = type.Id,
             ContractTemplateId = template.Id,
@@ -409,7 +410,7 @@ public sealed class ContractService(
                 DriverId = vehicleOwner.Id,
                 Type = "ContractAssigned",
                 Title = "Bạn được phát hợp đồng mới",
-                Message = $"Hợp đồng {entity.ContractNumber} đã được {actorName} phát xuống cho xe {vehicle.PlateNumber}.",
+                Message = $"Hợp đồng mới đã được {actorName} phát xuống cho xe {vehicle.PlateNumber}.",
                 LinkUrl = $"/vehicle-owner/contracts/{entity.Id}",
                 RelatedContractId = entity.Id,
                 RelatedVehicleId = vehicle.Id,
@@ -566,7 +567,7 @@ public sealed class ContractService(
             DriverId = vehicleOwner.Id,
             Type = "ContractAssigned",
             Title = "Hợp đồng được cập nhật/phát xuống",
-            Message = $"Hợp đồng {entity.ContractNumber} đã được {actorName} phát cho xe {vehicle.PlateNumber}.",
+            Message = $"Hợp đồng đã được {actorName} cập nhật/phát cho xe {vehicle.PlateNumber}.",
             LinkUrl = $"/vehicle-owner/contracts/{entity.Id}",
             RelatedContractId = entity.Id,
             RelatedVehicleId = vehicle.Id,
@@ -1675,8 +1676,6 @@ public sealed class ContractService(
 
     private static void Apply(Contract entity, SaveContractRequest request)
     {
-        if (!string.IsNullOrWhiteSpace(request.ContractNumber))
-            entity.ContractNumber = request.ContractNumber.Trim();
         entity.AreaCode = string.IsNullOrWhiteSpace(request.AreaCode) ? "N/A" : request.AreaCode.Trim();
         var isPassenger = request.BusinessType == ContractBusinessType.Passenger;
         entity.CustomerTravelsWithGroup = isPassenger && request.CustomerTravelsWithGroup;
@@ -1765,9 +1764,6 @@ public sealed class ContractService(
 
     private static bool Same(string? left, string? right)
         => string.Equals(N(left), N(right), StringComparison.Ordinal);
-
-    private static string BusinessCode(ContractBusinessType type)
-        => type == ContractBusinessType.Cargo ? "HH" : "HK";
 
     private static async Task<string> BuildFinalContractNumberAsync(
         ApplicationDbContext db,

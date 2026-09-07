@@ -41,7 +41,7 @@ else
                     <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.Email" Label="Email" Variant="Variant.Outlined" /></MudItem>
                     <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.CitizenId" Label="CCCD" Required="true" Variant="Variant.Outlined" /></MudItem>
                     <MudItem xs="12" md="6"><MudDatePicker @bind-Date="_model.CitizenIdIssuedDate" Label="Ngày cấp CCCD" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Culture="@AppCulture.Vietnamese" Required="true" Variant="Variant.Outlined" /></MudItem>
-                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.CitizenIdIssuedPlace" Label="Nơi cấp CCCD" Required="true" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12" md="6"><CitizenIdIssuedPlaceInput @bind-Value="_model.CitizenIdIssuedPlace" Required="true" /></MudItem>
                     <MudItem xs="12"><MudTextField @bind-Value="_model.Address" Label="Địa chỉ chủ xe" Required="true" Variant="Variant.Outlined" /></MudItem>
                     <MudItem xs="12">
                         <MudAlert Severity="Severity.Info" Variant="Variant.Text">
@@ -50,29 +50,17 @@ else
                     </MudItem>
                     <MudItem xs="12">
                         <MudText Typo="Typo.subtitle1">Chân ký Chủ xe</MudText>
-                        @if (string.IsNullOrWhiteSpace(_model.VehicleOwnerSignatureFileUrl))
-                        {
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                Chân ký chỉ được khai báo một lần. Có thể ký trực tiếp hoặc upload file PNG; sau khi lưu sẽ tự động khóa.
-                            </MudText>
-                            <SignaturePad ExistingSignatureUrl="@SignatureUrl"
-                                          SignerName="@_model.FullName"
-                                          StrokeColor="#0066CC"
-                                          StrokeWidth="1.5"
-                                          SignedAt="@_model.VehicleOwnerSignedAt"
-                                          OnSignatureSaved="SaveVehicleOwnerSignatureAsync"
-                                          ConfirmationButtonText="Lưu chân ký Chủ xe" />
-                        }
-                        else
-                        {
-                            <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mb-2 mt-2">
-                                Chân ký Chủ xe đã được khai báo và đã khóa. Tài khoản không thể chỉnh sửa hoặc ký lại.
-                            </MudAlert>
-                            <SignaturePad Disabled="true"
-                                          ExistingSignatureUrl="@SignatureUrl"
-                                          SignerName="@_model.FullName"
-                                          SignedAt="@_model.VehicleOwnerSignedAt" />
-                        }
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            Có thể ký trực tiếp hoặc upload PNG/JPG. Khi lưu chữ ký mới, hệ thống sẽ ghi đè chân ký hiện hành của tài khoản; hợp đồng đã snapshot trước đó vẫn giữ nguyên chữ ký lịch sử.
+                        </MudText>
+                        <SignaturePad ExistingSignatureUrl="@SignatureUrl"
+                                      SignerName="@_model.FullName"
+                                      StrokeColor="#0066CC"
+                                      StrokeWidth="1.5"
+                                      SignedAt="@_model.VehicleOwnerSignedAt"
+                                      OnSignatureSaved="SaveVehicleOwnerSignatureAsync"
+                                      ConfirmationButtonText="Lưu chân ký Chủ xe"
+                                      SavedStatusText="Chân ký hiện tại" />
                     </MudItem>
                 </MudGrid>
 
@@ -195,7 +183,7 @@ else
             var url = await MasterSignatureService.SaveVehicleOwnerAccountSignatureAsync(_model.Id, dataUrl);
             _model.VehicleOwnerSignatureFileUrl = url;
             _model.VehicleOwnerSignedAt = DateTime.UtcNow;
-            Snackbar.Add("Đã lưu chân ký Chủ xe. Các xe và hợp đồng mới sẽ sử dụng trực tiếp chân ký từ tài khoản này.", Severity.Success);
+            Snackbar.Add("Đã cập nhật chân ký Chủ xe. Chân ký mới đã ghi đè trên tài khoản và sẽ được dùng cho các hợp đồng tạo sau.", Severity.Success);
         }
         catch (Exception ex)
         {

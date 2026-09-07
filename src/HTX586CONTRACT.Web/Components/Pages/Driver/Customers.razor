@@ -75,7 +75,7 @@
             }
             <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.CitizenId" Label="CCCD" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="4"><MudDatePicker @bind-Date="_model.CitizenIdIssuedDate" Label="Ngày cấp CCCD" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Culture="@AppCulture.Vietnamese" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.CitizenIdIssuedPlace" Label="Nơi cấp CCCD" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" md="4"><CitizenIdIssuedPlaceInput @bind-Value="_model.CitizenIdIssuedPlace" /></MudItem>
             <MudItem xs="12" md="4"><MudDatePicker @bind-Date="_model.DateOfBirth" Label="Ngày sinh" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Culture="@AppCulture.Vietnamese" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.Email" Label="Email" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12"><MudTextField @bind-Value="_model.Address" Label="Địa chỉ" Variant="Variant.Outlined" /></MudItem>

@@ -149,27 +149,15 @@ else
 
                 @if (_detail.Role == SystemRoleDisplay.VehicleOwnerRole)
                 {
-                    @if (string.IsNullOrWhiteSpace(_detail.VehicleOwnerSignatureFileUrl))
-                    {
-                        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-2">
-                            Tài khoản chưa có chân ký. Chân ký chỉ được khai báo một lần và sẽ khóa ngay sau khi lưu.
-                        </MudAlert>
-                        <SignaturePad ExistingSignatureUrl="@SignatureUrl"
-                                      SignerName="@_detail.FullName"
-                                      SignedAt="@_detail.VehicleOwnerSignedAt"
-                                      OnSignatureSaved="SaveVehicleOwnerSignatureAsync"
-                                      ConfirmationButtonText="Lưu chân ký Chủ xe" />
-                    }
-                    else
-                    {
-                        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mb-2">
-                            Chân ký Chủ xe đã được khai báo và đã khóa, không thể chỉnh sửa lại.
-                        </MudAlert>
-                        <SignaturePad Disabled="true"
-                                      ExistingSignatureUrl="@SignatureUrl"
-                                      SignerName="@_detail.FullName"
-                                      SignedAt="@_detail.VehicleOwnerSignedAt" />
-                    }
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-2">
+                        Chân ký Chủ xe có thể cập nhật. Chữ ký mới sẽ ghi đè chân ký hiện hành trên tài khoản; hợp đồng cũ đã snapshot vẫn giữ chữ ký lịch sử.
+                    </MudAlert>
+                    <SignaturePad ExistingSignatureUrl="@SignatureUrl"
+                                  SignerName="@_detail.FullName"
+                                  SignedAt="@_detail.VehicleOwnerSignedAt"
+                                  OnSignatureSaved="SaveVehicleOwnerSignatureAsync"
+                                  ConfirmationButtonText="Lưu chân ký Chủ xe"
+                                  SavedStatusText="Chân ký hiện tại" />
                 }
                 else
                 {
@@ -269,7 +257,7 @@ else
         try
         {
             await MasterSignatureService.SaveVehicleOwnerAccountSignatureAsync(UserId, dataUrl);
-            Snackbar.Add("Đã lưu chân ký Chủ xe trên tài khoản. Các xe và hợp đồng mới sẽ lấy trực tiếp chân ký này.", Severity.Success);
+            Snackbar.Add("Đã cập nhật chân ký Chủ xe. Chân ký mới đã ghi đè trên tài khoản và sẽ được dùng cho các hợp đồng tạo sau.", Severity.Success);
             await LoadAsync();
         }
         catch (Exception ex)

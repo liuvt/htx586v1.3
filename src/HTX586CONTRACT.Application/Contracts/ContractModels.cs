@@ -136,7 +136,6 @@ public sealed class ContractDetailDto
 public sealed class SaveContractRequest
 {
     public Guid? Id { get; set; }
-    public string? ContractNumber { get; set; }
     public ContractBusinessType BusinessType { get; set; } = ContractBusinessType.Passenger;
     public Guid? ContractTypeId { get; set; }
     public Guid? CompanyProfileId { get; set; }

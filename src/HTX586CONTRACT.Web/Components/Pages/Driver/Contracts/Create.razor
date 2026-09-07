@@ -883,7 +883,6 @@ else
             _model = new SaveContractRequest
             {
                 Id = detail.Id,
-                ContractNumber = detail.ContractNumber,
                 BusinessType = detail.BusinessType,
                 ContractTypeId = detail.ContractTypeId,
                 CompanyProfileId = detail.CompanyProfileId,
@@ -1127,8 +1126,8 @@ else
         ContractBusinessType.Cargo => "HỢP ĐỒNG VẬN CHUYỂN HÀNG HÓA BẰNG XE Ô TÔ",
         _ => "Loại hợp đồng"
     };
-    private string ContractNumberDisplayText => _model.Status == ContractStatus.Completed && !string.IsNullOrWhiteSpace(_model.ContractNumber)
-        ? _model.ContractNumber
+    private string ContractNumberDisplayText => _model.Status == ContractStatus.Completed && !string.IsNullOrWhiteSpace(_detail?.ContractNumber)
+        ? _detail.ContractNumber
         : "Số hợp đồng chính thức sẽ được cấp khi hoàn thành";
     private string ContractSourceDisplayText => !Id.HasValue
         ? "Chủ xe tự tạo"
