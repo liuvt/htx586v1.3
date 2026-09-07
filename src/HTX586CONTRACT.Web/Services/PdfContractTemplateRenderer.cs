@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using HTX586CONTRACT.Domain.Companies;
 using HTX586CONTRACT.Domain.Contracts;
 using HTX586CONTRACT.Domain.Enums;
 using PdfSharp.Drawing;

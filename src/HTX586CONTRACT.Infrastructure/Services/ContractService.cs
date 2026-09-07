@@ -952,7 +952,8 @@ public sealed class ContractService(
                 vehicleOwner!,
                 customer,
                 vehicle!,
-                entity.AssignedAt ?? entity.CreatedAt);
+                entity.AssignedAt ?? entity.CreatedAt,
+                null);
         }
 
         ApplyOperatingDriverSnapshot(updatedSnapshot, request);
