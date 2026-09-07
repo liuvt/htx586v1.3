@@ -37,6 +37,9 @@ public sealed class CompanyProfileConfiguration : IEntityTypeConfiguration<Compa
         builder.Property(x => x.Email)
             .HasMaxLength(256);
 
+        builder.Property(x => x.ComplaintContact)
+            .HasMaxLength(500);
+
         builder.Property(x => x.RepresentativeName)
             .HasMaxLength(200)
             .IsRequired();

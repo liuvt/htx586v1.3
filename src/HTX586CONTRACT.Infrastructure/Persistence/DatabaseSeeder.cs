@@ -1,4 +1,5 @@
 using HTX586CONTRACT.Domain.Contracts;
+using HTX586CONTRACT.Domain.Companies;
 using HTX586CONTRACT.Domain.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -27,7 +28,16 @@ public static class DatabaseSeeder
 
         await SeedRolesAsync(roleManager);
         await SeedOwnerAsync(userManager, configuration);
+        await SeedCompanyComplaintContactsAsync(db);
         await SeedContractTypesAsync(db);
+    }
+
+    private static async Task SeedCompanyComplaintContactsAsync(ApplicationDbContext db)
+    {
+        await db.CompanyProfiles
+            .Where(x => !x.IsDeleted && (x.ComplaintContact == null || x.ComplaintContact == ""))
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.ComplaintContact, CompanyProfile.DefaultComplaintContact));
     }
 
     private static async Task SeedRolesAsync(RoleManager<IdentityRole> roleManager)

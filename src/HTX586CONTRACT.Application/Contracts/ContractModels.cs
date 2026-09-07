@@ -50,6 +50,7 @@ public sealed class ContractDetailDto
 
     public Guid CompanyProfileId { get; set; }
     public string CompanyName { get; set; } = string.Empty;
+    public string? CompanyComplaintContact { get; set; }
     public string? CompanyRepresentativeName { get; set; }
     public string? CompanyRepresentativeSignatureFileUrl { get; set; }
     public DateTime? CompanyRepresentativeSignedAt { get; set; }

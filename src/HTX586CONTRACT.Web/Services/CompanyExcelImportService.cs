@@ -35,7 +35,8 @@ public sealed class CompanyExcelImportService(
         "RepresentativeCitizenIdIssuedPlace",
         "BankAccountNumber",
         "BankName",
-        "IsActive"
+        "IsActive",
+        "ComplaintContact"
     ];
 
     private static readonly string[] SupportedDateFormats =
@@ -105,6 +106,7 @@ public sealed class CompanyExcelImportService(
                         RepresentativeCitizenIdIssuedPlace = NullIfWhiteSpace(values[11]),
                         BankAccountNumber = NullIfWhiteSpace(values[12]),
                         BankName = NullIfWhiteSpace(values[13]),
+                        ComplaintContact = NullIfWhiteSpace(values[15]) ?? CompanyProfile.DefaultComplaintContact,
                         IsActive = true
                     }
                 };
@@ -292,6 +294,7 @@ public sealed class CompanyExcelImportService(
         Maximum(row, data.RepresentativeCitizenIdIssuedPlace, 300, "RepresentativeCitizenIdIssuedPlace");
         Maximum(row, data.BankAccountNumber, 50, "BankAccountNumber");
         Maximum(row, data.BankName, 200, "BankName");
+        Maximum(row, data.ComplaintContact, 500, "ComplaintContact");
 
         if (!string.IsNullOrWhiteSpace(data.Email) && !IsValidEmail(data.Email))
             AddError(row, "Email không đúng định dạng.");
@@ -363,6 +366,7 @@ public sealed class CompanyExcelImportService(
             RepresentativeCitizenIdIssuedPlace = NullIfWhiteSpace(request.RepresentativeCitizenIdIssuedPlace),
             BankAccountNumber = NullIfWhiteSpace(request.BankAccountNumber),
             BankName = NullIfWhiteSpace(request.BankName),
+            ComplaintContact = NullIfWhiteSpace(request.ComplaintContact) ?? CompanyProfile.DefaultComplaintContact,
             IsActive = request.IsActive,
             CreatedAt = createdAt,
             CreatedByUserId = createdByUserId

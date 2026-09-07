@@ -111,6 +111,7 @@ else
                 <MudGrid>
                     <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.PhoneNumber" Label="Điện thoại" Variant="Variant.Outlined" /></MudItem>
                     <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.Email" Label="Email" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12"><MudTextField @bind-Value="_model.ComplaintContact" Label="Liên hệ phản ánh" HelperText="Được chụp snapshot vào hợp đồng khi tạo/phát hợp đồng." Variant="Variant.Outlined" /></MudItem>
                     <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.BankAccountNumber" Label="Số tài khoản" Variant="Variant.Outlined" /></MudItem>
                     <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.BankName" Label="Ngân hàng" Variant="Variant.Outlined" /></MudItem>
                     <MudItem xs="12">
@@ -212,6 +213,7 @@ else
                     Address = _detail.Address,
                     PhoneNumber = _detail.PhoneNumber,
                     Email = _detail.Email,
+                    ComplaintContact = _detail.ComplaintContact,
                     RepresentativeName = _detail.RepresentativeName,
                     RepresentativePosition = _detail.RepresentativePosition,
                     RepresentativeCitizenId = _detail.RepresentativeCitizenId,

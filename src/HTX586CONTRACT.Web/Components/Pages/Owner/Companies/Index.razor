@@ -208,6 +208,7 @@
             <MudItem xs="12" md="4"><MudTextField @bind-Value="_create.BusinessLicenseNumber" Label="Giấy phép kinh doanh" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="4"><MudTextField @bind-Value="_create.PhoneNumber" Label="Điện thoại" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12"><MudTextField @bind-Value="_create.Address" Label="Địa chỉ" Required="true" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12"><MudTextField @bind-Value="_create.ComplaintContact" Label="Liên hệ phản ánh" HelperText="Thông tin này được chụp snapshot vào hợp đồng." Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="6"><MudTextField @bind-Value="_create.RepresentativeName" Label="Người đại diện" Required="true" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="3"><MudTextField @bind-Value="_create.RepresentativePosition" Label="Chức vụ" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="3"><MudTextField @bind-Value="_create.RepresentativeCitizenId" Label="CCCD người đại diện" Required="true" Variant="Variant.Outlined" /></MudItem>
@@ -232,12 +233,13 @@
 
 <MudTable T="CompanyProfileListItemDto" Items="FilteredItems" Loading="_loading" Hover="true" Striped="true" Breakpoint="Breakpoint.Sm">
     <HeaderContent>
-        <MudTh>Đơn vị</MudTh><MudTh>Mã số thuế</MudTh><MudTh>Người đại diện</MudTh><MudTh>Quản lý</MudTh><MudTh>Chủ xe</MudTh><MudTh>Xe</MudTh><MudTh>Hợp đồng</MudTh><MudTh>Trạng thái</MudTh><MudTh></MudTh>
+        <MudTh>Đơn vị</MudTh><MudTh>Mã số thuế</MudTh><MudTh>Người đại diện</MudTh><MudTh>Liên hệ phản ánh</MudTh><MudTh>Quản lý</MudTh><MudTh>Chủ xe</MudTh><MudTh>Xe</MudTh><MudTh>Hợp đồng</MudTh><MudTh>Trạng thái</MudTh><MudTh></MudTh>
     </HeaderContent>
     <RowTemplate>
         <MudTd DataLabel="Đơn vị"><b>@context.CompanyName</b><br /><small>@context.BranchName</small></MudTd>
         <MudTd DataLabel="Mã số thuế">@context.TaxCode</MudTd>
         <MudTd DataLabel="Người đại diện">@context.RepresentativeName</MudTd>
+        <MudTd DataLabel="Liên hệ phản ánh">@context.ComplaintContact</MudTd>
         <MudTd DataLabel="Quản lý">@context.AdminCount</MudTd>
         <MudTd DataLabel="Chủ xe">@context.DriverCount</MudTd>
         <MudTd DataLabel="Xe">@context.VehicleCount</MudTd>
@@ -263,7 +265,7 @@
 
     private IEnumerable<CompanyProfileListItemDto> FilteredItems => string.IsNullOrWhiteSpace(_keyword)
         ? _items
-        : _items.Where(x => Contains(x.CompanyName) || Contains(x.BranchName) || Contains(x.TaxCode) || Contains(x.RepresentativeName));
+        : _items.Where(x => Contains(x.CompanyName) || Contains(x.BranchName) || Contains(x.TaxCode) || Contains(x.RepresentativeName) || Contains(x.ComplaintContact));
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -445,5 +447,9 @@
     }
 
     private bool Contains(string? value) => !string.IsNullOrWhiteSpace(value) && value.Contains(_keyword!.Trim(), StringComparison.OrdinalIgnoreCase);
-    private static CreateCompanyProfileRequest NewCompany() => new() { IsActive = true };
+    private static CreateCompanyProfileRequest NewCompany() => new()
+    {
+        IsActive = true,
+        ComplaintContact = CompanyProfile.DefaultComplaintContact
+    };
 }

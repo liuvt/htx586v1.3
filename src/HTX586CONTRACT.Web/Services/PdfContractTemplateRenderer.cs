@@ -300,6 +300,12 @@ public sealed class PdfContractTemplateRenderer(
         var companyOfficeName = snapshot is not null
             ? First(snapshot.Company.Name, snapshot.Company.BranchName, "...")
             : First(company?.CompanyName, company?.BranchName, companyName, "...");
+        // Trường Liên hệ phản ánh mới được bổ sung sau khi mẫu PDF cũ đã chứa
+        // sẵn dữ liệu Cần Thơ. Snapshot mới luôn ưu tiên dữ liệu đã chụp; snapshot
+        // legacy không có trường này dùng đúng giá trị mẫu cũ để không làm mất dòng.
+        var companyComplaintContact = snapshot is not null
+            ? First(snapshot.Company.ComplaintContact, CompanyProfile.DefaultComplaintContact)
+            : First(company?.ComplaintContact, CompanyProfile.DefaultComplaintContact);
         var liveCustomerIsCompany = customer?.Type == CustomerType.Organization ||
             !string.IsNullOrWhiteSpace(customer?.OrganizationName);
         var snapshotCustomerIsCompany = snapshot is not null &&
@@ -374,6 +380,7 @@ public sealed class PdfContractTemplateRenderer(
             ["COMPANY_LICENSE"] = FrozenText(snapshot?.Company.BusinessLicenseNumber, company?.BusinessLicenseNumber, "..."),
             ["COMPANY_ADDRESS"] = FrozenText(snapshot?.Company.Address, contract.CompanyAddressSnapshot, company?.Address, "..."),
             ["COMPANY_PHONE"] = FrozenText(snapshot?.Company.PhoneNumber, company?.PhoneNumber, "..."),
+            ["COMPANY_COMPLAINT_CONTACT"] = companyComplaintContact,
             ["COMPANY_REPRESENTATIVE"] = FrozenText(
                 snapshot?.Company.RepresentativeName,
                 contract.CompanyRepresentativeSnapshot,

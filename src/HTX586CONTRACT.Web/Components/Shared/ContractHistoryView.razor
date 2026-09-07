@@ -69,6 +69,7 @@
             @DataBlock("Loại hợp đồng", BusinessName(Detail.BusinessType))
             @DataBlock("Trạng thái", StatusName(Detail.Status))
             @DataBlock("Công ty/Văn phòng", Detail.CompanyName, "wide")
+            @DataBlock("Liên hệ phản ánh", Detail.CompanyComplaintContact, "wide")
             @DataBlock("Người tạo", Detail.CreatedByName)
             @DataBlock("Người phát xuống", Detail.AssignedByName ?? "Tài xế tự tạo")
             @DataBlock("Ngày tạo", FormatDateTime(Detail.CreatedAt))

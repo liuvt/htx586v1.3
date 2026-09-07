@@ -87,13 +87,29 @@ else
                     </MudText>
                     @if (_originalRole == SystemRoleDisplay.VehicleOwnerRole)
                     {
-                        <SignaturePad ExistingSignatureUrl="@SignatureUrl"
-                                      SignerName="@_model.FullName"
-                                      StrokeColor="#0066CC"
-                                      StrokeWidth="1.5"
-                                      SignedAt="@_detail?.VehicleOwnerSignedAt"
-                                      OnSignatureSaved="SaveVehicleOwnerSignatureAsync"
-                                      ConfirmationButtonText="Lưu chân ký Chủ xe" />
+                        @if (string.IsNullOrWhiteSpace(_detail?.VehicleOwnerSignatureFileUrl))
+                        {
+                            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mt-2 mb-2">
+                                Tài khoản chưa có chân ký. Chân ký chỉ được khai báo một lần và sẽ khóa ngay sau khi lưu.
+                            </MudAlert>
+                            <SignaturePad ExistingSignatureUrl="@SignatureUrl"
+                                          SignerName="@_model.FullName"
+                                          StrokeColor="#0066CC"
+                                          StrokeWidth="1.5"
+                                          SignedAt="@_detail?.VehicleOwnerSignedAt"
+                                          OnSignatureSaved="SaveVehicleOwnerSignatureAsync"
+                                          ConfirmationButtonText="Lưu chân ký Chủ xe" />
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mt-2 mb-2">
+                                Chân ký Chủ xe đã được khai báo và đã khóa, không thể chỉnh sửa lại.
+                            </MudAlert>
+                            <SignaturePad Disabled="true"
+                                          ExistingSignatureUrl="@SignatureUrl"
+                                          SignerName="@_model.FullName"
+                                          SignedAt="@_detail?.VehicleOwnerSignedAt" />
+                        }
                     }
                     else
                     {

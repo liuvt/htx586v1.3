@@ -45,6 +45,7 @@ public sealed class ContractSnapshotData
                 Address = company.Address,
                 PhoneNumber = company.PhoneNumber,
                 Email = company.Email,
+                ComplaintContact = company.ComplaintContact,
                 RepresentativeName = company.RepresentativeName,
                 RepresentativePosition = company.RepresentativePosition,
                 RepresentativeCitizenId = company.RepresentativeCitizenId,
@@ -147,6 +148,7 @@ public sealed class ContractSnapshotData
                 Address = First(contract.CompanyAddressSnapshot, company?.Address),
                 PhoneNumber = company?.PhoneNumber,
                 Email = company?.Email,
+                ComplaintContact = company?.ComplaintContact,
                 RepresentativeName = First(contract.CompanyRepresentativeSnapshot, company?.RepresentativeName),
                 RepresentativePosition = First(contract.CompanyRepresentativePositionSnapshot, company?.RepresentativePosition),
                 RepresentativeCitizenId = company?.RepresentativeCitizenId,
@@ -242,6 +244,7 @@ public sealed class CompanySnapshot
     public string? Address { get; set; }
     public string? PhoneNumber { get; set; }
     public string? Email { get; set; }
+    public string? ComplaintContact { get; set; }
     public string? RepresentativeName { get; set; }
     public string? RepresentativePosition { get; set; }
     public string? RepresentativeCitizenId { get; set; }

@@ -99,6 +99,7 @@ public sealed class ContractService(
                 IsLocked = x.Status == ContractStatus.Completed || x.Status == ContractStatus.Cancelled,
                 CompanyProfileId = x.CompanyProfileId,
                 CompanyName = x.CompanyNameSnapshot,
+                CompanyComplaintContact = x.CompanyProfile != null ? x.CompanyProfile.ComplaintContact : null,
                 CompanyRepresentativeName = x.CompanyRepresentativeSnapshot,
                 DriverId = x.DriverId,
                 DriverName = x.DriverNameSnapshot,
@@ -438,7 +439,9 @@ public sealed class ContractService(
         if (!canManage && (!access.IsVehicleOwner || !string.Equals(entity.DriverId, currentUserId, StringComparison.Ordinal)))
             return new(false, id, "Bạn không có quyền cập nhật hợp đồng này.");
 
-        if (!canManage && request.BusinessType != ContractBusinessType.Passenger)
+        // Chủ xe chỉ bị giới hạn loại HĐ khi tự tạo. HĐ hàng hóa do Owner/Admin
+        // phát xuống vẫn phải cho phép tài khoản nhận HĐ cập nhật phần nội dung.
+        if (!canManage && entity.IsSelfCreated && request.BusinessType != ContractBusinessType.Passenger)
             return new(false, id, "Chủ xe chỉ được tự tạo Hợp đồng vận chuyển hành khách.");
 
         var passengerCount = CountPassengers(request.Passengers, request.CustomerTravelsWithGroup);
@@ -850,7 +853,10 @@ public sealed class ContractService(
         {
             if (request.VehicleId.HasValue && request.VehicleId != entity.VehicleId)
                 return new(false, entity.Id, "Không được đổi xe của hợp đồng đã được phát xuống.");
-            if (DriverChangedCustomer(entity, request))
+            // Chỉ kiểm tra khóa định danh khách hàng. Tên hiển thị của khách hàng B2B
+            // trên UI là tên công ty, trong khi snapshot cũ có thể lưu tên người đại diện;
+            // so sánh chuỗi tại đây sẽ gây báo sai là Chủ xe đã đổi khách hàng.
+            if (request.CustomerId.HasValue && request.CustomerId != entity.CustomerId)
                 return new(false, entity.Id, "Không được thay đổi khách hàng của hợp đồng do Chủ hệ thống/Quản lý phát xuống.");
         }
 
@@ -913,24 +919,42 @@ public sealed class ContractService(
         }
 
         var passengerCount = CountPassengers(request.Passengers, request.CustomerTravelsWithGroup);
-        if (passengerCount > 20)
+        if (entity.BusinessType == ContractBusinessType.Passenger && passengerCount > 20)
             return new(false, entity.Id, "Danh sách hành khách tối đa 20 người theo mẫu PDF hiện tại.");
         if (!string.IsNullOrWhiteSpace(request.OperatingDriverLicenseClass) &&
             !AutomobileDrivingLicenseClasses.IsValid(request.OperatingDriverLicenseClass))
             return new(false, entity.Id, "Hạng GPLX ô tô của người trực tiếp điều khiển xe không hợp lệ.");
 
         Apply(entity, request);
-        ApplySnapshots(entity, vehicleOwner!, company!, customer, vehicle!);
         ApplyOperatingDriverEntitySnapshot(entity, request);
-        if (customerIsProvisional)
-            ApplyCustomerSnapshotsFromRequest(entity, request);
-        var updatedSnapshot = CaptureSnapshot(
-            company!,
-            vehicleOwner!,
-            customer,
-            vehicle!,
-            DateTime.UtcNow,
-            customerIsProvisional ? request : null);
+
+        ContractSnapshotData updatedSnapshot;
+        if (entity.IsSelfCreated)
+        {
+            ApplySnapshots(entity, vehicleOwner!, company!, customer, vehicle!);
+            if (customerIsProvisional)
+                ApplyCustomerSnapshotsFromRequest(entity, request);
+
+            updatedSnapshot = CaptureSnapshot(
+                company!,
+                vehicleOwner!,
+                customer,
+                vehicle!,
+                DateTime.UtcNow,
+                customerIsProvisional ? request : null);
+        }
+        else
+        {
+            // HĐ phát xuống phải giữ nguyên snapshot Công ty/khách hàng/xe tại thời
+            // điểm phát. Chủ xe chỉ cập nhật phần nội dung và người lái thực tế.
+            updatedSnapshot = existingSnapshot ?? CaptureSnapshot(
+                company!,
+                vehicleOwner!,
+                customer,
+                vehicle!,
+                entity.AssignedAt ?? entity.CreatedAt);
+        }
+
         ApplyOperatingDriverSnapshot(updatedSnapshot, request);
         PreserveVehicleOwnerSignature(existingSnapshot, updatedSnapshot);
         entity.ContractDataJson = updatedSnapshot.ToJson();
@@ -957,7 +981,7 @@ public sealed class ContractService(
         });
 
         await db.SaveChangesAsync(ct);
-        return new(true, entity.Id, "Đã lưu thông tin tài xế chạy, chuyến đi và danh sách hành khách.");
+        return new(true, entity.Id, "Đã lưu tạm nội dung hợp đồng, thông tin chuyến đi và danh sách hành khách.");
     }
 
     private sealed record UserAccess(
@@ -1467,6 +1491,9 @@ public sealed class ContractService(
     private static void ApplyImmutableSnapshot(ContractDetailDto detail, ContractSnapshotData snapshot)
     {
         detail.CompanyName = snapshot.Company.DisplayName;
+        detail.CompanyComplaintContact = string.IsNullOrWhiteSpace(snapshot.Company.ComplaintContact)
+            ? CompanyProfile.DefaultComplaintContact
+            : snapshot.Company.ComplaintContact;
         detail.CompanyRepresentativeName = snapshot.Company.RepresentativeName;
         detail.CompanyRepresentativeSignatureFileUrl = snapshot.Company.RepresentativeSignatureFileUrl;
         detail.CompanyRepresentativeSignedAt = snapshot.Company.RepresentativeSignedAt;
@@ -1578,13 +1605,6 @@ public sealed class ContractService(
         => string.IsNullOrWhiteSpace(request.CustomerName) ||
            string.IsNullOrWhiteSpace(request.CustomerPhone) ||
            (request.CustomerIsCompany && string.IsNullOrWhiteSpace(request.CustomerRepresentativeName));
-
-    private static bool DriverChangedCustomer(Contract contract, SaveContractRequest request)
-        => (request.CustomerId.HasValue && request.CustomerId != contract.CustomerId) ||
-           (!string.IsNullOrWhiteSpace(request.CustomerName) && !Same(request.CustomerName, contract.CustomerNameSnapshot)) ||
-           (!string.IsNullOrWhiteSpace(request.CustomerPhone) && !Same(request.CustomerPhone, contract.CustomerPhoneSnapshot)) ||
-           (!string.IsNullOrWhiteSpace(request.CustomerCitizenId) && !Same(request.CustomerCitizenId, contract.CustomerCitizenIdSnapshot)) ||
-           (!string.IsNullOrWhiteSpace(request.CustomerAddress) && !Same(request.CustomerAddress, contract.CustomerAddressSnapshot));
 
     private static bool IsFinal(ContractStatus status)
         => status is ContractStatus.Completed or ContractStatus.Cancelled or ContractStatus.Expired or ContractStatus.Invalidated;

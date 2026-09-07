@@ -59,11 +59,21 @@ public sealed class MasterSignatureService(
                 where ur.UserId == userId && role.Name == "VehicleOwner"
                 select ur.UserId).AnyAsync(ct);
 
-            var isValidUser = await checkDb.Users.AsNoTracking()
-                .AnyAsync(x => x.Id == userId && !x.IsDeleted, ct);
+            var user = await checkDb.Users.AsNoTracking()
+                .Where(x => x.Id == userId && !x.IsDeleted)
+                .Select(x => new
+                {
+                    x.Id,
+                    x.VehicleOwnerSignatureFileUrl,
+                    x.VehicleOwnerSignedAt
+                })
+                .FirstOrDefaultAsync(ct);
 
-            if (!isValidUser || !isVehicleOwner)
+            if (user is null || !isVehicleOwner)
                 throw new KeyNotFoundException("Không tìm thấy tài khoản Chủ xe để lưu chân ký.");
+
+            if (!string.IsNullOrWhiteSpace(user.VehicleOwnerSignatureFileUrl) || user.VehicleOwnerSignedAt.HasValue)
+                throw new InvalidOperationException("Chân ký Chủ xe đã được khai báo và đã khóa. Không thể chỉnh sửa hoặc ký lại.");
         }
 
         var stored = await storage.SavePngDataUrlAsync(
@@ -74,7 +84,9 @@ public sealed class MasterSignatureService(
 
         await using var db = await factory.CreateDbContextAsync(ct);
         var updatedUser = await db.Users
-            .Where(x => x.Id == userId && !x.IsDeleted)
+            .Where(x => x.Id == userId && !x.IsDeleted &&
+                        (x.VehicleOwnerSignatureFileUrl == null || x.VehicleOwnerSignatureFileUrl == "") &&
+                        x.VehicleOwnerSignedAt == null)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(x => x.VehicleOwnerSignatureFileUrl, stored.RelativeUrl)
                 .SetProperty(x => x.VehicleOwnerSignatureHash, stored.Sha256Hash)
@@ -83,7 +95,7 @@ public sealed class MasterSignatureService(
                 ct);
 
         if (updatedUser != 1)
-            throw new KeyNotFoundException("Không tìm thấy tài khoản Chủ xe để lưu chân ký.");
+            throw new InvalidOperationException("Chân ký Chủ xe đã được khai báo và đã khóa. Không thể chỉnh sửa hoặc ký lại.");
 
         return stored.RelativeUrl;
     }

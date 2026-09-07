@@ -149,11 +149,27 @@ else
 
                 @if (_detail.Role == SystemRoleDisplay.VehicleOwnerRole)
                 {
-                    <SignaturePad ExistingSignatureUrl="@SignatureUrl"
-                                  SignerName="@_detail.FullName"
-                                  SignedAt="@_detail.VehicleOwnerSignedAt"
-                                  OnSignatureSaved="SaveVehicleOwnerSignatureAsync"
-                                  ConfirmationButtonText="Lưu chân ký Chủ xe" />
+                    @if (string.IsNullOrWhiteSpace(_detail.VehicleOwnerSignatureFileUrl))
+                    {
+                        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-2">
+                            Tài khoản chưa có chân ký. Chân ký chỉ được khai báo một lần và sẽ khóa ngay sau khi lưu.
+                        </MudAlert>
+                        <SignaturePad ExistingSignatureUrl="@SignatureUrl"
+                                      SignerName="@_detail.FullName"
+                                      SignedAt="@_detail.VehicleOwnerSignedAt"
+                                      OnSignatureSaved="SaveVehicleOwnerSignatureAsync"
+                                      ConfirmationButtonText="Lưu chân ký Chủ xe" />
+                    }
+                    else
+                    {
+                        <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mb-2">
+                            Chân ký Chủ xe đã được khai báo và đã khóa, không thể chỉnh sửa lại.
+                        </MudAlert>
+                        <SignaturePad Disabled="true"
+                                      ExistingSignatureUrl="@SignatureUrl"
+                                      SignerName="@_detail.FullName"
+                                      SignedAt="@_detail.VehicleOwnerSignedAt" />
+                    }
                 }
                 else
                 {

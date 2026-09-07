@@ -50,16 +50,29 @@ else
                     </MudItem>
                     <MudItem xs="12">
                         <MudText Typo="Typo.subtitle1">Chân ký Chủ xe</MudText>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">
-                            Mỗi hợp đồng mới sẽ tự động chụp chân ký này. Có thể ký trực tiếp hoặc upload file PNG.
-                        </MudText>
-                        <SignaturePad ExistingSignatureUrl="@SignatureUrl"
-                                      SignerName="@_model.FullName"
-                                      StrokeColor="#0066CC"
-                                      StrokeWidth="1.5"
-                                      SignedAt="@_model.VehicleOwnerSignedAt"
-                                      OnSignatureSaved="SaveVehicleOwnerSignatureAsync"
-                                      ConfirmationButtonText="Lưu chân ký Chủ xe" />
+                        @if (string.IsNullOrWhiteSpace(_model.VehicleOwnerSignatureFileUrl))
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                Chân ký chỉ được khai báo một lần. Có thể ký trực tiếp hoặc upload file PNG; sau khi lưu sẽ tự động khóa.
+                            </MudText>
+                            <SignaturePad ExistingSignatureUrl="@SignatureUrl"
+                                          SignerName="@_model.FullName"
+                                          StrokeColor="#0066CC"
+                                          StrokeWidth="1.5"
+                                          SignedAt="@_model.VehicleOwnerSignedAt"
+                                          OnSignatureSaved="SaveVehicleOwnerSignatureAsync"
+                                          ConfirmationButtonText="Lưu chân ký Chủ xe" />
+                        }
+                        else
+                        {
+                            <MudAlert Severity="Severity.Success" Variant="Variant.Outlined" Class="mb-2 mt-2">
+                                Chân ký Chủ xe đã được khai báo và đã khóa. Tài khoản không thể chỉnh sửa hoặc ký lại.
+                            </MudAlert>
+                            <SignaturePad Disabled="true"
+                                          ExistingSignatureUrl="@SignatureUrl"
+                                          SignerName="@_model.FullName"
+                                          SignedAt="@_model.VehicleOwnerSignedAt" />
+                        }
                     </MudItem>
                 </MudGrid>
 

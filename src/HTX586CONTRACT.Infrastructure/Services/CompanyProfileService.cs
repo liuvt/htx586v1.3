@@ -24,7 +24,8 @@ public sealed class CompanyProfileService(
                 (x.BranchName != null && x.BranchName.Contains(keyword)) ||
                 x.TaxCode.Contains(keyword) ||
                 x.RepresentativeName.Contains(keyword) ||
-                (x.PhoneNumber != null && x.PhoneNumber.Contains(keyword)));
+                (x.PhoneNumber != null && x.PhoneNumber.Contains(keyword)) ||
+                (x.ComplaintContact != null && x.ComplaintContact.Contains(keyword)));
         }
 
         if (filter.IsActive.HasValue)
@@ -45,6 +46,7 @@ public sealed class CompanyProfileService(
                 TaxCode = x.TaxCode,
                 PhoneNumber = x.PhoneNumber,
                 Email = x.Email,
+                ComplaintContact = x.ComplaintContact,
                 RepresentativeName = x.RepresentativeName,
                 RepresentativeSignatureFileUrl = x.RepresentativeSignatureFileUrl,
                 IsActive = x.IsActive,
@@ -73,6 +75,7 @@ public sealed class CompanyProfileService(
                 Address = x.Address,
                 PhoneNumber = x.PhoneNumber,
                 Email = x.Email,
+                ComplaintContact = x.ComplaintContact,
                 RepresentativeName = x.RepresentativeName,
                 RepresentativePosition = x.RepresentativePosition,
                 RepresentativeCitizenId = x.RepresentativeCitizenId,
@@ -187,6 +190,7 @@ public sealed class CompanyProfileService(
         e.Address = r.Address.Trim();
         e.PhoneNumber = N(r.PhoneNumber);
         e.Email = N(r.Email);
+        e.ComplaintContact = N(r.ComplaintContact) ?? CompanyProfile.DefaultComplaintContact;
         e.RepresentativeName = r.RepresentativeName.Trim();
         e.RepresentativePosition = N(r.RepresentativePosition);
         e.RepresentativeCitizenId = r.RepresentativeCitizenId.Trim();
@@ -206,6 +210,7 @@ public sealed class CompanyProfileService(
         e.Address = r.Address.Trim();
         e.PhoneNumber = N(r.PhoneNumber);
         e.Email = N(r.Email);
+        e.ComplaintContact = N(r.ComplaintContact) ?? CompanyProfile.DefaultComplaintContact;
         e.RepresentativeName = r.RepresentativeName.Trim();
         e.RepresentativePosition = N(r.RepresentativePosition);
         e.RepresentativeCitizenId = r.RepresentativeCitizenId.Trim();
