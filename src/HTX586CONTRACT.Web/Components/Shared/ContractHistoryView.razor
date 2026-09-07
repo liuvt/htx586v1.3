@@ -48,8 +48,8 @@
             <div class="kpi-value">@FormatDecimal(Detail.TotalKilometers, " km")</div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-label">Số hành khách thực tế</div>
-            <div class="kpi-value">@FormatNumber(Detail.ActualPassengerCount)</div>
+            <div class="kpi-label">@(Detail.BusinessType == ContractBusinessType.Cargo ? "Loại hàng" : "Số hành khách thực tế")</div>
+            <div class="kpi-value">@(Detail.BusinessType == ContractBusinessType.Cargo ? (Detail.CargoName ?? "-") : FormatNumber(Detail.ActualPassengerCount))</div>
         </div>
         <div class="kpi-card">
             <div class="kpi-label">Khoảng thời gian</div>
@@ -83,31 +83,51 @@
     <MudPaper Class="section-card" Elevation="1">
         <div class="section-header">
             <div>
-                <MudText Typo="Typo.h6">2. Phương tiện, chủ xe và người lái</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">Thông tin xe, chủ sở hữu và người trực tiếp điều khiển phương tiện.</MudText>
+                <MudText Typo="Typo.h6">@(Detail.BusinessType == ContractBusinessType.Cargo ? "2. Văn phòng/Công ty và Chủ phương tiện" : "2. Phương tiện, chủ xe và người lái")</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@(Detail.BusinessType == ContractBusinessType.Cargo ? "Dữ liệu được chụp snapshot từ Công ty/Văn phòng của xe và tài khoản Chủ xe tại thời điểm tạo/phát HĐ." : "Thông tin xe, chủ sở hữu và người trực tiếp điều khiển phương tiện.")</MudText>
             </div>
         </div>
-        <div class="data-grid">
-            @DataBlock("Biển kiểm soát", Detail.VehiclePlate)
-            @DataBlock("Mã xe", Detail.VehicleCode)
-            @DataBlock("Hãng / Loại xe", Detail.VehicleBrand)
-            @DataBlock("Số chỗ", FormatNumber(Detail.SeatCount))
-            @DataBlock("Chủ sở hữu", Detail.OwnerName)
-            @DataBlock("CCCD chủ sở hữu", Detail.OwnerCitizenId)
-            @DataBlock("Ngày cấp CCCD", FormatDate(Detail.OwnerCitizenIdIssuedDate))
-            @DataBlock("Tài khoản nhận HĐ", Detail.DriverName)
-            @DataBlock("Người lái thực tế", Detail.OperatingDriverName)
-            @DataBlock("Hạng GPLX", Detail.OperatingDriverLicenseClass)
-            @DataBlock("Số GPLX", Detail.OperatingDriverLicenseNumber)
-            @DataBlock("SĐT người lái", Detail.OperatingDriverPhoneNumber)
-        </div>
+        @if (Detail.BusinessType == ContractBusinessType.Cargo)
+        {
+            <div class="data-grid">
+                @DataBlock("Tên Văn phòng/Công ty", Detail.CompanyOfficeName ?? Detail.CompanyName, "wide")
+                @DataBlock("Mã số thuế", Detail.CompanyTaxCode)
+                @DataBlock("GPKDVT", Detail.CompanyBusinessLicenseNumber)
+                @DataBlock("Địa chỉ", Detail.CompanyAddress, "wide")
+                @DataBlock("Số điện thoại", Detail.CompanyPhoneNumber)
+                @DataBlock("Tên người đại diện", Detail.CompanyRepresentativeName)
+                @DataBlock("CCCD người đại diện", Detail.CompanyRepresentativeCitizenId)
+                @DataBlock("Ngày cấp CCCD đại diện", FormatDate(Detail.CompanyRepresentativeCitizenIdIssuedDate))
+                @DataBlock("Tên chủ phương tiện", Detail.OwnerName)
+                @DataBlock("CCCD chủ phương tiện", Detail.OwnerCitizenId)
+                @DataBlock("Ngày cấp CCCD chủ phương tiện", FormatDate(Detail.OwnerCitizenIdIssuedDate))
+                @DataBlock("Biển kiểm soát", Detail.VehiclePlate)
+            </div>
+        }
+        else
+        {
+            <div class="data-grid">
+                @DataBlock("Biển kiểm soát", Detail.VehiclePlate)
+                @DataBlock("Mã xe", Detail.VehicleCode)
+                @DataBlock("Hãng / Loại xe", Detail.VehicleBrand)
+                @DataBlock("Số chỗ", FormatNumber(Detail.SeatCount))
+                @DataBlock("Chủ sở hữu", Detail.OwnerName)
+                @DataBlock("CCCD chủ sở hữu", Detail.OwnerCitizenId)
+                @DataBlock("Ngày cấp CCCD", FormatDate(Detail.OwnerCitizenIdIssuedDate))
+                @DataBlock("Tài khoản nhận HĐ", Detail.DriverName)
+                @DataBlock("Người lái thực tế", Detail.OperatingDriverName)
+                @DataBlock("Hạng GPLX", Detail.OperatingDriverLicenseClass)
+                @DataBlock("Số GPLX", Detail.OperatingDriverLicenseNumber)
+                @DataBlock("SĐT người lái", Detail.OperatingDriverPhoneNumber)
+            </div>
+        }
     </MudPaper>
 
     <MudPaper Class="section-card" Elevation="1">
         <div class="section-header">
             <div>
-                <MudText Typo="Typo.h6">3. Khách hàng / người thuê</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">Thông tin khách hàng được khóa theo hợp đồng tại thời điểm tạo/chốt.</MudText>
+                <MudText Typo="Typo.h6">@(Detail.BusinessType == ContractBusinessType.Cargo ? "3. Khách hàng / Bên A" : "3. Khách hàng / người thuê")</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@(Detail.BusinessType == ContractBusinessType.Cargo ? "Bên A được lấy từ hồ sơ khách hàng Công ty/Doanh nghiệp và khóa theo snapshot của hợp đồng." : "Thông tin khách hàng được khóa theo hợp đồng tại thời điểm tạo/chốt.")</MudText>
             </div>
         </div>
         <div class="data-grid">
@@ -128,7 +148,10 @@
                 @DataBlock("Số điện thoại", Detail.CustomerPhone)
             }
             @DataBlock("Ngày cấp CCCD", FormatDate(Detail.CustomerCitizenIdIssuedDate))
-            @DataBlock("Người đặt đi cùng", YesNo(Detail.CustomerTravelsWithGroup))
+            @if (Detail.BusinessType == ContractBusinessType.Passenger)
+            {
+                @DataBlock("Người đặt đi cùng", YesNo(Detail.CustomerTravelsWithGroup))
+            }
             @DataBlock("Địa chỉ", Detail.CustomerAddress, "wide")
         </div>
     </MudPaper>
@@ -144,12 +167,19 @@
             @DataBlock("Thời gian bắt đầu", FormatDateTime(Detail.StartTime))
             @DataBlock("Thời gian kết thúc", FormatDateTime(Detail.EndTime))
             @DataBlock("Tổng km", FormatDecimal(Detail.TotalKilometers, " km"))
-            @DataBlock("Giá trị hợp đồng", FormatMoney(Detail.ContractValue))
-            @DataBlock("Điểm đi", Detail.PickupLocation)
-            @DataBlock("Điểm đến", Detail.DropoffLocation)
-            @DataBlock("Lộ trình chi tiết", Detail.RouteDescription, "wide")
-            @DataBlock("Hình thức thanh toán", Detail.PaymentMethod)
-            @DataBlock("Thời gian thanh toán", Detail.PaymentTime)
+            @DataBlock(Detail.BusinessType == ContractBusinessType.Cargo ? "Cước vận chuyển" : "Giá trị hợp đồng", FormatMoney(Detail.ContractValue))
+            @DataBlock(Detail.BusinessType == ContractBusinessType.Cargo ? "Nơi nhận hàng" : "Điểm đi", Detail.PickupLocation)
+            @DataBlock(Detail.BusinessType == ContractBusinessType.Cargo ? "Nơi trả hàng" : "Điểm đến", Detail.DropoffLocation)
+            @DataBlock(Detail.BusinessType == ContractBusinessType.Cargo ? "Hành trình xe chạy" : "Lộ trình chi tiết", Detail.RouteDescription, "wide")
+            @if (Detail.BusinessType == ContractBusinessType.Cargo)
+            {
+                @DataBlock("Thanh toán", Detail.PaymentMethod, "wide")
+            }
+            else
+            {
+                @DataBlock("Hình thức thanh toán", Detail.PaymentMethod)
+                @DataBlock("Thời gian thanh toán", Detail.PaymentTime)
+            }
             @DataBlock("Ghi chú", Detail.Note, "wide")
         </div>
 
@@ -158,13 +188,16 @@
             <MudDivider Class="my-4" />
             <MudText Typo="Typo.subtitle1" Class="mb-3">Thông tin hàng hóa</MudText>
             <div class="data-grid">
-                @DataBlock("Tên hàng hóa", Detail.CargoName)
-                @DataBlock("Khối lượng", Detail.CargoWeight?.ToString("N1"))
-                @DataBlock("Đơn vị", Detail.CargoUnit)
+                @DataBlock("Loại hàng", Detail.CargoName)
+                @DataBlock("Quy cách", Detail.CargoSpecification)
+                @DataBlock("Số lượng", Detail.CargoQuantity)
+                @DataBlock("Khối lượng", Detail.CargoWeight?.ToString("N2"))
             </div>
         }
     </MudPaper>
 
+    @if (Detail.BusinessType == ContractBusinessType.Passenger)
+    {
     <MudPaper Class="section-card" Elevation="1">
         <div class="section-header">
             <div>
@@ -206,12 +239,13 @@
             </MudTable>
         }
     </MudPaper>
+    }
 
     <MudPaper Class="section-card" Elevation="1">
         <div class="section-header">
             <div>
-                <MudText Typo="Typo.h6">6. Chữ ký theo hợp đồng</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">Bốn chữ ký được chốt và lưu theo từng hợp đồng.</MudText>
+                <MudText Typo="Typo.h6">@(Detail.BusinessType == ContractBusinessType.Cargo ? "5. Chữ ký theo hợp đồng" : "6. Chữ ký theo hợp đồng")</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@(Detail.BusinessType == ContractBusinessType.Cargo ? "Ba chân ký theo mẫu: HTX, Chủ xe và Đại diện Bên A." : "Bốn chữ ký được chốt và lưu theo từng hợp đồng.")</MudText>
             </div>
         </div>
         <div class="signature-grid">
@@ -229,15 +263,18 @@
                               SignerName="@(Detail.OwnerName ?? "Chủ sở hữu xe")"
                               SignedAt="@Detail.VehicleOwnerSignedAt" />
             </div>
+            @if (Detail.BusinessType == ContractBusinessType.Passenger)
+            {
+                <div class="signature-card">
+                    <div class="signature-card__title">Người lái thực tế</div>
+                    <SignaturePad Disabled="true"
+                                  ExistingSignatureUrl="@Detail.DriverSignatureFileUrl"
+                                  SignerName="@(string.IsNullOrWhiteSpace(Detail.OperatingDriverName) ? Detail.DriverName : Detail.OperatingDriverName)"
+                                  SignedAt="@Detail.DriverSignedAt" />
+                </div>
+            }
             <div class="signature-card">
-                <div class="signature-card__title">Người lái thực tế</div>
-                <SignaturePad Disabled="true"
-                              ExistingSignatureUrl="@Detail.DriverSignatureFileUrl"
-                              SignerName="@(string.IsNullOrWhiteSpace(Detail.OperatingDriverName) ? Detail.DriverName : Detail.OperatingDriverName)"
-                              SignedAt="@Detail.DriverSignedAt" />
-            </div>
-            <div class="signature-card">
-                <div class="signature-card__title">Khách hàng</div>
+                <div class="signature-card__title">@(Detail.BusinessType == ContractBusinessType.Cargo ? "Đại diện Bên A" : "Khách hàng")</div>
                 <SignaturePad Disabled="true"
                               ExistingSignatureUrl="@(CustomerSignature?.SignatureFileUrl)"
                               SignerName="@CustomerSignatureSignerName"
@@ -651,7 +688,7 @@
     private static string BusinessName(ContractBusinessType type) => type switch
     {
         ContractBusinessType.Passenger => "Hợp đồng vận chuyển hành khách",
-        ContractBusinessType.Cargo => "Hợp đồng vận chuyển hàng hóa bằng xe ô tô",
+        ContractBusinessType.Cargo => "HỢP ĐỒNG VẬN CHUYỂN HÀNG HÓA BẰNG XE Ô TÔ",
         _ => type.ToString()
     };
 

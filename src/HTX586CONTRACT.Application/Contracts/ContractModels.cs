@@ -50,8 +50,15 @@ public sealed class ContractDetailDto
 
     public Guid CompanyProfileId { get; set; }
     public string CompanyName { get; set; } = string.Empty;
+    public string? CompanyOfficeName { get; set; }
+    public string? CompanyTaxCode { get; set; }
+    public string? CompanyBusinessLicenseNumber { get; set; }
+    public string? CompanyAddress { get; set; }
+    public string? CompanyPhoneNumber { get; set; }
     public string? CompanyComplaintContact { get; set; }
     public string? CompanyRepresentativeName { get; set; }
+    public string? CompanyRepresentativeCitizenId { get; set; }
+    public DateTime? CompanyRepresentativeCitizenIdIssuedDate { get; set; }
     public string? CompanyRepresentativeSignatureFileUrl { get; set; }
     public DateTime? CompanyRepresentativeSignedAt { get; set; }
 
@@ -95,6 +102,8 @@ public sealed class ContractDetailDto
     public string? SecondDriverLicenseClass { get; set; }
 
     public string? CargoName { get; set; }
+    public string? CargoSpecification { get; set; }
+    public string? CargoQuantity { get; set; }
     public decimal? CargoWeight { get; set; }
     public string? CargoUnit { get; set; }
     public string? PickupLocation { get; set; }
@@ -165,6 +174,8 @@ public sealed class SaveContractRequest
     public string? SecondDriverLicenseClass { get; set; }
 
     public string? CargoName { get; set; }
+    public string? CargoSpecification { get; set; }
+    public string? CargoQuantity { get; set; }
     public decimal? CargoWeight { get; set; }
     public string? CargoUnit { get; set; }
     public string? PickupLocation { get; set; }

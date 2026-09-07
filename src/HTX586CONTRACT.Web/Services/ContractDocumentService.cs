@@ -168,23 +168,38 @@ public sealed class ContractDocumentService(
                             "Bạn phải bấm Nhận hợp đồng trước khi cập nhật và ghi nhận chữ ký người lái/khách hàng.");
                     }
 
-                    if (string.IsNullOrWhiteSpace(contract.OperatingDriverName))
+                    if (contract.BusinessType == ContractBusinessType.Cargo && role == SignatureParty.Driver)
+                        throw new InvalidOperationException(
+                            "Hợp đồng hàng hóa sử dụng chân ký Chủ xe cố định theo mẫu, không có ô ký riêng cho người lái thực tế.");
+
+                    if (contract.BusinessType == ContractBusinessType.Passenger &&
+                        string.IsNullOrWhiteSpace(contract.OperatingDriverName))
                         throw new InvalidOperationException(
                             "Vui lòng nhập và lưu họ tên người lái thực tế trước khi ghi nhận chữ ký.");
 
-                    if (role == SignatureParty.Driver &&
+                    if (contract.BusinessType == ContractBusinessType.Passenger &&
+                        role == SignatureParty.Driver &&
                         !AutomobileDrivingLicenseClasses.IsValid(contract.OperatingDriverLicenseClass))
                         throw new InvalidOperationException(
                             "Vui lòng nhập và lưu hạng GPLX ô tô hợp lệ của người lái thực tế trước khi ký.");
 
                     if (role == SignatureParty.Customer)
                     {
-                        var hasDriverSignature = await db.ContractSignatures
-                            .AsNoTracking()
-                            .AnyAsync(x => x.ContractId == contractId && !x.IsDeleted && x.Party == SignatureParty.Driver, ct);
-                        if (!hasDriverSignature)
-                            throw new InvalidOperationException(
-                                "Người lái thực tế chưa ký xác nhận. Vui lòng để người lái ký trước, sau đó mới ghi nhận chữ ký khách hàng.");
+                        if (contract.BusinessType == ContractBusinessType.Passenger)
+                        {
+                            var hasDriverSignature = await db.ContractSignatures
+                                .AsNoTracking()
+                                .AnyAsync(x => x.ContractId == contractId && !x.IsDeleted && x.Party == SignatureParty.Driver, ct);
+                            if (!hasDriverSignature)
+                                throw new InvalidOperationException(
+                                    "Người lái thực tế chưa ký xác nhận. Vui lòng để người lái ký trước, sau đó mới ghi nhận chữ ký khách hàng.");
+                        }
+                        else
+                        {
+                            var cargoError = ValidateCargoContentForSigning(contract);
+                            if (cargoError is not null)
+                                throw new InvalidOperationException(cargoError);
+                        }
                     }
 
                     var existingSignature = await db.ContractSignatures
@@ -454,7 +469,8 @@ public sealed class ContractDocumentService(
         if (!StoredSignatureExists(snapshot.Vehicle.OwnerSignatureFileUrl))
             missingSignatures.Add("chân ký tài khoản Chủ xe tại thời điểm lập hợp đồng");
 
-        if (!signedRoles.Contains(SignatureParty.Driver))
+        if (contract.BusinessType == ContractBusinessType.Passenger &&
+            !signedRoles.Contains(SignatureParty.Driver))
             missingSignatures.Add("chữ ký người lái thực tế");
 
         if (!signedRoles.Contains(SignatureParty.Customer))
@@ -466,7 +482,7 @@ public sealed class ContractDocumentService(
 
         var passengerCount = contract.Passengers.Count(x => !x.IsDeleted && !string.IsNullOrWhiteSpace(x.FullName)) +
             (contract.CustomerTravelsWithGroup ? 1 : 0);
-        if (passengerCount > 20)
+        if (contract.BusinessType == ContractBusinessType.Passenger && passengerCount > 20)
             throw new InvalidOperationException(
                 "Mẫu PDF 2 trang chỉ hỗ trợ tối đa 20 hành khách. Vui lòng giảm danh sách trước khi tạo PDF.");
 
@@ -550,7 +566,8 @@ public sealed class ContractDocumentService(
             missingSignatures.Add("chữ ký Văn phòng đại diện trong snapshot");
         if (!StoredSignatureExists(snapshot.Vehicle.OwnerSignatureFileUrl))
             missingSignatures.Add("chữ ký Chủ xe trong snapshot");
-        if (!signedRoles.Contains(SignatureParty.Driver))
+        if (contract.BusinessType == ContractBusinessType.Passenger &&
+            !signedRoles.Contains(SignatureParty.Driver))
             missingSignatures.Add("chữ ký người lái thực tế");
         if (!signedRoles.Contains(SignatureParty.Customer))
             missingSignatures.Add("chữ ký khách hàng");
@@ -561,7 +578,7 @@ public sealed class ContractDocumentService(
 
         var passengerCount = contract.Passengers.Count(x => !x.IsDeleted && !string.IsNullOrWhiteSpace(x.FullName)) +
             (contract.CustomerTravelsWithGroup ? 1 : 0);
-        if (passengerCount > 20)
+        if (contract.BusinessType == ContractBusinessType.Passenger && passengerCount > 20)
             throw new InvalidOperationException(
                 "Mẫu PDF 2 trang chỉ hỗ trợ tối đa 20 hành khách.");
 
@@ -825,6 +842,32 @@ public sealed class ContractDocumentService(
         }
     }
 
+    private static string? ValidateCargoContentForSigning(Contract contract)
+    {
+        var snapshot = ContractSnapshotData.FromJson(contract.ContractDataJson);
+        if (snapshot is null || string.IsNullOrWhiteSpace(snapshot.Customer.OrganizationName)) return "Hợp đồng hàng hóa yêu cầu Bên A là Công ty/Doanh nghiệp.";
+        if (string.IsNullOrWhiteSpace(snapshot.Customer.TaxCode)) return "Vui lòng lưu Mã số thuế Bên A trước khi ký.";
+        if (string.IsNullOrWhiteSpace(snapshot.Customer.FullName) || SameText(snapshot.Customer.FullName, snapshot.Customer.OrganizationName)) return "Vui lòng lưu Người đại diện Bên A trước khi ký.";
+        if (string.IsNullOrWhiteSpace(snapshot.Customer.CitizenId)) return "Vui lòng lưu CCCD người đại diện Bên A trước khi ký.";
+        if (snapshot.Customer.CitizenIdIssuedDate is null) return "Vui lòng lưu Ngày cấp CCCD người đại diện Bên A trước khi ký.";
+        if (string.IsNullOrWhiteSpace(snapshot.Customer.PhoneNumber)) return "Vui lòng lưu Điện thoại Bên A trước khi ký.";
+        if (string.IsNullOrWhiteSpace(snapshot.Customer.Address)) return "Vui lòng lưu Địa chỉ Bên A trước khi ký.";
+
+        if (string.IsNullOrWhiteSpace(contract.CargoName)) return "Vui lòng lưu Loại hàng trước khi Bên A ký.";
+        if (string.IsNullOrWhiteSpace(contract.CargoSpecification)) return "Vui lòng lưu Quy cách hàng hóa trước khi Bên A ký.";
+        if (string.IsNullOrWhiteSpace(contract.CargoQuantity)) return "Vui lòng lưu Số lượng hàng hóa trước khi Bên A ký.";
+        if (contract.CargoWeight is null || contract.CargoWeight <= 0) return "Vui lòng lưu Khối lượng hàng hóa lớn hơn 0 trước khi Bên A ký.";
+        if (string.IsNullOrWhiteSpace(contract.PickupLocation)) return "Vui lòng lưu Nơi nhận hàng trước khi Bên A ký.";
+        if (string.IsNullOrWhiteSpace(contract.DropoffLocation)) return "Vui lòng lưu Nơi trả hàng trước khi Bên A ký.";
+        if (contract.StartTime is null || contract.EndTime is null) return "Vui lòng lưu đầy đủ thời gian vận chuyển Từ - Đến trước khi Bên A ký.";
+        if (contract.EndTime < contract.StartTime) return "Thời gian kết thúc vận chuyển phải sau thời gian bắt đầu.";
+        if (string.IsNullOrWhiteSpace(contract.RouteDescription)) return "Vui lòng lưu Hành trình xe chạy trước khi Bên A ký.";
+        if (contract.TotalKilometers is null || contract.TotalKilometers < 0) return "Vui lòng lưu Tổng km trước khi Bên A ký.";
+        if (contract.ContractValue is null || contract.ContractValue < 0) return "Vui lòng lưu Cước vận chuyển trước khi Bên A ký.";
+        if (string.IsNullOrWhiteSpace(contract.PaymentMethod) && string.IsNullOrWhiteSpace(contract.PaymentTime)) return "Vui lòng lưu nội dung Thanh toán trước khi Bên A ký.";
+        return null;
+    }
+
     // Hash bao phủ dữ liệu snapshot và toàn bộ nội dung nghiệp vụ chính của hợp đồng.
     // Sau khi hoàn tất, UpdateAsync bị chặn nên hash này đại diện cho bản hợp đồng bất biến.
     private static string ContractHash(Contract contract)
@@ -848,6 +891,11 @@ public sealed class ContractDocumentService(
             contract.PaymentMethod,
             contract.PaymentTime,
             contract.Note,
+            contract.CargoName,
+            contract.CargoSpecification,
+            contract.CargoQuantity,
+            contract.CargoWeight,
+            contract.CargoUnit,
             contract.ActualPassengerCount,
             contract.ContractDataJson,
             contract.Status,

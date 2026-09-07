@@ -34,6 +34,12 @@ public sealed class ContractConfiguration : IEntityTypeConfiguration<Contract>
         builder.Property(x => x.CargoName)
             .HasMaxLength(300);
 
+        builder.Property(x => x.CargoSpecification)
+            .HasMaxLength(500);
+
+        builder.Property(x => x.CargoQuantity)
+            .HasMaxLength(100);
+
         builder.Property(x => x.CargoWeight)
             .HasPrecision(18, 2);
 

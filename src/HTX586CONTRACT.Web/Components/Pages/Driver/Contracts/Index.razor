@@ -23,7 +23,7 @@
         <MudItem xs="12" md="4">
             <MudSelect T="ContractBusinessType?" @bind-Value="_businessType" Label="Loại hợp đồng" Clearable="true" Variant="Variant.Outlined">
                 <MudSelectItem T="ContractBusinessType?" Value="@((ContractBusinessType?)ContractBusinessType.Passenger)">Vận chuyển hành khách</MudSelectItem>
-                <MudSelectItem T="ContractBusinessType?" Value="@((ContractBusinessType?)ContractBusinessType.Cargo)" Disabled="true">Vận chuyển hàng hóa bằng xe ô tô (Tạm chưa dùng)</MudSelectItem>
+                <MudSelectItem T="ContractBusinessType?" Value="@((ContractBusinessType?)ContractBusinessType.Cargo)">Vận chuyển hàng hóa bằng xe ô tô</MudSelectItem>
             </MudSelect>
         </MudItem>
         <MudItem xs="12" md="4" Class="d-flex align-center">

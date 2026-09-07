@@ -31,7 +31,10 @@ public class Contract : BaseEntity
     public DateTime? LockedAt { get; set; }
 
     public string AreaCode { get; set; } = string.Empty;
+    // Hàng hóa: CargoName được dùng cho trường "Loại hàng" trên mẫu HĐ hàng hóa.
     public string? CargoName { get; set; }
+    public string? CargoSpecification { get; set; }
+    public string? CargoQuantity { get; set; }
     public decimal? CargoWeight { get; set; }
     public string? CargoUnit { get; set; }
     public int? ActualPassengerCount { get; set; }

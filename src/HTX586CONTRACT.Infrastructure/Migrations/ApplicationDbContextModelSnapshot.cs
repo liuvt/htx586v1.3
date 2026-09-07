@@ -187,6 +187,14 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .HasMaxLength(300)
                         .HasColumnType("nvarchar(300)");
 
+                    b.Property<string>("CargoQuantity")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("CargoSpecification")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<string>("CargoUnit")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");

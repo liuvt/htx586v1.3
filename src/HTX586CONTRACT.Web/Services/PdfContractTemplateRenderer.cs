@@ -31,13 +31,18 @@ public sealed class PdfContractTemplateRenderer(
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        var isCargo = contract.BusinessType == ContractBusinessType.Cargo;
         var templatePath = ResolveContentPath(
-            configuration["DocumentGeneration:ContractTemplatePath"],
-            Path.Combine("Templates", "Contracts", "HopDongVanChuyenHanhKhach.template.pdf"));
+            configuration[isCargo ? "DocumentGeneration:CargoContractTemplatePath" : "DocumentGeneration:ContractTemplatePath"],
+            Path.Combine("Templates", "Contracts", isCargo
+                ? "HopDongVanChuyenHangHoa.template.pdf"
+                : "HopDongVanChuyenHanhKhach.template.pdf"));
 
         var layoutPath = ResolveContentPath(
-            configuration["DocumentGeneration:ContractLayoutPath"],
-            Path.Combine("Templates", "Contracts", "HopDongVanChuyenHanhKhach.layout.json"));
+            configuration[isCargo ? "DocumentGeneration:CargoContractLayoutPath" : "DocumentGeneration:ContractLayoutPath"],
+            Path.Combine("Templates", "Contracts", isCargo
+                ? "HopDongVanChuyenHangHoa.layout.json"
+                : "HopDongVanChuyenHanhKhach.layout.json"));
 
         if (!File.Exists(templatePath))
             throw new FileNotFoundException(
@@ -285,6 +290,7 @@ public sealed class PdfContractTemplateRenderer(
         var vehicle = contract.Vehicle;
         var driver = contract.Driver;
         var contractDate = VietnamTime(contract.CreatedAt);
+        var isCargo = contract.BusinessType == ContractBusinessType.Cargo;
         var passengerCount = contract.ActualPassengerCount ??
             (contract.Passengers.Count(x => !x.IsDeleted && !string.IsNullOrWhiteSpace(x.FullName)) +
              (contract.CustomerTravelsWithGroup ? 1 : 0));
@@ -299,8 +305,8 @@ public sealed class PdfContractTemplateRenderer(
         // Không ghép CompanyName + BranchName vì dữ liệu thực tế có thể đã chứa
         // tên chi nhánh trong CompanyName, gây lặp như "... CẦN THƠ - HTX VT 586 - CẦN THƠ".
         var companyOfficeName = snapshot is not null
-            ? First(snapshot.Company.Name, snapshot.Company.BranchName, "...")
-            : First(company?.CompanyName, company?.BranchName, companyName, "...");
+            ? First(snapshot.Company.BranchName, snapshot.Company.Name, "...")
+            : First(company?.BranchName, company?.CompanyName, companyName, "...");
         // Trường Liên hệ phản ánh mới được bổ sung sau khi mẫu PDF cũ đã chứa
         // sẵn dữ liệu Cần Thơ. Snapshot mới luôn ưu tiên dữ liệu đã chụp; snapshot
         // legacy không có trường này dùng đúng giá trị mẫu cũ để không làm mất dòng.
@@ -375,7 +381,7 @@ public sealed class PdfContractTemplateRenderer(
                 $"(Kèm theo hợp đồng vận chuyển số {First(contract.ContractNumber, "...")}/HĐVC-HTX " +
                 $"ngày {contractDate:dd} tháng {contractDate:MM} năm {contractDate:yyyy})",
 
-            ["COMPANY_NAME"] = companyName,
+            ["COMPANY_NAME"] = isCargo ? companyOfficeName : companyName,
             ["COMPANY_OFFICE_NAME"] = companyOfficeName,
             ["COMPANY_TAX_CODE"] = FrozenText(snapshot?.Company.TaxCode, contract.CompanyTaxCodeSnapshot, company?.TaxCode, "..."),
             ["COMPANY_LICENSE"] = FrozenText(snapshot?.Company.BusinessLicenseNumber, company?.BusinessLicenseNumber, "..."),
@@ -432,6 +438,8 @@ public sealed class PdfContractTemplateRenderer(
 
             ["PICKUP_DATETIME_LOCATION"] = BuildDateTimeLocation(contract.StartTime, contract.PickupLocation),
             ["DROPOFF_DATETIME_LOCATION"] = BuildDateTimeLocation(contract.EndTime, contract.DropoffLocation),
+            ["PICKUP_LOCATION"] = First(contract.PickupLocation, "..."),
+            ["DROPOFF_LOCATION"] = First(contract.DropoffLocation, "..."),
             ["ROUTE_DESCRIPTION"] = First(contract.RouteDescription, "..."),
             ["TOTAL_KILOMETERS"] = contract.TotalKilometers?.ToString("N1", CultureInfo.GetCultureInfo("vi-VN")) ?? "...",
             ["CONTRACT_VALUE"] = contract.ContractValue?.ToString("N0", CultureInfo.GetCultureInfo("vi-VN")) ?? "...",
@@ -440,11 +448,21 @@ public sealed class PdfContractTemplateRenderer(
             ["PAYMENT_TIME"] = First(contract.PaymentTime, "..."),
             ["CONTRACT_NOTE"] = First(contract.Note, "Không có"),
             ["CARGO_NAME"] = First(contract.CargoName, "..."),
+            ["CARGO_SPECIFICATION"] = First(contract.CargoSpecification, "..."),
+            ["CARGO_QUANTITY"] = First(contract.CargoQuantity, "..."),
             ["CARGO_WEIGHT"] = contract.CargoWeight?.ToString("N2", CultureInfo.GetCultureInfo("vi-VN")) ?? "...",
             ["CARGO_UNIT"] = First(contract.CargoUnit, "..."),
             ["CARGO_WEIGHT_UNIT"] = contract.CargoWeight is null
                 ? "..."
-                : $"{contract.CargoWeight.Value.ToString("N2", CultureInfo.GetCultureInfo("vi-VN"))} {First(contract.CargoUnit, string.Empty)}".Trim(),
+                : string.IsNullOrWhiteSpace(contract.CargoUnit)
+                    ? contract.CargoWeight.Value.ToString("N2", CultureInfo.GetCultureInfo("vi-VN"))
+                    : $"{contract.CargoWeight.Value.ToString("N2", CultureInfo.GetCultureInfo("vi-VN"))} {contract.CargoUnit.Trim()}",
+            ["CARGO_START_TIME"] = FormatDateTime(contract.StartTime),
+            ["CARGO_END_TIME"] = FormatDateTime(contract.EndTime),
+            ["CONTRACT_VALUE_WITH_UNIT"] = contract.ContractValue is null
+                ? "..."
+                : $"{contract.ContractValue.Value.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"))} đồng",
+            ["PAYMENT_DESCRIPTION"] = JoinNonEmpty(" - ", contract.PaymentMethod, contract.PaymentTime),
 
             ["SIG_OFFICE_NAME"] = FrozenText(
                 snapshot?.Company.RepresentativeName,
@@ -533,6 +551,15 @@ public sealed class PdfContractTemplateRenderer(
     private static string SignatureName(Contract contract, SignatureParty party, string fallback)
         => First(contract.Signatures.FirstOrDefault(x => x.Party == party)?.SignerName, fallback, "...");
 
+    private static string FormatDateTime(DateTime? value)
+        => value is null ? "..." : VietnamTime(value.Value).ToString("dd/MM/yyyy HH:mm");
+
+    private static string JoinNonEmpty(string separator, params string?[] values)
+    {
+        var parts = values.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x!.Trim()).ToArray();
+        return parts.Length == 0 ? "..." : string.Join(separator, parts);
+    }
+
     private static string BuildDateTimeLocation(DateTime? value, string? location)
     {
         var dateTime = value is null
@@ -549,7 +576,7 @@ public sealed class PdfContractTemplateRenderer(
 
     private static string ContractBusinessTitle(ContractBusinessType businessType)
         => businessType == ContractBusinessType.Cargo
-            ? "Hợp đồng vận chuyển hàng hóa"
+            ? "HỢP ĐỒNG VẬN CHUYỂN HÀNG HÓA BẰNG XE Ô TÔ"
             : "Hợp đồng vận chuyển hành khách";
 
     private static string? RepresentativeCandidate(string? candidate, params string?[] organizationNames)

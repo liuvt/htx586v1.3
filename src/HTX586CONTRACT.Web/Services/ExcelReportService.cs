@@ -833,7 +833,7 @@ public sealed class ExcelReportService(IDbContextFactory<ApplicationDbContext> f
             ? contract.ContractType.Name
             : contract.BusinessType == ContractBusinessType.Passenger
                 ? "Hợp đồng vận chuyển hành khách"
-                : "Hợp đồng vận chuyển hàng hóa";
+                : "HỢP ĐỒNG VẬN CHUYỂN HÀNG HÓA BẰNG XE Ô TÔ";
 
     private static string StatusText(ContractStatus status) => status switch
     {

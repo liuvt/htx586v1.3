@@ -69,28 +69,64 @@ else
                 <MudItem xs="12" md="4"><InfoListItem Label="Công ty/Văn phòng" Value="@_detail.CompanyName" /></MudItem>
                 <MudItem xs="12" md="4"><InfoListItem Label="Tài xế" Value="@_detail.DriverName" /></MudItem>
                 <MudItem xs="12" md="4"><InfoListItem Label="Khu vực" Value="@_detail.AreaCode" /></MudItem>
+                <MudItem xs="12" md="4"><InfoListItem Label="Ngày tạo HĐ" Value="@FormatDateTime(_detail.CreatedAt)" /></MudItem>
             </MudGrid>
         </MudPaper>
 
         <MudPaper Class="pa-4" Elevation="1">
-            <MudText Typo="Typo.h6" Class="mb-3">2. Phương tiện</MudText>
-            <MudGrid>
-                <MudItem xs="12" md="4"><InfoListItem Label="Biển kiểm soát" Value="@(_detail.VehiclePlate ?? "-")" /></MudItem>
-                <MudItem xs="12" md="4"><InfoListItem Label="Hãng/Loại xe" Value="@(_detail.VehicleBrand ?? "-")" /></MudItem>
-                <MudItem xs="12" md="4"><InfoListItem Label="Số chỗ" Value="@FormatNumber(_detail.SeatCount)" /></MudItem>
-                <MudItem xs="12" md="6"><InfoListItem Label="Chủ sở hữu" Value="@(_detail.OwnerName ?? "-")" /></MudItem>
-                <MudItem xs="12" md="6"><InfoListItem Label="CCCD chủ sở hữu" Value="@(_detail.OwnerCitizenId ?? "-")" /></MudItem>
-            </MudGrid>
+            <MudText Typo="Typo.h6" Class="mb-3">@(_detail.BusinessType == ContractBusinessType.Cargo ? "2. Văn phòng/Công ty và Chủ phương tiện" : "2. Phương tiện")</MudText>
+            @if (_detail.BusinessType == ContractBusinessType.Cargo)
+            {
+                <MudGrid>
+                    <MudItem xs="12" md="6"><InfoListItem Label="Tên Văn phòng/Công ty" Value="@(_detail.CompanyOfficeName ?? _detail.CompanyName)" /></MudItem>
+                    <MudItem xs="12" md="3"><InfoListItem Label="Mã số thuế" Value="@(_detail.CompanyTaxCode ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="3"><InfoListItem Label="GPKDVT" Value="@(_detail.CompanyBusinessLicenseNumber ?? "-")" /></MudItem>
+                    <MudItem xs="12"><InfoListItem Label="Địa chỉ" Value="@(_detail.CompanyAddress ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="Số điện thoại" Value="@(_detail.CompanyPhoneNumber ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="Tên người đại diện" Value="@(_detail.CompanyRepresentativeName ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="CCCD người đại diện" Value="@(_detail.CompanyRepresentativeCitizenId ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="Ngày cấp CCCD đại diện" Value="@FormatDate(_detail.CompanyRepresentativeCitizenIdIssuedDate)" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="Tên chủ phương tiện" Value="@(_detail.OwnerName ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="CCCD chủ phương tiện" Value="@(_detail.OwnerCitizenId ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="Ngày cấp CCCD chủ phương tiện" Value="@FormatDate(_detail.OwnerCitizenIdIssuedDate)" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="Biển kiểm soát" Value="@(_detail.VehiclePlate ?? "-")" /></MudItem>
+                </MudGrid>
+            }
+            else
+            {
+                <MudGrid>
+                    <MudItem xs="12" md="4"><InfoListItem Label="Biển kiểm soát" Value="@(_detail.VehiclePlate ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="Hãng/Loại xe" Value="@(_detail.VehicleBrand ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="Số chỗ" Value="@FormatNumber(_detail.SeatCount)" /></MudItem>
+                    <MudItem xs="12" md="6"><InfoListItem Label="Chủ sở hữu" Value="@(_detail.OwnerName ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="6"><InfoListItem Label="CCCD chủ sở hữu" Value="@(_detail.OwnerCitizenId ?? "-")" /></MudItem>
+                </MudGrid>
+            }
         </MudPaper>
 
         <MudPaper Class="pa-4" Elevation="1">
-            <MudText Typo="Typo.h6" Class="mb-3">3. Khách hàng/người thuê</MudText>
-            <MudGrid>
-                <MudItem xs="12" md="4"><InfoListItem Label="Khách hàng/người thuê" Value="@_detail.CustomerName" /></MudItem>
-                <MudItem xs="12" md="4"><InfoListItem Label="Số điện thoại" Value="@_detail.CustomerPhone" /></MudItem>
-                <MudItem xs="12" md="4"><InfoListItem Label="CCCD/MST" Value="@(_detail.CustomerCitizenId ?? "-")" /></MudItem>
-                <MudItem xs="12"><InfoListItem Label="Địa chỉ" Value="@(_detail.CustomerAddress ?? "-")" /></MudItem>
-            </MudGrid>
+            <MudText Typo="Typo.h6" Class="mb-3">@(_detail.BusinessType == ContractBusinessType.Cargo ? "3. Khách hàng / Bên A" : "3. Khách hàng/người thuê")</MudText>
+            @if (_detail.BusinessType == ContractBusinessType.Cargo)
+            {
+                <MudGrid>
+                    <MudItem xs="12" md="6"><InfoListItem Label="Tên công ty" Value="@_detail.CustomerName" /></MudItem>
+                    <MudItem xs="12" md="3"><InfoListItem Label="Mã số thuế" Value="@(_detail.CustomerTaxCode ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="3"><InfoListItem Label="Số điện thoại" Value="@_detail.CustomerPhone" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="Người đại diện" Value="@(_detail.CustomerRepresentativeName ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="CCCD" Value="@(_detail.CustomerCitizenId ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="Ngày cấp CCCD" Value="@FormatDate(_detail.CustomerCitizenIdIssuedDate)" /></MudItem>
+                    <MudItem xs="12"><InfoListItem Label="Địa chỉ" Value="@(_detail.CustomerAddress ?? "-")" /></MudItem>
+                </MudGrid>
+            }
+            else
+            {
+                <MudGrid>
+                    <MudItem xs="12" md="4"><InfoListItem Label="Khách hàng/người thuê" Value="@_detail.CustomerName" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="Số điện thoại" Value="@_detail.CustomerPhone" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="CCCD/MST" Value="@(_detail.CustomerCitizenId ?? "-")" /></MudItem>
+                    <MudItem xs="12"><InfoListItem Label="Địa chỉ" Value="@(_detail.CustomerAddress ?? "-")" /></MudItem>
+                </MudGrid>
+            }
         </MudPaper>
 
         <MudPaper Class="pa-4" Elevation="1">
@@ -99,16 +135,38 @@ else
                 <MudItem xs="12" md="3"><InfoListItem Label="Bắt đầu" Value="@FormatDateTime(_detail.StartTime)" /></MudItem>
                 <MudItem xs="12" md="3"><InfoListItem Label="Kết thúc" Value="@FormatDateTime(_detail.EndTime)" /></MudItem>
                 <MudItem xs="12" md="3"><InfoListItem Label="Tổng km" Value="@FormatDecimal(_detail.TotalKilometers)" /></MudItem>
-                <MudItem xs="12" md="3"><InfoListItem Label="Giá trị hợp đồng" Value="@FormatMoney(_detail.ContractValue)" /></MudItem>
-                <MudItem xs="12" md="6"><InfoListItem Label="Điểm đi" Value="@(_detail.PickupLocation ?? "-")" /></MudItem>
-                <MudItem xs="12" md="6"><InfoListItem Label="Điểm đến" Value="@(_detail.DropoffLocation ?? "-")" /></MudItem>
-                <MudItem xs="12"><InfoListItem Label="Lộ trình chi tiết" Value="@(_detail.RouteDescription ?? "-")" /></MudItem>
-                <MudItem xs="12" md="6"><InfoListItem Label="Hình thức thanh toán" Value="@(_detail.PaymentMethod ?? "-")" /></MudItem>
-                <MudItem xs="12" md="6"><InfoListItem Label="Thời gian thanh toán" Value="@(_detail.PaymentTime ?? "-")" /></MudItem>
+                <MudItem xs="12" md="3"><InfoListItem Label="@(_detail.BusinessType == ContractBusinessType.Cargo ? "Cước vận chuyển" : "Giá trị hợp đồng")" Value="@FormatMoney(_detail.ContractValue)" /></MudItem>
+                <MudItem xs="12" md="6"><InfoListItem Label="@(_detail.BusinessType == ContractBusinessType.Cargo ? "Nơi nhận hàng" : "Điểm đi")" Value="@(_detail.PickupLocation ?? "-")" /></MudItem>
+                <MudItem xs="12" md="6"><InfoListItem Label="@(_detail.BusinessType == ContractBusinessType.Cargo ? "Nơi trả hàng" : "Điểm đến")" Value="@(_detail.DropoffLocation ?? "-")" /></MudItem>
+                <MudItem xs="12"><InfoListItem Label="@(_detail.BusinessType == ContractBusinessType.Cargo ? "Hành trình xe chạy" : "Lộ trình chi tiết")" Value="@(_detail.RouteDescription ?? "-")" /></MudItem>
+                @if (_detail.BusinessType == ContractBusinessType.Cargo)
+                {
+                    <MudItem xs="12"><InfoListItem Label="Thanh toán" Value="@(_detail.PaymentMethod ?? "-")" /></MudItem>
+                }
+                else
+                {
+                    <MudItem xs="12" md="6"><InfoListItem Label="Hình thức thanh toán" Value="@(_detail.PaymentMethod ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="6"><InfoListItem Label="Thời gian thanh toán" Value="@(_detail.PaymentTime ?? "-")" /></MudItem>
+                }
                 <MudItem xs="12"><InfoListItem Label="Ghi chú" Value="@(_detail.Note ?? "-")" /></MudItem>
             </MudGrid>
         </MudPaper>
 
+        @if (_detail.BusinessType == ContractBusinessType.Cargo)
+        {
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudText Typo="Typo.h6" Class="mb-3">5. Thông tin hàng hóa</MudText>
+                <MudGrid>
+                    <MudItem xs="12" md="6"><InfoListItem Label="Loại hàng" Value="@(_detail.CargoName ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="6"><InfoListItem Label="Quy cách" Value="@(_detail.CargoSpecification ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="Số lượng" Value="@(_detail.CargoQuantity ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="6"><InfoListItem Label="Khối lượng" Value="@FormatDecimal(_detail.CargoWeight)" /></MudItem>
+                </MudGrid>
+            </MudPaper>
+        }
+
+        @if (_detail.BusinessType == ContractBusinessType.Passenger)
+        {
         <MudPaper Class="pa-4" Elevation="1">
             <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
                 <MudText Typo="Typo.h6">5. Danh sách hành khách</MudText>
@@ -141,6 +199,7 @@ else
                 <NoRecordsContent><MudText>Không có hành khách.</MudText></NoRecordsContent>
             </MudTable>
         </MudPaper>
+        }
 
         <MudPaper Class="pa-4" Elevation="1">
             <MudText Typo="Typo.h6" Class="mb-3">Lịch sử chữ ký</MudText>
@@ -151,7 +210,7 @@ else
                     <MudTh>Thời gian</MudTh>
                 </HeaderContent>
                 <RowTemplate>
-                    <MudTd DataLabel="Bên ký">@SignaturePartyName(context.Party)</MudTd>
+                    <MudTd DataLabel="Bên ký">@SignaturePartyName(context.Party, _detail.BusinessType)</MudTd>
                     <MudTd DataLabel="Người ký">@context.SignerName</MudTd>
                     <MudTd DataLabel="Thời gian">@VietnamTime(context.ServerSignedAt).ToString("dd/MM/yyyy HH:mm:ss")</MudTd>
                 </RowTemplate>
@@ -270,6 +329,9 @@ else
     private static string FormatDateTime(DateTime? value)
         => value.HasValue ? VietnamTime(value.Value).ToString("dd/MM/yyyy HH:mm") : "-";
 
+    private static string FormatDate(DateTime? value)
+        => value.HasValue ? value.Value.ToString("dd/MM/yyyy") : "-";
+
     private static string FormatMoney(decimal? value)
         => value.HasValue ? $"{value.Value:N0} VNĐ" : "-";
 
@@ -286,12 +348,12 @@ else
         _ => "Loại hợp đồng cũ"
     };
 
-    private static string SignaturePartyName(SignatureParty party) => party switch
+    private static string SignaturePartyName(SignatureParty party, ContractBusinessType businessType) => party switch
     {
         SignatureParty.RepresentativeOffice => "Công ty/Văn phòng",
-        SignatureParty.VehicleOwner => "Chủ sở hữu xe",
+        SignatureParty.VehicleOwner => "Chủ xe",
         SignatureParty.Driver => "Tài xế",
-        SignatureParty.Customer => "Khách hàng",
+        SignatureParty.Customer => businessType == ContractBusinessType.Cargo ? "Đại diện Bên A" : "Khách hàng",
         _ => party.ToString()
     };
 
