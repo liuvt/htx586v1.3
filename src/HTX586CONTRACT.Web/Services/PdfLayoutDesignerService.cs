@@ -26,44 +26,42 @@ public sealed class PdfLayoutDesignerService(
         WriteIndented = true
     };
 
-    public async Task<PdfLayoutDesignerDocument> LoadAsync(CancellationToken cancellationToken = default)
+    public async Task<PdfLayoutDesignerDocument> LoadAsync(
+        PdfLayoutDesignerContractType contractType = PdfLayoutDesignerContractType.Passenger,
+        CancellationToken cancellationToken = default)
     {
-        var templatePath = ResolveContentPath(
-            configuration["DocumentGeneration:ContractTemplatePath"],
-            Path.Combine("Templates", "Contracts", "HopDongVanChuyenHanhKhach.template.pdf"));
+        var paths = ResolveDesignerPaths(contractType);
 
-        var layoutPath = ResolveContentPath(
-            configuration["DocumentGeneration:ContractLayoutPath"],
-            Path.Combine("Templates", "Contracts", "HopDongVanChuyenHanhKhach.layout.json"));
+        if (!File.Exists(paths.TemplatePath))
+            throw new FileNotFoundException($"Không tìm thấy PDF template tại '{paths.TemplatePath}'.", paths.TemplatePath);
 
-        if (!File.Exists(templatePath))
-            throw new FileNotFoundException($"Không tìm thấy PDF template tại '{templatePath}'.", templatePath);
+        if (!File.Exists(paths.LayoutPath))
+            throw new FileNotFoundException($"Không tìm thấy layout JSON tại '{paths.LayoutPath}'.", paths.LayoutPath);
 
-        if (!File.Exists(layoutPath))
-            throw new FileNotFoundException($"Không tìm thấy layout JSON tại '{layoutPath}'.", layoutPath);
-
-        var layoutJson = await File.ReadAllTextAsync(layoutPath, cancellationToken);
+        var layoutJson = await File.ReadAllTextAsync(paths.LayoutPath, cancellationToken);
         var layout = JsonSerializer.Deserialize<PdfTemplateLayoutDto>(layoutJson, ReadJsonOptions)
             ?? throw new InvalidOperationException("Không thể đọc layout JSON.");
 
-        var pdfBytes = await File.ReadAllBytesAsync(templatePath, cancellationToken);
+        var pdfBytes = await File.ReadAllBytesAsync(paths.TemplatePath, cancellationToken);
 
         return new PdfLayoutDesignerDocument
         {
-            TemplatePath = templatePath,
-            LayoutPath = layoutPath,
+            ContractType = contractType,
+            ContractTypeName = GetContractTypeName(contractType),
+            TemplatePath = paths.TemplatePath,
+            LayoutPath = paths.LayoutPath,
             TemplateBase64 = Convert.ToBase64String(pdfBytes),
             Layout = layout
         };
     }
 
     public async Task SaveLayoutAsync(
+        PdfLayoutDesignerContractType contractType,
         PdfTemplateLayoutDto layout,
         CancellationToken cancellationToken = default)
     {
-        var layoutPath = ResolveContentPath(
-            configuration["DocumentGeneration:ContractLayoutPath"],
-            Path.Combine("Templates", "Contracts", "HopDongVanChuyenHanhKhach.layout.json"));
+        var paths = ResolveDesignerPaths(contractType);
+        var layoutPath = paths.LayoutPath;
 
         Directory.CreateDirectory(Path.GetDirectoryName(layoutPath)!);
 
@@ -73,13 +71,55 @@ public sealed class PdfLayoutDesignerService(
                 Path.GetDirectoryName(layoutPath)!,
                 $"{Path.GetFileName(layoutPath)}.bak-{DateTime.Now:yyyyMMddHHmmss}");
             File.Copy(layoutPath, backupPath, overwrite: false);
-            logger.LogInformation("Đã backup layout PDF. Backup={BackupPath}", backupPath);
+            logger.LogInformation(
+                "Đã backup layout PDF. ContractType={ContractType}, Backup={BackupPath}",
+                contractType,
+                backupPath);
         }
 
         var json = JsonSerializer.Serialize(layout, WriteJsonOptions);
         await File.WriteAllTextAsync(layoutPath, json, cancellationToken);
 
-        logger.LogInformation("Đã lưu layout PDF. Layout={LayoutPath}", layoutPath);
+        logger.LogInformation(
+            "Đã lưu layout PDF. ContractType={ContractType}, Layout={LayoutPath}",
+            contractType,
+            layoutPath);
+    }
+
+    public static string GetContractTypeName(PdfLayoutDesignerContractType contractType)
+        => contractType switch
+        {
+            PdfLayoutDesignerContractType.Cargo => "Hợp đồng vận chuyển hàng hóa",
+            _ => "Hợp đồng vận chuyển hành khách"
+        };
+
+    private DesignerPaths ResolveDesignerPaths(PdfLayoutDesignerContractType contractType)
+    {
+        var isCargo = contractType == PdfLayoutDesignerContractType.Cargo;
+
+        var templatePath = ResolveContentPath(
+            configuration[isCargo
+                ? "DocumentGeneration:CargoContractTemplatePath"
+                : "DocumentGeneration:ContractTemplatePath"],
+            Path.Combine(
+                "Templates",
+                "Contracts",
+                isCargo
+                    ? "HopDongVanChuyenHangHoa.template.pdf"
+                    : "HopDongVanChuyenHanhKhach.template.pdf"));
+
+        var layoutPath = ResolveContentPath(
+            configuration[isCargo
+                ? "DocumentGeneration:CargoContractLayoutPath"
+                : "DocumentGeneration:ContractLayoutPath"],
+            Path.Combine(
+                "Templates",
+                "Contracts",
+                isCargo
+                    ? "HopDongVanChuyenHangHoa.layout.json"
+                    : "HopDongVanChuyenHanhKhach.layout.json"));
+
+        return new DesignerPaths(templatePath, layoutPath);
     }
 
     private string ResolveContentPath(string? configuredPath, string defaultRelativePath)
@@ -92,12 +132,24 @@ public sealed class PdfLayoutDesignerService(
             ? path
             : Path.GetFullPath(Path.Combine(environment.ContentRootPath, path));
     }
+
+    private sealed record DesignerPaths(string TemplatePath, string LayoutPath);
+}
+
+public enum PdfLayoutDesignerContractType
+{
+    Passenger = 1,
+    Cargo = 2
 }
 
 public sealed class PdfLayoutDesignerDocument
 {
+    public PdfLayoutDesignerContractType ContractType { get; set; } = PdfLayoutDesignerContractType.Passenger;
+    public string ContractTypeName { get; set; } = string.Empty;
     public string TemplatePath { get; set; } = string.Empty;
     public string LayoutPath { get; set; } = string.Empty;
+    public string TemplateFileName => Path.GetFileName(TemplatePath);
+    public string LayoutFileName => Path.GetFileName(LayoutPath);
     public string TemplateBase64 { get; set; } = string.Empty;
     public PdfTemplateLayoutDto Layout { get; set; } = new();
 }

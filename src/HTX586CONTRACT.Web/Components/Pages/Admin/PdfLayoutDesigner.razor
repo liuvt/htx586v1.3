@@ -6,7 +6,7 @@
 @inject ISnackbar Snackbar
 
 <PageTitle>PDF Layout Designer</PageTitle>
-<PageHeader Title="PDF Layout Designer" Subtitle="Kéo thả để pin vị trí data trên mẫu hợp đồng PDF." />
+<PageHeader Title="PDF Layout Designer" Subtitle="Chọn HĐ hành khách hoặc HĐ hàng hóa, sau đó kéo thả để chỉnh layout JSON tương ứng." />
 
 @if (_loading)
 {
@@ -25,7 +25,24 @@ else if (_document is not null)
         <MudItem xs="12" lg="3">
             <MudPaper Class="pa-3 designer-panel" Elevation="1">
                 <MudText Typo="Typo.h6">Công cụ</MudText>
-                <MudText Typo="Typo.caption" Class="d-block mt-1">Layout: @_document.LayoutPath</MudText>
+
+                <MudSelect T="PdfLayoutDesignerContractType"
+                           Label="Loại hợp đồng"
+                           Dense="true"
+                           Class="mt-2"
+                           Value="@_contractType"
+                           ValueChanged="ChangeContractTypeAsync"
+                           Disabled="@_saving">
+                    <MudSelectItem T="PdfLayoutDesignerContractType" Value="@PdfLayoutDesignerContractType.Passenger">HĐ vận chuyển hành khách</MudSelectItem>
+                    <MudSelectItem T="PdfLayoutDesignerContractType" Value="@PdfLayoutDesignerContractType.Cargo">HĐ vận chuyển hàng hóa</MudSelectItem>
+                </MudSelect>
+
+                <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2">
+                    Đang chỉnh: <b>@_document.ContractTypeName</b>
+                </MudAlert>
+                <MudText Typo="Typo.caption" Class="d-block mt-2">PDF: @_document.TemplateFileName</MudText>
+                <MudText Typo="Typo.caption" Class="d-block">JSON: @_document.LayoutFileName</MudText>
+                <MudText Typo="Typo.caption" Class="d-block">Layout: @_document.LayoutPath</MudText>
 
                 <MudDivider Class="my-3" />
 
@@ -131,7 +148,7 @@ else if (_document is not null)
         <MudItem xs="12" lg="9">
             <MudPaper Class="pa-3 designer-workspace" Elevation="1">
                 <div class="pdf-layout-designer-toolbar">
-                    <MudText Typo="Typo.subtitle2">Preview template PDF</MudText>
+                    <MudText Typo="Typo.subtitle2">Preview: @_document.ContractTypeName</MudText>
                     <MudSpacer />
                     <MudChip T="string" Size="Size.Small" Color="Color.Info">@_fields.Count field</MudChip>
                 </div>
@@ -154,6 +171,7 @@ else if (_document is not null)
     private bool _designerInitialized;
     private string? _errorMessage;
     private double _zoom = 1.25d;
+    private PdfLayoutDesignerContractType _contractType = PdfLayoutDesignerContractType.Passenger;
 
     protected override async Task OnInitializedAsync()
     {
@@ -182,7 +200,7 @@ else if (_document is not null)
         {
             _loading = true;
             _errorMessage = null;
-            _document = await LayoutDesignerService.LoadAsync();
+            _document = await LayoutDesignerService.LoadAsync(_contractType);
             RebuildFields();
             _selectedField = _fields.FirstOrDefault();
             _selectedFieldId = _selectedField?.Id;
@@ -204,6 +222,17 @@ else if (_document is not null)
         _dotNetReference?.Dispose();
         _dotNetReference = null;
         await LoadDocumentAsync();
+    }
+
+    private async Task ChangeContractTypeAsync(PdfLayoutDesignerContractType contractType)
+    {
+        if (_saving || contractType == _contractType)
+            return;
+
+        _contractType = contractType;
+        _selectedField = null;
+        _selectedFieldId = null;
+        await ReloadAsync();
     }
 
     private void RebuildFields()
@@ -269,8 +298,8 @@ else if (_document is not null)
         {
             _saving = true;
             ApplyFieldsToLayout();
-            await LayoutDesignerService.SaveLayoutAsync(_document.Layout);
-            Snackbar.Add("Đã lưu layout.json và tự tạo file backup.", Severity.Success);
+            await LayoutDesignerService.SaveLayoutAsync(_contractType, _document.Layout);
+            Snackbar.Add($"Đã lưu JSON {_document.ContractTypeName} và tự tạo file backup.", Severity.Success);
         }
         catch (Exception ex)
         {
