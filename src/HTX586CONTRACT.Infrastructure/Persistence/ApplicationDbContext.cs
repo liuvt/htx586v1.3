@@ -22,6 +22,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<ContractTemplate> ContractTemplates => Set<ContractTemplate>();
     public DbSet<Contract> Contracts => Set<Contract>();
     public DbSet<ContractPassenger> ContractPassengers => Set<ContractPassenger>();
+    public DbSet<ContractCargoHandlingEvent> ContractCargoHandlingEvents => Set<ContractCargoHandlingEvent>();
     public DbSet<ContractSignature> ContractSignatures => Set<ContractSignature>();
     public DbSet<ContractAttachment> ContractAttachments => Set<ContractAttachment>();
     public DbSet<ContractAuditLog> ContractAuditLogs => Set<ContractAuditLog>();

@@ -150,7 +150,14 @@ public sealed class ContractService(
                 CargoWeight = x.CargoWeight,
                 CargoUnit = x.CargoUnit,
                 SecondDriverName = x.SecondDriverName,
+                SecondDriverPhoneNumber = x.SecondDriverPhoneNumber,
+                SecondDriverLicenseNumber = x.SecondDriverLicenseNumber,
                 SecondDriverLicenseClass = x.SecondDriverLicenseClass,
+                CargoTransportGoodsName = x.CargoTransportGoodsName,
+                CargoTransportRoute = x.CargoTransportRoute,
+                CargoLoadingPoint = x.CargoLoadingPoint,
+                CargoDeliveryPoint = x.CargoDeliveryPoint,
+                CargoOtherInformation = x.CargoOtherInformation,
                 PickupLocation = x.PickupLocation,
                 DropoffLocation = x.DropoffLocation,
                 StartTime = x.StartTime,
@@ -181,6 +188,20 @@ public sealed class ContractService(
                         FullName = p.FullName,
                         BirthYear = p.BirthYear,
                         Note = p.Note
+                    }).ToList(),
+                CargoHandlingEvents = x.CargoHandlingEvents
+                    .Where(e => !e.IsDeleted)
+                    .OrderBy(e => e.Type)
+                    .ThenBy(e => e.SortOrder)
+                    .Select(e => new ContractCargoHandlingEventDto
+                    {
+                        Id = e.Id,
+                        Type = e.Type,
+                        SortOrder = e.SortOrder,
+                        Location = e.Location,
+                        CargoWeight = e.CargoWeight,
+                        EventTime = e.EventTime,
+                        Confirmation = e.Confirmation
                     }).ToList(),
                 Signatures = x.Signatures
                     .Where(s => !s.IsDeleted)
@@ -290,16 +311,12 @@ public sealed class ContractService(
 
         if (!Enum.IsDefined(request.BusinessType))
             return new(false, null, "Loại hợp đồng không hợp lệ.");
+        var cargoHandlingError = ValidateCargoHandlingEvents(request);
+        if (cargoHandlingError is not null)
+            return new(false, null, cargoHandlingError);
         var passengerCount = CountPassengers(request.Passengers, request.CustomerTravelsWithGroup);
         if (request.BusinessType == ContractBusinessType.Passenger && passengerCount > 20)
             return new(false, null, "Danh sách hành khách tối đa 20 người theo mẫu PDF hiện tại.");
-        if (request.BusinessType == ContractBusinessType.Cargo && !canManage)
-        {
-            var cargoCustomerError = ValidateCargoCustomerRequest(request);
-            if (cargoCustomerError is not null)
-                return new(false, null, cargoCustomerError);
-        }
-
         var assignment = await ResolveAssignmentAsync(db, request, currentUserId, access, ct);
         if (assignment.Error is not null)
             return new(false, null, assignment.Error);
@@ -383,16 +400,12 @@ public sealed class ContractService(
             vehicle,
             now,
             customerResult.IsProvisional ? request : null);
+        ApplyOperatingDriverSnapshot(createdSnapshot, request);
+        ApplyOperatingDriverEntitySnapshot(entity, request);
         if (request.BusinessType == ContractBusinessType.Passenger)
-        {
-            ApplyOperatingDriverSnapshot(createdSnapshot, request);
-            ApplyOperatingDriverEntitySnapshot(entity, request);
             AddPassengers(entity, request.Passengers, currentUserId);
-        }
         else
-        {
-            ClearOperatingDriver(entity);
-        }
+            AddCargoHandlingEvents(entity, request.CargoHandlingEvents ?? [], currentUserId);
         entity.ContractDataJson = createdSnapshot.ToJson();
 
         if (canManage)
@@ -442,6 +455,7 @@ public sealed class ContractService(
         await using var db = await factory.CreateDbContextAsync(ct);
         var entity = await db.Contracts
             .Include(x => x.Passengers)
+            .Include(x => x.CargoHandlingEvents)
             .Include(x => x.Signatures)
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, ct);
         if (entity is null)
@@ -461,6 +475,10 @@ public sealed class ContractService(
             return new(false, id, "Quản lý chỉ được cập nhật hợp đồng thuộc Công ty/Văn phòng được gán.");
         if (!canManage && (!access.IsVehicleOwner || !string.Equals(entity.DriverId, currentUserId, StringComparison.Ordinal)))
             return new(false, id, "Bạn không có quyền cập nhật hợp đồng này.");
+
+        var cargoHandlingError = ValidateCargoHandlingEvents(request);
+        if (cargoHandlingError is not null)
+            return new(false, id, cargoHandlingError);
 
         var passengerCount = CountPassengers(request.Passengers, request.CustomerTravelsWithGroup);
         if (request.BusinessType == ContractBusinessType.Passenger && passengerCount > 20)
@@ -531,15 +549,8 @@ public sealed class ContractService(
             customerResult.Customer,
             vehicle,
             now);
-        if (request.BusinessType == ContractBusinessType.Passenger)
-        {
-            ApplyOperatingDriverEntitySnapshot(entity, request);
-            ApplyOperatingDriverSnapshot(updatedSnapshot, request);
-        }
-        else
-        {
-            ClearOperatingDriver(entity);
-        }
+        ApplyOperatingDriverEntitySnapshot(entity, request);
+        ApplyOperatingDriverSnapshot(updatedSnapshot, request);
 
         // Chân ký Chủ xe là snapshot theo từng HĐ. Khi chỉ sửa nội dung hoặc
         // đổi xe nhưng vẫn cùng Chủ xe, giữ nguyên ảnh đã chụp lúc tạo HĐ.
@@ -549,8 +560,11 @@ public sealed class ContractService(
 
         entity.ContractDataJson = updatedSnapshot.ToJson();
         db.ContractPassengers.RemoveRange(entity.Passengers);
+        db.ContractCargoHandlingEvents.RemoveRange(entity.CargoHandlingEvents);
         if (request.BusinessType == ContractBusinessType.Passenger)
             AddPassengers(entity, request.Passengers, currentUserId);
+        else
+            AddCargoHandlingEvents(entity, request.CargoHandlingEvents ?? [], currentUserId);
         entity.UpdatedAt = now;
         entity.UpdatedBy = currentUserId;
 
@@ -682,14 +696,15 @@ public sealed class ContractService(
         if (entity.Vehicle.AssignedDriverId != currentUserId)
             return new(false, id, "Xe của hợp đồng không còn được gán cho tài khoản này.");
 
-        if (entity.BusinessType == ContractBusinessType.Passenger)
-        {
-            if (string.IsNullOrWhiteSpace(entity.OperatingDriverName))
-                return new(false, id, "Vui lòng nhập họ tên người trực tiếp điều khiển xe.");
-            if (!AutomobileDrivingLicenseClasses.IsValid(entity.OperatingDriverLicenseClass))
-                return new(false, id, "Vui lòng chọn hạng GPLX ô tô hợp lệ cho người trực tiếp điều khiển xe.");
-        }
-        else
+        if (string.IsNullOrWhiteSpace(entity.OperatingDriverName))
+            return new(false, id, "Vui lòng nhập họ tên Tài xế 1.");
+        if (!AutomobileDrivingLicenseClasses.IsValid(entity.OperatingDriverLicenseClass))
+            return new(false, id, "Vui lòng chọn hạng GPLX ô tô hợp lệ cho Tài xế 1.");
+        if (!string.IsNullOrWhiteSpace(entity.SecondDriverName) &&
+            !AutomobileDrivingLicenseClasses.IsValid(entity.SecondDriverLicenseClass))
+            return new(false, id, "Vui lòng chọn hạng GPLX ô tô hợp lệ cho Tài xế 2.");
+
+        if (entity.BusinessType == ContractBusinessType.Cargo)
         {
             var cargoError = ValidateCargoForFinalization(entity);
             if (cargoError is not null)
@@ -703,9 +718,8 @@ public sealed class ContractService(
             ?? entity.Driver.VehicleOwnerSignatureFileUrl;
         if (string.IsNullOrWhiteSpace(vehicleOwnerSignatureUrl))
             return new(false, id, "Tài khoản Chủ xe chưa có chân ký cố định.");
-        if (entity.BusinessType == ContractBusinessType.Passenger &&
-            !entity.Signatures.Any(x => !x.IsDeleted && x.Party == SignatureParty.Driver))
-            return new(false, id, "Người lái thực tế chưa ký xác nhận hợp đồng trên điện thoại Chủ xe.");
+        if (!entity.Signatures.Any(x => !x.IsDeleted && x.Party == SignatureParty.Driver))
+            return new(false, id, "Tài xế 1 chưa ký xác nhận hợp đồng trên điện thoại Chủ xe.");
         if (!entity.Signatures.Any(x => !x.IsDeleted && x.Party == SignatureParty.Customer))
             return new(false, id, entity.BusinessType == ContractBusinessType.Cargo
                 ? "Đại diện Bên A chưa ký xác nhận hợp đồng trên điện thoại Chủ xe."
@@ -966,16 +980,15 @@ public sealed class ContractService(
         var passengerCount = CountPassengers(request.Passengers, request.CustomerTravelsWithGroup);
         if (entity.BusinessType == ContractBusinessType.Passenger && passengerCount > 20)
             return new(false, entity.Id, "Danh sách hành khách tối đa 20 người theo mẫu PDF hiện tại.");
-        if (entity.BusinessType == ContractBusinessType.Passenger &&
-            !string.IsNullOrWhiteSpace(request.OperatingDriverLicenseClass) &&
+        if (!string.IsNullOrWhiteSpace(request.OperatingDriverLicenseClass) &&
             !AutomobileDrivingLicenseClasses.IsValid(request.OperatingDriverLicenseClass))
-            return new(false, entity.Id, "Hạng GPLX ô tô của người trực tiếp điều khiển xe không hợp lệ.");
+            return new(false, entity.Id, "Hạng GPLX ô tô của Tài xế 1 không hợp lệ.");
+        if (!string.IsNullOrWhiteSpace(request.SecondDriverLicenseClass) &&
+            !AutomobileDrivingLicenseClasses.IsValid(request.SecondDriverLicenseClass))
+            return new(false, entity.Id, "Hạng GPLX ô tô của Tài xế 2 không hợp lệ.");
 
         Apply(entity, request);
-        if (entity.BusinessType == ContractBusinessType.Passenger)
-            ApplyOperatingDriverEntitySnapshot(entity, request);
-        else
-            ClearOperatingDriver(entity);
+        ApplyOperatingDriverEntitySnapshot(entity, request);
 
         ContractSnapshotData updatedSnapshot;
         if (entity.IsSelfCreated)
@@ -1005,13 +1018,15 @@ public sealed class ContractService(
                 null);
         }
 
-        if (entity.BusinessType == ContractBusinessType.Passenger)
-            ApplyOperatingDriverSnapshot(updatedSnapshot, request);
+        ApplyOperatingDriverSnapshot(updatedSnapshot, request);
         PreserveVehicleOwnerSignature(existingSnapshot, updatedSnapshot);
         entity.ContractDataJson = updatedSnapshot.ToJson();
         db.ContractPassengers.RemoveRange(entity.Passengers);
+        db.ContractCargoHandlingEvents.RemoveRange(entity.CargoHandlingEvents);
         if (entity.BusinessType == ContractBusinessType.Passenger)
             AddPassengers(entity, request.Passengers, currentUserId);
+        else
+            AddCargoHandlingEvents(entity, request.CargoHandlingEvents ?? [], currentUserId);
 
         // Assigned thể hiện nội dung đã lưu và có thể ghi nhận chữ ký khách hàng.
         // Received vẫn được giữ nếu tài khoản đã bấm nhận trước đó.
@@ -1478,6 +1493,22 @@ public sealed class ContractService(
         return (vehicle, vehicleOwner, selectedOfficeLink.CompanyProfile, null);
     }
 
+    private static string? ValidateCargoHandlingEvents(SaveContractRequest request)
+    {
+        if (request.BusinessType != ContractBusinessType.Cargo)
+            return null;
+
+        var events = request.CargoHandlingEvents ?? [];
+        if (events.Any(x => !Enum.IsDefined(x.Type)))
+            return "Loại xếp/dỡ hàng không hợp lệ.";
+        if (events.Count(x => x.Type == CargoHandlingType.Loading) > 3)
+            return "Chỉ được khai báo tối đa 3 lần xếp hàng.";
+        if (events.Count(x => x.Type == CargoHandlingType.Unloading) > 3)
+            return "Chỉ được khai báo tối đa 3 lần dỡ hàng.";
+
+        return null;
+    }
+
     private static string? ValidateDispatchPrerequisites(
         CompanyProfile company,
         ApplicationUser vehicleOwner,
@@ -1492,64 +1523,26 @@ public sealed class ContractService(
         if (missing.Count > 0)
             return $"Chưa thể phát hợp đồng xuống tài khoản nhận HĐ. Cần đủ 2 chân ký đầu tiên: {string.Join(" và ", missing)}.";
 
-        if (request.BusinessType == ContractBusinessType.Passenger)
-        {
-            if (string.IsNullOrWhiteSpace(request.OperatingDriverName))
-                return "Vui lòng nhập họ và tên người trực tiếp điều khiển xe trước khi phát hợp đồng.";
+        if (string.IsNullOrWhiteSpace(request.OperatingDriverName))
+            return "Vui lòng nhập họ và tên Tài xế 1 trước khi phát hợp đồng.";
 
-            if (!AutomobileDrivingLicenseClasses.IsValid(request.OperatingDriverLicenseClass))
-                return "Vui lòng chọn hạng GPLX ô tô hợp lệ cho người trực tiếp điều khiển xe trước khi phát hợp đồng.";
-        }
-        else
-        {
-            var cargoCustomerError = ValidateCargoCustomerRequest(request);
-            if (cargoCustomerError is not null)
-                return cargoCustomerError;
-        }
+        if (!AutomobileDrivingLicenseClasses.IsValid(request.OperatingDriverLicenseClass))
+            return "Vui lòng chọn hạng GPLX ô tô hợp lệ cho Tài xế 1 trước khi phát hợp đồng.";
 
-        return null;
-    }
+        if (!string.IsNullOrWhiteSpace(request.SecondDriverName) &&
+            !AutomobileDrivingLicenseClasses.IsValid(request.SecondDriverLicenseClass))
+            return "Nếu khai báo Tài xế 2, vui lòng chọn hạng GPLX ô tô hợp lệ cho Tài xế 2.";
 
-    private static string? ValidateCargoCustomerRequest(SaveContractRequest request)
-    {
-        if (!request.CustomerIsCompany)
-            return "Hợp đồng hàng hóa yêu cầu Bên A là Công ty/Doanh nghiệp theo mẫu hợp đồng.";
-        if (string.IsNullOrWhiteSpace(request.CustomerName))
-            return "Vui lòng nhập Tên công ty Bên A.";
-        if (string.IsNullOrWhiteSpace(request.CustomerTaxCode))
-            return "Vui lòng nhập Mã số thuế Bên A.";
-        if (string.IsNullOrWhiteSpace(request.CustomerRepresentativeName))
-            return "Vui lòng nhập Người đại diện Bên A.";
-        if (string.IsNullOrWhiteSpace(request.CustomerCitizenId))
-            return "Vui lòng nhập CCCD người đại diện Bên A.";
-        if (request.CustomerCitizenIdIssuedDate is null)
-            return "Vui lòng nhập Ngày cấp CCCD người đại diện Bên A.";
-        if (string.IsNullOrWhiteSpace(request.CustomerPhone))
-            return "Vui lòng nhập Điện thoại Bên A.";
-        if (string.IsNullOrWhiteSpace(request.CustomerAddress))
-            return "Vui lòng nhập Địa chỉ Bên A.";
         return null;
     }
 
     private static string? ValidateCargoForFinalization(Contract entity)
     {
         var customer = entity.Customer;
-        if (customer is null || (customer.Type != CustomerType.Organization && string.IsNullOrWhiteSpace(customer.OrganizationName)))
-            return "Hợp đồng hàng hóa yêu cầu Bên A là Công ty/Doanh nghiệp.";
-        if (string.IsNullOrWhiteSpace(customer.OrganizationName))
-            return "Vui lòng bổ sung Tên công ty Bên A.";
-        if (string.IsNullOrWhiteSpace(customer.TaxCode))
-            return "Vui lòng bổ sung Mã số thuế Bên A.";
-        if (string.IsNullOrWhiteSpace(customer.FullName))
-            return "Vui lòng bổ sung Người đại diện Bên A.";
-        if (string.IsNullOrWhiteSpace(customer.CitizenId))
-            return "Vui lòng bổ sung CCCD người đại diện Bên A.";
-        if (customer.CitizenIdIssuedDate is null)
-            return "Vui lòng bổ sung Ngày cấp CCCD người đại diện Bên A.";
+        if (customer is null || string.IsNullOrWhiteSpace(customer.FullName))
+            return "Vui lòng bổ sung thông tin khách hàng/Bên A.";
         if (string.IsNullOrWhiteSpace(customer.PhoneNumber))
-            return "Vui lòng bổ sung Điện thoại Bên A.";
-        if (string.IsNullOrWhiteSpace(customer.Address))
-            return "Vui lòng bổ sung Địa chỉ Bên A.";
+            return "Vui lòng bổ sung số điện thoại khách hàng/Bên A.";
 
         if (string.IsNullOrWhiteSpace(entity.CargoName))
             return "Vui lòng nhập Loại hàng trước khi ký/hoàn thành hợp đồng hàng hóa.";
@@ -1585,6 +1578,8 @@ public sealed class ContractService(
         entity.OperatingDriverLicenseNumber = null;
         entity.OperatingDriverLicenseClass = null;
         entity.SecondDriverName = null;
+        entity.SecondDriverPhoneNumber = null;
+        entity.SecondDriverLicenseNumber = null;
         entity.SecondDriverLicenseClass = null;
     }
 
@@ -1699,7 +1694,23 @@ public sealed class ContractService(
         entity.OperatingDriverLicenseNumber = N(request.OperatingDriverLicenseNumber);
         entity.OperatingDriverLicenseClass = N(request.OperatingDriverLicenseClass);
         entity.SecondDriverName = N(request.SecondDriverName);
-        entity.SecondDriverLicenseClass = N(request.SecondDriverLicenseClass);
+        if (entity.SecondDriverName is null)
+        {
+            entity.SecondDriverPhoneNumber = null;
+            entity.SecondDriverLicenseNumber = null;
+            entity.SecondDriverLicenseClass = null;
+        }
+        else
+        {
+            entity.SecondDriverPhoneNumber = N(request.SecondDriverPhoneNumber);
+            entity.SecondDriverLicenseNumber = N(request.SecondDriverLicenseNumber);
+            entity.SecondDriverLicenseClass = N(request.SecondDriverLicenseClass);
+        }
+        entity.CargoTransportGoodsName = request.BusinessType == ContractBusinessType.Cargo ? N(request.CargoTransportGoodsName) : null;
+        entity.CargoTransportRoute = request.BusinessType == ContractBusinessType.Cargo ? N(request.CargoTransportRoute) : null;
+        entity.CargoLoadingPoint = request.BusinessType == ContractBusinessType.Cargo ? N(request.CargoLoadingPoint) : null;
+        entity.CargoDeliveryPoint = request.BusinessType == ContractBusinessType.Cargo ? N(request.CargoDeliveryPoint) : null;
+        entity.CargoOtherInformation = request.BusinessType == ContractBusinessType.Cargo ? N(request.CargoOtherInformation) : null;
         entity.PickupLocation = N(request.PickupLocation);
         entity.DropoffLocation = N(request.DropoffLocation);
         entity.StartTime = request.StartTime;
@@ -1755,6 +1766,34 @@ public sealed class ContractService(
                 Note = N(item.x.Note),
                 CreatedBy = userId
             });
+        }
+    }
+
+    private static void AddCargoHandlingEvents(
+        Contract entity,
+        IEnumerable<ContractCargoHandlingEventDto> events,
+        string userId)
+    {
+        foreach (var type in new[] { CargoHandlingType.Loading, CargoHandlingType.Unloading })
+        {
+            var rows = events
+                .Where(x => x.Type == type)
+                .Take(3)
+                .Select((x, index) => (x, index));
+
+            foreach (var item in rows)
+            {
+                entity.CargoHandlingEvents.Add(new ContractCargoHandlingEvent
+                {
+                    Type = type,
+                    SortOrder = item.index + 1,
+                    Location = N(item.x.Location),
+                    CargoWeight = N(item.x.CargoWeight),
+                    EventTime = item.x.EventTime,
+                    Confirmation = N(item.x.Confirmation),
+                    CreatedBy = userId
+                });
+            }
         }
     }
 

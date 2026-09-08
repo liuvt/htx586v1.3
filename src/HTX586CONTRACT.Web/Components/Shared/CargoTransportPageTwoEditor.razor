@@ -1,0 +1,145 @@
+<MudPaper Class="pa-4" Elevation="0" Outlined="true">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+        <div>
+            <MudText Typo="Typo.h6">Thông tin trang 2 - Giấy vận tải</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Các vị trí không nhập sẽ tự hiển thị N/A trên PDF.</MudText>
+        </div>
+    </MudStack>
+
+    <MudGrid Spacing="2">
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="Model.CargoTransportRoute" Label="Tuyến vận chuyển" Lines="2" Variant="Variant.Outlined" Disabled="@Disabled" />
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="Model.CargoTransportGoodsName" Label="Tên hàng hóa" Lines="2" Variant="Variant.Outlined" Disabled="@Disabled" />
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="Model.CargoLoadingPoint" Label="Điểm xếp hàng" Lines="2" Variant="Variant.Outlined" Disabled="@Disabled" />
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudTextField @bind-Value="Model.CargoDeliveryPoint" Label="Điểm giao hàng" Lines="2" Variant="Variant.Outlined" Disabled="@Disabled" />
+        </MudItem>
+        <MudItem xs="12">
+            <MudTextField @bind-Value="Model.CargoOtherInformation" Label="Thông tin khác" Lines="2" Variant="Variant.Outlined" Disabled="@Disabled" />
+        </MudItem>
+    </MudGrid>
+
+    <MudDivider Class="my-4" />
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+        <div>
+            <MudText Typo="Typo.subtitle1">Xếp / dỡ hàng</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Tối đa 3 lần xếp và 3 lần dỡ.</MudText>
+        </div>
+        <MudSpacer />
+        @if (!Disabled)
+        {
+            <MudMenu Label="+ Thêm xếp/dỡ" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add">
+                <MudMenuItem Disabled="@(LoadingCount >= 3)" OnClick="@(() => AddEvent(CargoHandlingType.Loading))">Xếp hàng</MudMenuItem>
+                <MudMenuItem Disabled="@(UnloadingCount >= 3)" OnClick="@(() => AddEvent(CargoHandlingType.Unloading))">Dỡ hàng</MudMenuItem>
+            </MudMenu>
+        }
+    </MudStack>
+
+    @if (Model.CargoHandlingEvents.Count == 0)
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">Chưa khai báo lần xếp/dỡ nào. PDF sẽ điền N/A tại các vị trí tương ứng.</MudAlert>
+    }
+    else
+    {
+        @foreach (var item in OrderedEvents)
+        {
+            var isLoading = item.Type == CargoHandlingType.Loading;
+            <MudPaper Class="pa-3 mb-3" Elevation="0" Style="border:1px solid var(--mud-palette-lines-default); border-radius:12px;">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+                    <MudChip T="string" Color="@(isLoading ? Color.Primary : Color.Secondary)" Variant="Variant.Outlined">
+                        @(isLoading ? $"Xếp lần {item.SortOrder}" : $"Dỡ lần {item.SortOrder}")
+                    </MudChip>
+                    <MudSpacer />
+                    @if (!Disabled)
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" title="Xóa dòng" OnClick="@(() => RemoveEvent(item))" />
+                    }
+                </MudStack>
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" md="6">
+                        <MudTextField @bind-Value="item.Location" Label="Địa điểm" Lines="2" Variant="Variant.Outlined" Disabled="@Disabled" />
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudTextField @bind-Value="item.CargoWeight" Label="Khối lượng hàng" Variant="Variant.Outlined" Disabled="@Disabled" />
+                    </MudItem>
+                    <MudItem xs="12" md="3">
+                        <MudDatePicker Date="@(item.EventTime?.Date)"
+                                       DateChanged="@(value => SetEventDate(item, value))"
+                                       Label="Ngày" DateFormat="dd/MM/yyyy" Editable="true" Clearable="true"
+                                       Variant="Variant.Outlined" Disabled="@Disabled" Culture="@AppCulture.Vietnamese" />
+                        <MudTimePicker Time="@(item.EventTime?.TimeOfDay)"
+                                       TimeChanged="@(value => SetEventClock(item, value))"
+                                       Label="Giờ" TimeFormat="HH:mm" Editable="true" Clearable="true"
+                                       Variant="Variant.Outlined" Disabled="@Disabled" Culture="@AppCulture.Vietnamese" Class="mt-2" />
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="item.Confirmation"
+                                      Label="@(isLoading ? "Xác nhận của người xếp hàng" : "Xác nhận của người dỡ hàng")"
+                                      Lines="2" Variant="Variant.Outlined" Disabled="@Disabled" />
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        }
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public SaveContractRequest Model { get; set; } = null!;
+    [Parameter] public bool Disabled { get; set; }
+
+    private int LoadingCount => Model.CargoHandlingEvents.Count(x => x.Type == CargoHandlingType.Loading);
+    private int UnloadingCount => Model.CargoHandlingEvents.Count(x => x.Type == CargoHandlingType.Unloading);
+    private IEnumerable<ContractCargoHandlingEventDto> OrderedEvents => Model.CargoHandlingEvents
+        .OrderBy(x => x.Type)
+        .ThenBy(x => x.SortOrder);
+
+    private void AddEvent(CargoHandlingType type)
+    {
+        var count = Model.CargoHandlingEvents.Count(x => x.Type == type);
+        if (count >= 3)
+            return;
+        Model.CargoHandlingEvents.Add(new ContractCargoHandlingEventDto
+        {
+            Type = type,
+            SortOrder = count + 1
+        });
+    }
+
+    private void RemoveEvent(ContractCargoHandlingEventDto item)
+    {
+        Model.CargoHandlingEvents.Remove(item);
+        Reorder(item.Type);
+    }
+
+    private static void SetEventDate(ContractCargoHandlingEventDto item, DateTime? date)
+    {
+        if (date is null)
+        {
+            item.EventTime = null;
+            return;
+        }
+        item.EventTime = date.Value.Date + (item.EventTime?.TimeOfDay ?? TimeSpan.Zero);
+    }
+
+    private static void SetEventClock(ContractCargoHandlingEventDto item, TimeSpan? time)
+    {
+        if (time is null)
+        {
+            item.EventTime = item.EventTime?.Date;
+            return;
+        }
+        item.EventTime = (item.EventTime?.Date ?? DateTime.Today) + time.Value;
+    }
+
+    private void Reorder(CargoHandlingType type)
+    {
+        var index = 1;
+        foreach (var item in Model.CargoHandlingEvents.Where(x => x.Type == type).OrderBy(x => x.SortOrder))
+            item.SortOrder = index++;
+    }
+}

@@ -322,7 +322,7 @@ public sealed class PdfContractTemplateRenderer(
             !string.IsNullOrWhiteSpace(snapshot.Customer.OrganizationName);
         var customerIsCompany = snapshotCustomerIsCompany || liveCustomerIsCompany;
 
-        var customerName = snapshot is not null
+        var customerLegalName = snapshot is not null
             ? First(
                 snapshot.Customer.OrganizationName,
                 customerIsCompany ? customer?.OrganizationName : null,
@@ -330,6 +330,10 @@ public sealed class PdfContractTemplateRenderer(
                 snapshot.Customer.FullName,
                 "...")
             : First(contract.CustomerNameSnapshot, customer?.OrganizationName, customer?.FullName, "...");
+        // Theo nghiệp vụ: nếu khách hàng không phải B2B thì trên dòng tên pháp nhân
+        // của hợp đồng luôn ghi "Khách hàng cá nhân" và MST = N/A. Họ tên thật
+        // vẫn được dùng ở trường người đại diện/người ký.
+        var customerName = customerIsCompany ? customerLegalName : "Khách hàng cá nhân";
 
         // Một số snapshot B2B legacy được tạo từ CustomerNameSnapshot nên
         // Customer.FullName bị lưu thành chính tên công ty. Với trường hợp này,
@@ -426,7 +430,9 @@ public sealed class PdfContractTemplateRenderer(
             ["OWNER_ISSUED_PLACE"] = FrozenText(snapshot?.Vehicle.OwnerCitizenIdIssuedPlace, vehicle?.OwnerCitizenIdIssuedPlace, "..."),
 
             ["CUSTOMER_NAME"] = customerName,
-            ["CUSTOMER_TAX_CODE"] = FrozenText(snapshot?.Customer.TaxCode, customer?.TaxCode, "..."),
+            ["CUSTOMER_TAX_CODE"] = customerIsCompany
+                ? FrozenText(snapshot?.Customer.TaxCode, customer?.TaxCode, "N/A")
+                : "N/A",
             ["CUSTOMER_PHONE"] = FrozenText(snapshot?.Customer.PhoneNumber, contract.CustomerPhoneSnapshot, customer?.PhoneNumber, "..."),
             ["CUSTOMER_ADDRESS"] = FrozenText(snapshot?.Customer.Address, contract.CustomerAddressSnapshot, customer?.Address, "..."),
             ["CUSTOMER_CITIZEN_ID"] = FrozenText(snapshot?.Customer.CitizenId, contract.CustomerCitizenIdSnapshot, customer?.CitizenId, "..."),
@@ -448,7 +454,9 @@ public sealed class PdfContractTemplateRenderer(
                 driver?.DriverLicenseClass,
                 "..."),
             ["SECOND_DRIVER_NAME"] = First(contract.SecondDriverName, "Không có"),
-            ["SECOND_DRIVER_LICENSE_CLASS"] = First(contract.SecondDriverLicenseClass, "-"),
+            ["SECOND_DRIVER_PHONE"] = First(contract.SecondDriverPhoneNumber, "N/A"),
+            ["SECOND_DRIVER_LICENSE_NUMBER"] = First(contract.SecondDriverLicenseNumber, "N/A"),
+            ["SECOND_DRIVER_LICENSE_CLASS"] = First(contract.SecondDriverLicenseClass, "N/A"),
 
             ["PICKUP_DATETIME_LOCATION"] = BuildDateTimeLocation(contract.StartTime, contract.PickupLocation),
             ["DROPOFF_DATETIME_LOCATION"] = BuildDateTimeLocation(contract.EndTime, contract.DropoffLocation),
@@ -478,6 +486,33 @@ public sealed class PdfContractTemplateRenderer(
                 : $"{contract.ContractValue.Value.ToString("N0", CultureInfo.GetCultureInfo("vi-VN"))} đồng",
             ["PAYMENT_DESCRIPTION"] = JoinNonEmpty(" - ", contract.PaymentMethod, contract.PaymentTime),
 
+            // Trang 2 - GIẤY VẬN TẢI của HĐ hàng hóa. Các vị trí không có dữ liệu
+            // được ghi N/A theo yêu cầu nghiệp vụ.
+            ["TRANSPORT_CONTRACT_NUMBER"] = First(contract.ContractNumber, "N/A"),
+            ["TRANSPORT_VALID_UNTIL"] = contract.EndTime is null ? "N/A" : VietnamTime(contract.EndTime.Value).ToString("dd/MM/yyyy"),
+            ["TRANSPORT_VEHICLE_PLATE"] = FrozenText(snapshot?.Vehicle.PlateNumber, contract.VehiclePlateSnapshot, vehicle?.PlateNumber, "N/A"),
+            ["TRANSPORT_COMPANY_NAME"] = companyOfficeName,
+            ["TRANSPORT_COMPANY_TAX_CODE"] = FrozenText(snapshot?.Company.TaxCode, contract.CompanyTaxCodeSnapshot, company?.TaxCode, "N/A"),
+            ["TRANSPORT_COMPANY_LICENSE"] = FrozenText(snapshot?.Company.BusinessLicenseNumber, company?.BusinessLicenseNumber, "N/A"),
+            ["TRANSPORT_COMPANY_ADDRESS"] = FrozenText(snapshot?.Company.Address, contract.CompanyAddressSnapshot, company?.Address, "N/A"),
+            ["TRANSPORT_COMPANY_REPRESENTATIVE"] = FrozenText(snapshot?.Company.RepresentativeName, contract.CompanyRepresentativeSnapshot, company?.RepresentativeName, "N/A"),
+            ["TRANSPORT_COMPANY_REP_CITIZEN_ID"] = FrozenText(snapshot?.Company.RepresentativeCitizenId, company?.RepresentativeCitizenId, "N/A"),
+            ["TRANSPORT_COMPANY_PHONE"] = FrozenText(snapshot?.Company.PhoneNumber, company?.PhoneNumber, "N/A"),
+            ["TRANSPORT_DRIVER1_NAME"] = First(driverName, "N/A"),
+            ["TRANSPORT_DRIVER1_LICENSE_NUMBER"] = First(contract.OperatingDriverLicenseNumber, snapshot?.Driver.DriverLicenseNumber, contract.DriverLicenseNumberSnapshot, "N/A"),
+            ["TRANSPORT_DRIVER2_NAME"] = First(contract.SecondDriverName, "Không có"),
+            ["TRANSPORT_DRIVER2_LICENSE_NUMBER"] = string.IsNullOrWhiteSpace(contract.SecondDriverName)
+                ? "N/A"
+                : First(contract.SecondDriverLicenseNumber, "N/A"),
+            ["TRANSPORT_ROUTE"] = First(contract.CargoTransportRoute, "N/A"),
+            ["TRANSPORT_GOODS_NAME"] = First(contract.CargoTransportGoodsName, "N/A"),
+            ["TRANSPORT_LOADING_POINT"] = First(contract.CargoLoadingPoint, "N/A"),
+            ["TRANSPORT_CARGO_WEIGHT"] = contract.CargoWeight is null
+                ? "N/A"
+                : contract.CargoWeight.Value.ToString("N2", CultureInfo.GetCultureInfo("vi-VN")),
+            ["TRANSPORT_DELIVERY_POINT"] = First(contract.CargoDeliveryPoint, "N/A"),
+            ["TRANSPORT_OTHER_INFO"] = First(contract.CargoOtherInformation, "N/A"),
+
             ["SIG_OFFICE_NAME"] = FrozenText(
                 snapshot?.Company.RepresentativeName,
                 contract.CompanyRepresentativeSnapshot,
@@ -492,6 +527,31 @@ public sealed class PdfContractTemplateRenderer(
             ["SIG_DRIVER_NAME"] = driverName,
             ["VERIFY_CODE"] = ShortHash(contract.ContractHash ?? contract.Id.ToString("N"))
         };
+
+        if (isCargo)
+        {
+            foreach (var type in new[] { CargoHandlingType.Loading, CargoHandlingType.Unloading })
+            {
+                var prefix = type == CargoHandlingType.Loading ? "LOAD" : "UNLOAD";
+                var rows = contract.CargoHandlingEvents
+                    .Where(x => !x.IsDeleted && x.Type == type)
+                    .OrderBy(x => x.SortOrder)
+                    .ThenBy(x => x.CreatedAt)
+                    .Take(3)
+                    .ToList();
+
+                for (var index = 1; index <= 3; index++)
+                {
+                    var item = index <= rows.Count ? rows[index - 1] : null;
+                    values[$"{prefix}{index}_LOCATION"] = First(item?.Location, "N/A");
+                    values[$"{prefix}{index}_WEIGHT"] = First(item?.CargoWeight, "N/A");
+                    values[$"{prefix}{index}_TIME"] = item?.EventTime is null
+                        ? "N/A"
+                        : VietnamTime(item.EventTime.Value).ToString("dd/MM/yyyy HH:mm");
+                    values[$"{prefix}{index}_CONFIRMATION"] = First(item?.Confirmation, "N/A");
+                }
+            }
+        }
 
         // Khách thuê/người đặt đi cùng được dành cố định vị trí số 1 trên
         // danh sách hành khách. Các hành khách nhập bổ sung được dời xuống từ số 2.

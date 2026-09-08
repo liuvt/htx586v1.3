@@ -22,6 +22,18 @@ public sealed class ContractPassengerDto
     public string? Note { get; set; }
 }
 
+
+public sealed class ContractCargoHandlingEventDto
+{
+    public Guid? Id { get; set; }
+    public CargoHandlingType Type { get; set; } = CargoHandlingType.Loading;
+    public int SortOrder { get; set; }
+    public string? Location { get; set; }
+    public string? CargoWeight { get; set; }
+    public DateTime? EventTime { get; set; }
+    public string? Confirmation { get; set; }
+}
+
 public sealed class ContractSignatureDto
 {
     public Guid Id { get; set; }
@@ -100,7 +112,15 @@ public sealed class ContractDetailDto
     public string? OperatingDriverLicenseNumber { get; set; }
     public string? OperatingDriverLicenseClass { get; set; }
     public string? SecondDriverName { get; set; }
+    public string? SecondDriverPhoneNumber { get; set; }
+    public string? SecondDriverLicenseNumber { get; set; }
     public string? SecondDriverLicenseClass { get; set; }
+
+    public string? CargoTransportGoodsName { get; set; }
+    public string? CargoTransportRoute { get; set; }
+    public string? CargoLoadingPoint { get; set; }
+    public string? CargoDeliveryPoint { get; set; }
+    public string? CargoOtherInformation { get; set; }
 
     public string? CargoName { get; set; }
     public string? CargoSpecification { get; set; }
@@ -131,6 +151,7 @@ public sealed class ContractDetailDto
     public DateTime? LockedAt { get; set; }
 
     public List<ContractPassengerDto> Passengers { get; set; } = [];
+    public List<ContractCargoHandlingEventDto> CargoHandlingEvents { get; set; } = [];
     public List<ContractSignatureDto> Signatures { get; set; } = [];
 }
 
@@ -171,7 +192,15 @@ public sealed class SaveContractRequest
     public string? OperatingDriverLicenseNumber { get; set; }
     public string? OperatingDriverLicenseClass { get; set; }
     public string? SecondDriverName { get; set; }
+    public string? SecondDriverPhoneNumber { get; set; }
+    public string? SecondDriverLicenseNumber { get; set; }
     public string? SecondDriverLicenseClass { get; set; }
+
+    public string? CargoTransportGoodsName { get; set; }
+    public string? CargoTransportRoute { get; set; }
+    public string? CargoLoadingPoint { get; set; }
+    public string? CargoDeliveryPoint { get; set; }
+    public string? CargoOtherInformation { get; set; }
 
     public string? CargoName { get; set; }
     public string? CargoSpecification { get; set; }
@@ -190,6 +219,7 @@ public sealed class SaveContractRequest
     public string? Note { get; set; }
     public ContractStatus Status { get; set; } = ContractStatus.Created;
     public List<ContractPassengerDto> Passengers { get; set; } = [];
+    public List<ContractCargoHandlingEventDto> CargoHandlingEvents { get; set; } = [];
 }
 
 public sealed record SaveContractResult(bool Succeeded, Guid? Id, string Message);

@@ -91,6 +91,12 @@ else
                     <MudItem xs="12" md="4"><InfoListItem Label="CCCD chủ phương tiện" Value="@(_detail.OwnerCitizenId ?? "-")" /></MudItem>
                     <MudItem xs="12" md="4"><InfoListItem Label="Ngày cấp CCCD chủ phương tiện" Value="@FormatDate(_detail.OwnerCitizenIdIssuedDate)" /></MudItem>
                     <MudItem xs="12" md="4"><InfoListItem Label="Biển kiểm soát" Value="@(_detail.VehiclePlate ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="Tài xế 1" Value="@(_detail.OperatingDriverName ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="Số GPLX TX1" Value="@(_detail.OperatingDriverLicenseNumber ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="Hạng GPLX TX1" Value="@(_detail.OperatingDriverLicenseClass ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="Tài xế 2" Value="@(string.IsNullOrWhiteSpace(_detail.SecondDriverName) ? "Không có" : _detail.SecondDriverName)" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="Số GPLX TX2" Value="@(string.IsNullOrWhiteSpace(_detail.SecondDriverName) ? "N/A" : _detail.SecondDriverLicenseNumber ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="Hạng GPLX TX2" Value="@(string.IsNullOrWhiteSpace(_detail.SecondDriverName) ? "N/A" : _detail.SecondDriverLicenseClass ?? "-")" /></MudItem>
                 </MudGrid>
             }
             else
@@ -110,10 +116,10 @@ else
             @if (_detail.BusinessType == ContractBusinessType.Cargo)
             {
                 <MudGrid>
-                    <MudItem xs="12" md="6"><InfoListItem Label="Tên công ty" Value="@_detail.CustomerName" /></MudItem>
-                    <MudItem xs="12" md="3"><InfoListItem Label="Mã số thuế" Value="@(_detail.CustomerTaxCode ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="6"><InfoListItem Label="@(_detail.CustomerIsCompany ? "Tên công ty" : "Khách hàng")" Value="@(_detail.CustomerIsCompany ? _detail.CustomerName : "Khách hàng cá nhân")" /></MudItem>
+                    <MudItem xs="12" md="3"><InfoListItem Label="Mã số thuế" Value="@(_detail.CustomerIsCompany ? _detail.CustomerTaxCode ?? "N/A" : "N/A")" /></MudItem>
                     <MudItem xs="12" md="3"><InfoListItem Label="Số điện thoại" Value="@_detail.CustomerPhone" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="Người đại diện" Value="@(_detail.CustomerRepresentativeName ?? "-")" /></MudItem>
+                    <MudItem xs="12" md="4"><InfoListItem Label="Người đại diện/Khách hàng" Value="@(_detail.CustomerIsCompany ? _detail.CustomerRepresentativeName ?? "-" : _detail.CustomerName)" /></MudItem>
                     <MudItem xs="12" md="4"><InfoListItem Label="CCCD" Value="@(_detail.CustomerCitizenId ?? "-")" /></MudItem>
                     <MudItem xs="12" md="4"><InfoListItem Label="Ngày cấp CCCD" Value="@FormatDate(_detail.CustomerCitizenIdIssuedDate)" /></MudItem>
                     <MudItem xs="12"><InfoListItem Label="Địa chỉ" Value="@(_detail.CustomerAddress ?? "-")" /></MudItem>
@@ -162,7 +168,28 @@ else
                     <MudItem xs="12" md="6"><InfoListItem Label="Quy cách" Value="@(_detail.CargoSpecification ?? "-")" /></MudItem>
                     <MudItem xs="12" md="4"><InfoListItem Label="Số lượng" Value="@(_detail.CargoQuantity ?? "-")" /></MudItem>
                     <MudItem xs="12" md="6"><InfoListItem Label="Khối lượng" Value="@FormatDecimal(_detail.CargoWeight)" /></MudItem>
+                    <MudItem xs="12"><InfoListItem Label="Tên hàng hóa (Giấy vận tải)" Value="@(_detail.CargoTransportGoodsName ?? "N/A")" /></MudItem>
+                    <MudItem xs="12"><InfoListItem Label="Tuyến vận chuyển" Value="@(_detail.CargoTransportRoute ?? "N/A")" /></MudItem>
+                    <MudItem xs="12" md="6"><InfoListItem Label="Điểm xếp hàng" Value="@(_detail.CargoLoadingPoint ?? "N/A")" /></MudItem>
+                    <MudItem xs="12" md="6"><InfoListItem Label="Điểm giao hàng" Value="@(_detail.CargoDeliveryPoint ?? "N/A")" /></MudItem>
+                    <MudItem xs="12"><InfoListItem Label="Thông tin khác" Value="@(_detail.CargoOtherInformation ?? "N/A")" /></MudItem>
                 </MudGrid>
+                @if (_detail.CargoHandlingEvents.Count > 0)
+                {
+                    <MudTable T="ContractCargoHandlingEventDto" Items="@_detail.CargoHandlingEvents.OrderBy(x => x.Type).ThenBy(x => x.SortOrder)" Dense="true" Hover="true" Class="mt-3">
+                        <HeaderContent>
+                            <MudTh>Loại</MudTh><MudTh>Lần</MudTh><MudTh>Địa điểm</MudTh><MudTh>Khối lượng</MudTh><MudTh>Thời gian</MudTh><MudTh>Xác nhận</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@(context.Type == CargoHandlingType.Loading ? "Xếp" : "Dỡ")</MudTd>
+                            <MudTd>@context.SortOrder</MudTd>
+                            <MudTd>@(context.Location ?? "N/A")</MudTd>
+                            <MudTd>@(context.CargoWeight ?? "N/A")</MudTd>
+                            <MudTd>@(context.EventTime.HasValue ? FormatDateTime(context.EventTime) : "N/A")</MudTd>
+                            <MudTd>@(context.Confirmation ?? "N/A")</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                }
             </MudPaper>
         }
 

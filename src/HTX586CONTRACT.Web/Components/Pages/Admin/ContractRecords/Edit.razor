@@ -99,41 +99,10 @@ else
                                      Disabled="@DriverSelectDisabled" />
                 </MudItem>
 
-                @if (_model.BusinessType == ContractBusinessType.Passenger)
-                {
-                    <MudItem xs="12">
-                        <MudDivider Class="my-2" />
-                        <MudText Typo="Typo.subtitle1">Người trực tiếp điều khiển xe</MudText>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">
-                            Người lái thực tế có thể khác Chủ xe. Nhập đúng thông tin người trực tiếp điều khiển phương tiện trên chuyến này.
-                        </MudText>
-                    </MudItem>
-                    <MudItem xs="12" md="4">
-                        <MudTextField @bind-Value="_model.OperatingDriverName" Label="Họ và tên người lái xe" Variant="Variant.Outlined" Required="true" />
-                    </MudItem>
-                    <MudItem xs="12" md="3">
-                        <MudSelect T="string" @bind-Value="_model.OperatingDriverLicenseClass" Label="Hạng GPLX ô tô" Variant="Variant.Outlined" Required="true">
-                            @foreach (var licenseClass in AutomobileDrivingLicenseClasses.All)
-                            {
-                                <MudSelectItem T="string" Value="@licenseClass">@AutomobileDrivingLicenseClasses.DisplayName(licenseClass)</MudSelectItem>
-                            }
-                        </MudSelect>
-                    </MudItem>
-                    <MudItem xs="12" md="3">
-                        <MudTextField @bind-Value="_model.OperatingDriverLicenseNumber" Label="Số GPLX" Variant="Variant.Outlined" />
-                    </MudItem>
-                    <MudItem xs="12" md="2">
-                        <MudTextField @bind-Value="_model.OperatingDriverPhoneNumber" Label="SĐT người lái" Variant="Variant.Outlined" />
-                    </MudItem>
-                }
-                else
-                {
-                    <MudItem xs="12">
-                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
-                            HĐ hàng hóa theo mẫu dùng chân ký Chủ xe cố định; không yêu cầu chữ ký riêng của người lái thực tế.
-                        </MudAlert>
-                    </MudItem>
-                }
+                <MudItem xs="12">
+                    <MudDivider Class="my-2" />
+                    <ContractDriverEditor Model="_model" />
+                </MudItem>
 
                 @if (_model.CompanyProfileId.HasValue && SelectedVehicle is not null)
                 {
@@ -160,7 +129,7 @@ else
             @if (_model.BusinessType == ContractBusinessType.Cargo)
             {
                 <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="mb-3">
-                    HĐ hàng hóa yêu cầu Bên A là Công ty/Doanh nghiệp và có đủ MST, người đại diện, CCCD, ngày cấp, điện thoại, địa chỉ theo mẫu.
+                    HĐ hàng hóa hỗ trợ khách hàng Công ty/Doanh nghiệp hoặc cá nhân. Khi là khách cá nhân, PDF tự ghi "Khách hàng cá nhân" và MST = N/A.
                 </MudAlert>
             }
             <MudGrid>
@@ -198,17 +167,14 @@ else
                             Bạn đang nhập mới khách hàng trực tiếp trên màn hình tạo hợp đồng. Nếu không cần nữa, bấm lại nút <b>Thêm mới khách hàng</b> để ẩn phần này.
                         </MudAlert>
                     </MudItem>
-                    @if (_model.BusinessType != ContractBusinessType.Cargo)
-                    {
-                        <MudItem xs="12">
-                            <MudCheckBox T="bool"
-                                         Value="@_model.CustomerIsCompany"
-                                         ValueChanged="SetCustomerIsCompany"
-                                         Color="Color.Primary"
-                                         Label="Khách hàng là công ty" />
-                        </MudItem>
-                    }
-                    @if (_model.BusinessType == ContractBusinessType.Cargo || _model.CustomerIsCompany)
+                    <MudItem xs="12">
+                        <MudCheckBox T="bool"
+                                     Value="@_model.CustomerIsCompany"
+                                     ValueChanged="SetCustomerIsCompany"
+                                     Color="Color.Primary"
+                                     Label="Khách hàng là công ty" />
+                    </MudItem>
+                    @if (_model.CustomerIsCompany)
                     {
                         <MudItem xs="12" md="6">
                             <MudTextField @bind-Value="_model.CustomerName"
@@ -440,6 +406,13 @@ else
             </MudGrid>
         </MudPaper>
 
+        @if (_model.BusinessType == ContractBusinessType.Cargo)
+        {
+            <div class="mb-4">
+                <CargoTransportPageTwoEditor Model="_model" />
+            </div>
+        }
+
         @if (_model.BusinessType == ContractBusinessType.Passenger)
         {
         <MudPaper Class="pa-4" Elevation="0" Style="border:1px solid var(--mud-palette-lines-default);">
@@ -518,7 +491,7 @@ else
         <MudText Typo="Typo.h6" Class="mb-3">Thông tin chữ ký hợp đồng</MudText>
         <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-3">
             Chỉ 2 chân ký đầu tiên là bắt buộc trước khi phát HĐ xuống tài khoản nhận HĐ: Văn phòng đại diện và Chủ xe.
-            HĐ hành khách: người lái thực tế ký trước, khách hàng ký sau. HĐ hàng hóa: dùng chân ký HTX + Chủ xe cố định và chỉ Đại diện Bên A ký trên điện thoại Chủ xe.
+            Cả HĐ hành khách và HĐ hàng hóa: Tài xế 1 ký trước trên điện thoại Chủ xe, sau đó khách hàng/Đại diện Bên A ký. Chỉ 2 chân ký cố định Văn phòng đại diện và Chủ xe là điều kiện để phát HĐ.
         </MudAlert>
         <MudGrid>
             <MudItem xs="12" md="3">
@@ -535,25 +508,22 @@ else
                               SignerName="@OwnerSigner"
                               SignedAt="@FixedOwnerSignedAt" />
             </MudItem>
-            @if (_model.BusinessType == ContractBusinessType.Passenger)
-            {
-                <MudItem xs="12" md="3">
-                    <MudText Typo="Typo.subtitle1">Người lái thực tế</MudText>
-                    @if (!string.IsNullOrWhiteSpace(SignatureUrl(SignatureParty.Driver)))
-                    {
-                        <SignaturePad Disabled="true"
-                                      ExistingSignatureUrl="@SignatureUrl(SignatureParty.Driver)"
-                                      SignerName="@SignatureName(SignatureParty.Driver)"
-                                      SignedAt="@SignatureTime(SignatureParty.Driver)" />
-                    }
-                    else
-                    {
-                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
-                            Chưa có chữ ký người lái. Chữ ký này được ghi nhận trên điện thoại tài khoản Chủ xe sau khi nhận HĐ.
-                        </MudAlert>
-                    }
-                </MudItem>
-            }
+            <MudItem xs="12" md="3">
+                <MudText Typo="Typo.subtitle1">Tài xế 1</MudText>
+                @if (!string.IsNullOrWhiteSpace(SignatureUrl(SignatureParty.Driver)))
+                {
+                    <SignaturePad Disabled="true"
+                                  ExistingSignatureUrl="@SignatureUrl(SignatureParty.Driver)"
+                                  SignerName="@SignatureName(SignatureParty.Driver)"
+                                  SignedAt="@SignatureTime(SignatureParty.Driver)" />
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
+                        Chưa có chữ ký Tài xế 1. Chữ ký được ghi nhận trên điện thoại tài khoản Chủ xe sau khi nhận HĐ.
+                    </MudAlert>
+                }
+            </MudItem>
             <MudItem xs="12" md="3">
                 <MudText Typo="Typo.subtitle1">@(_model.BusinessType == ContractBusinessType.Cargo ? "Đại diện Bên A" : "Khách hàng (Người thuê xe)")</MudText>
                 @if (!string.IsNullOrWhiteSpace(SignatureUrl(SignatureParty.Customer)))
@@ -764,6 +734,15 @@ else
             OperatingDriverPhoneNumber = detail.OperatingDriverPhoneNumber,
             OperatingDriverLicenseNumber = detail.OperatingDriverLicenseNumber,
             OperatingDriverLicenseClass = detail.OperatingDriverLicenseClass,
+            SecondDriverName = detail.SecondDriverName,
+            SecondDriverPhoneNumber = detail.SecondDriverPhoneNumber,
+            SecondDriverLicenseNumber = detail.SecondDriverLicenseNumber,
+            SecondDriverLicenseClass = detail.SecondDriverLicenseClass,
+            CargoTransportGoodsName = detail.CargoTransportGoodsName,
+            CargoTransportRoute = detail.CargoTransportRoute,
+            CargoLoadingPoint = detail.CargoLoadingPoint,
+            CargoDeliveryPoint = detail.CargoDeliveryPoint,
+            CargoOtherInformation = detail.CargoOtherInformation,
             CargoName = detail.CargoName,
             CargoSpecification = detail.CargoSpecification,
             CargoQuantity = detail.CargoQuantity,
@@ -780,6 +759,7 @@ else
             PaymentTime = detail.PaymentTime,
             Note = detail.Note,
             Status = detail.Status,
+            CargoHandlingEvents = detail.CargoHandlingEvents,
             Passengers = detail.Passengers
         };
 
@@ -1037,8 +1017,6 @@ else
             return Task.FromResult(Enumerable.Empty<Customer>());
 
         IEnumerable<Customer> result = _customers.Where(CustomerBelongsToSelectedCompany);
-        if (_model.BusinessType == ContractBusinessType.Cargo)
-            result = result.Where(x => x.Type == CustomerType.Organization || !string.IsNullOrWhiteSpace(x.OrganizationName));
         var search = value?.Trim();
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -1068,8 +1046,6 @@ else
 
     private async Task SaveAsync()
     {
-        if (_model.BusinessType == ContractBusinessType.Cargo)
-            _model.CustomerIsCompany = true;
 
         await _form!.ValidateAsync();
         if (!_valid)

@@ -84,7 +84,7 @@
         <div class="section-header">
             <div>
                 <MudText Typo="Typo.h6">@(Detail.BusinessType == ContractBusinessType.Cargo ? "2. Văn phòng/Công ty và Chủ phương tiện" : "2. Phương tiện, chủ xe và người lái")</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">@(Detail.BusinessType == ContractBusinessType.Cargo ? "Dữ liệu được chụp snapshot từ Công ty/Văn phòng của xe và tài khoản Chủ xe tại thời điểm tạo/phát HĐ." : "Thông tin xe, chủ sở hữu và người trực tiếp điều khiển phương tiện.")</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Dữ liệu Công ty/Văn phòng và Chủ xe được chụp snapshot; Tài xế 1/Tài xế 2 là người thực tế điều khiển phương tiện của hợp đồng.</MudText>
             </div>
         </div>
         @if (Detail.BusinessType == ContractBusinessType.Cargo)
@@ -103,6 +103,14 @@
                 @DataBlock("CCCD chủ phương tiện", Detail.OwnerCitizenId)
                 @DataBlock("Ngày cấp CCCD chủ phương tiện", FormatDate(Detail.OwnerCitizenIdIssuedDate))
                 @DataBlock("Biển kiểm soát", Detail.VehiclePlate)
+                @DataBlock("Tài xế 1", Detail.OperatingDriverName)
+                @DataBlock("Số GPLX TX1", Detail.OperatingDriverLicenseNumber)
+                @DataBlock("Hạng GPLX TX1", Detail.OperatingDriverLicenseClass)
+                @DataBlock("SĐT TX1", Detail.OperatingDriverPhoneNumber)
+                @DataBlock("Tài xế 2", string.IsNullOrWhiteSpace(Detail.SecondDriverName) ? "Không có" : Detail.SecondDriverName)
+                @DataBlock("Số GPLX TX2", string.IsNullOrWhiteSpace(Detail.SecondDriverName) ? "N/A" : Detail.SecondDriverLicenseNumber)
+                @DataBlock("Hạng GPLX TX2", string.IsNullOrWhiteSpace(Detail.SecondDriverName) ? "N/A" : Detail.SecondDriverLicenseClass)
+                @DataBlock("SĐT TX2", string.IsNullOrWhiteSpace(Detail.SecondDriverName) ? "N/A" : Detail.SecondDriverPhoneNumber)
             </div>
         }
         else
@@ -128,7 +136,7 @@
         <div class="section-header">
             <div>
                 <MudText Typo="Typo.h6">@(Detail.BusinessType == ContractBusinessType.Cargo ? "3. Khách hàng / Bên A" : "3. Khách hàng / người thuê")</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">@(Detail.BusinessType == ContractBusinessType.Cargo ? "Bên A được lấy từ hồ sơ khách hàng Công ty/Doanh nghiệp và khóa theo snapshot của hợp đồng." : "Thông tin khách hàng được khóa theo hợp đồng tại thời điểm tạo/chốt.")</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Thông tin khách hàng được khóa theo hợp đồng tại thời điểm tạo/chốt; hỗ trợ cả khách hàng cá nhân và Công ty/Doanh nghiệp.</MudText>
             </div>
         </div>
         <div class="data-grid">
@@ -193,7 +201,34 @@
                 @DataBlock("Quy cách", Detail.CargoSpecification)
                 @DataBlock("Số lượng", Detail.CargoQuantity)
                 @DataBlock("Khối lượng", Detail.CargoWeight?.ToString("N2"))
+                @DataBlock("Tên hàng hóa (Giấy vận tải)", Detail.CargoTransportGoodsName, "wide")
+                @DataBlock("Tuyến vận chuyển", Detail.CargoTransportRoute, "wide")
+                @DataBlock("Điểm xếp hàng", Detail.CargoLoadingPoint, "wide")
+                @DataBlock("Điểm giao hàng", Detail.CargoDeliveryPoint, "wide")
+                @DataBlock("Thông tin khác", Detail.CargoOtherInformation, "wide")
             </div>
+
+            <MudText Typo="Typo.subtitle2" Class="mt-4 mb-2">Các lần xếp/dỡ hàng</MudText>
+            @if (Detail.CargoHandlingEvents.Count == 0)
+            {
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">Không có dữ liệu xếp/dỡ hàng.</MudAlert>
+            }
+            else
+            {
+                <MudTable T="ContractCargoHandlingEventDto" Items="@Detail.CargoHandlingEvents.OrderBy(x => x.Type).ThenBy(x => x.SortOrder)" Dense="true" Hover="true">
+                    <HeaderContent>
+                        <MudTh>Loại</MudTh><MudTh>Lần</MudTh><MudTh>Địa điểm</MudTh><MudTh>Khối lượng</MudTh><MudTh>Thời gian</MudTh><MudTh>Xác nhận</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd>@(context.Type == CargoHandlingType.Loading ? "Xếp" : "Dỡ")</MudTd>
+                        <MudTd>@context.SortOrder</MudTd>
+                        <MudTd>@DisplayText(context.Location)</MudTd>
+                        <MudTd>@DisplayText(context.CargoWeight)</MudTd>
+                        <MudTd>@(context.EventTime.HasValue ? FormatDateTime(context.EventTime) : "N/A")</MudTd>
+                        <MudTd>@DisplayText(context.Confirmation)</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            }
         }
     </MudPaper>
 
@@ -246,7 +281,7 @@
         <div class="section-header">
             <div>
                 <MudText Typo="Typo.h6">@(Detail.BusinessType == ContractBusinessType.Cargo ? "5. Chữ ký theo hợp đồng" : "6. Chữ ký theo hợp đồng")</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary">@(Detail.BusinessType == ContractBusinessType.Cargo ? "Ba chân ký theo mẫu: HTX, Chủ xe và Đại diện Bên A." : "Bốn chữ ký được chốt và lưu theo từng hợp đồng.")</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Cả hai loại HĐ lưu chữ ký Văn phòng, Chủ xe, Tài xế 1 và khách hàng/Đại diện Bên A theo từng hợp đồng.</MudText>
             </div>
         </div>
         <div class="signature-grid">
@@ -264,16 +299,13 @@
                               SignerName="@(Detail.OwnerName ?? "Chủ sở hữu xe")"
                               SignedAt="@Detail.VehicleOwnerSignedAt" />
             </div>
-            @if (Detail.BusinessType == ContractBusinessType.Passenger)
-            {
-                <div class="signature-card">
-                    <div class="signature-card__title">Người lái thực tế</div>
-                    <SignaturePad Disabled="true"
-                                  ExistingSignatureUrl="@Detail.DriverSignatureFileUrl"
-                                  SignerName="@(string.IsNullOrWhiteSpace(Detail.OperatingDriverName) ? Detail.DriverName : Detail.OperatingDriverName)"
-                                  SignedAt="@Detail.DriverSignedAt" />
-                </div>
-            }
+            <div class="signature-card">
+                <div class="signature-card__title">Tài xế 1</div>
+                <SignaturePad Disabled="true"
+                              ExistingSignatureUrl="@Detail.DriverSignatureFileUrl"
+                              SignerName="@(string.IsNullOrWhiteSpace(Detail.OperatingDriverName) ? Detail.DriverName : Detail.OperatingDriverName)"
+                              SignedAt="@Detail.DriverSignedAt" />
+            </div>
             <div class="signature-card">
                 <div class="signature-card__title">@(Detail.BusinessType == ContractBusinessType.Cargo ? "Đại diện Bên A" : "Khách hàng")</div>
                 <SignaturePad Disabled="true"

@@ -152,7 +152,7 @@ public static class DatabaseSeeder
         type.Description = description;
         type.IsActive = true;
         type.RequireCustomerSignature = true;
-        type.RequireDriverSignature = !string.Equals(code, "CARGO", StringComparison.OrdinalIgnoreCase);
+        type.RequireDriverSignature = true;
         type.RequireLocation = true;
         type.UpdatedAt = DateTime.UtcNow;
         return type;

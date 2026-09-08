@@ -199,6 +199,26 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<string>("CargoTransportGoodsName")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("CargoTransportRoute")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("CargoLoadingPoint")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("CargoDeliveryPoint")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("CargoOtherInformation")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
                     b.Property<string>("CargoUnit")
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
@@ -400,9 +420,17 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<string>("SecondDriverLicenseNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<string>("SecondDriverName")
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("SecondDriverPhoneNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<DateTime?>("StartTime")
                         .HasColumnType("datetime2");
@@ -605,6 +633,73 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .HasDatabaseName("IX_ContractAuditLogs_User_CreatedAt");
 
                     b.ToTable("ContractAuditLogs", (string)null);
+                });
+
+            modelBuilder.Entity("HTX586CONTRACT.Domain.Contracts.ContractCargoHandlingEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CargoWeight")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Confirmation")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime?>("EventTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContractId", "Type", "SortOrder")
+                        .IsUnique()
+                        .HasFilter("[IsDeleted] = 0")
+                        .HasDatabaseName("UX_ContractCargoHandlingEvents_Contract_Type_SortOrder");
+
+                    b.ToTable("ContractCargoHandlingEvents", (string)null);
                 });
 
             modelBuilder.Entity("HTX586CONTRACT.Domain.Contracts.ContractPassenger", b =>
@@ -1810,6 +1905,17 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                     b.Navigation("Contract");
                 });
 
+            modelBuilder.Entity("HTX586CONTRACT.Domain.Contracts.ContractCargoHandlingEvent", b =>
+                {
+                    b.HasOne("HTX586CONTRACT.Domain.Contracts.Contract", "Contract")
+                        .WithMany("CargoHandlingEvents")
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Contract");
+                });
+
             modelBuilder.Entity("HTX586CONTRACT.Domain.Contracts.ContractPassenger", b =>
                 {
                     b.HasOne("HTX586CONTRACT.Domain.Contracts.Contract", "Contract")
@@ -1978,6 +2084,8 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                     b.Navigation("Attachments");
 
                     b.Navigation("AuditLogs");
+
+                    b.Navigation("CargoHandlingEvents");
 
                     b.Navigation("Passengers");
 

@@ -50,7 +50,16 @@ public class Contract : BaseEntity
 
     // Giữ tương thích mẫu/PDF cũ.
     public string? SecondDriverName { get; set; }
+    public string? SecondDriverPhoneNumber { get; set; }
+    public string? SecondDriverLicenseNumber { get; set; }
     public string? SecondDriverLicenseClass { get; set; }
+
+    // Thông tin riêng của trang 2 - Giấy vận tải đối với HĐ hàng hóa.
+    public string? CargoTransportGoodsName { get; set; }
+    public string? CargoTransportRoute { get; set; }
+    public string? CargoLoadingPoint { get; set; }
+    public string? CargoDeliveryPoint { get; set; }
+    public string? CargoOtherInformation { get; set; }
 
     public string? RouteDescription { get; set; }
     public decimal? TotalKilometers { get; set; }
@@ -104,6 +113,7 @@ public class Contract : BaseEntity
     public ApplicationUser Driver { get; set; } = null!;
     public ICollection<ContractSignature> Signatures { get; set; } = [];
     public ICollection<ContractPassenger> Passengers { get; set; } = [];
+    public ICollection<ContractCargoHandlingEvent> CargoHandlingEvents { get; set; } = [];
     public ICollection<ContractAttachment> Attachments { get; set; } = [];
     public ICollection<ContractAuditLog> AuditLogs { get; set; } = [];
 }

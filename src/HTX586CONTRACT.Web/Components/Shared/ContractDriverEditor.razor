@@ -1,0 +1,104 @@
+<MudPaper Class="pa-3" Elevation="0" Outlined="true">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
+        <div>
+            <MudText Typo="Typo.subtitle1">Tài xế lái</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Tối đa 2 tài xế. Tài xế 1 là người ký xác nhận hợp đồng.</MudText>
+        </div>
+        <MudSpacer />
+        @if (!_showSecondDriver && !Disabled)
+        {
+            <MudButton StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Outlined" Color="Color.Primary" OnClick="ShowSecondDriver">
+                Thêm tài xế
+            </MudButton>
+        }
+    </MudStack>
+
+    <MudText Typo="Typo.subtitle2" Class="mb-2">Tài xế 1</MudText>
+    <MudGrid Spacing="2">
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="Model.OperatingDriverName" Label="Họ và tên" Required="true" Variant="Variant.Outlined" Disabled="@Disabled" />
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudSelect T="string" @bind-Value="Model.OperatingDriverLicenseClass" Label="Hạng GPLX ô tô" Required="true" Variant="Variant.Outlined" Disabled="@Disabled">
+                @foreach (var licenseClass in AutomobileDrivingLicenseClasses.All)
+                {
+                    <MudSelectItem T="string" Value="@licenseClass">@AutomobileDrivingLicenseClasses.DisplayName(licenseClass)</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudTextField @bind-Value="Model.OperatingDriverLicenseNumber" Label="Số GPLX" Variant="Variant.Outlined" Disabled="@Disabled" />
+        </MudItem>
+        <MudItem xs="12" md="2">
+            <MudTextField @bind-Value="Model.OperatingDriverPhoneNumber" Label="SĐT" Variant="Variant.Outlined" Disabled="@Disabled" />
+        </MudItem>
+    </MudGrid>
+
+    @if (_showSecondDriver)
+    {
+        <MudDivider Class="my-3" />
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudText Typo="Typo.subtitle2">Tài xế 2</MudText>
+            <MudSpacer />
+            @if (!Disabled)
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" title="Bỏ Tài xế 2" OnClick="RemoveSecondDriver" />
+            }
+        </MudStack>
+        <MudGrid Spacing="2">
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="Model.SecondDriverName" Label="Họ và tên" Required="true" Variant="Variant.Outlined" Disabled="@Disabled" />
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudSelect T="string" @bind-Value="Model.SecondDriverLicenseClass" Label="Hạng GPLX ô tô" Required="true" Variant="Variant.Outlined" Disabled="@Disabled">
+                    @foreach (var licenseClass in AutomobileDrivingLicenseClasses.All)
+                    {
+                        <MudSelectItem T="string" Value="@licenseClass">@AutomobileDrivingLicenseClasses.DisplayName(licenseClass)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudTextField @bind-Value="Model.SecondDriverLicenseNumber" Label="Số GPLX" Variant="Variant.Outlined" Disabled="@Disabled" />
+            </MudItem>
+            <MudItem xs="12" md="2">
+                <MudTextField @bind-Value="Model.SecondDriverPhoneNumber" Label="SĐT" Variant="Variant.Outlined" Disabled="@Disabled" />
+            </MudItem>
+        </MudGrid>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Variant="Variant.Text" Class="mt-2">
+            Tài xế 2: Không có
+        </MudAlert>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public SaveContractRequest Model { get; set; } = null!;
+    [Parameter] public bool Disabled { get; set; }
+
+    private bool _showSecondDriver;
+
+    protected override void OnParametersSet()
+    {
+        if (!_showSecondDriver &&
+            (!string.IsNullOrWhiteSpace(Model.SecondDriverName) ||
+             !string.IsNullOrWhiteSpace(Model.SecondDriverLicenseNumber) ||
+             !string.IsNullOrWhiteSpace(Model.SecondDriverLicenseClass) ||
+             !string.IsNullOrWhiteSpace(Model.SecondDriverPhoneNumber)))
+        {
+            _showSecondDriver = true;
+        }
+    }
+
+    private void ShowSecondDriver() => _showSecondDriver = true;
+
+    private void RemoveSecondDriver()
+    {
+        Model.SecondDriverName = null;
+        Model.SecondDriverPhoneNumber = null;
+        Model.SecondDriverLicenseNumber = null;
+        Model.SecondDriverLicenseClass = null;
+        _showSecondDriver = false;
+    }
+}

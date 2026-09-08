@@ -49,8 +49,29 @@ public sealed class ContractConfiguration : IEntityTypeConfiguration<Contract>
         builder.Property(x => x.SecondDriverName)
             .HasMaxLength(200);
 
+        builder.Property(x => x.SecondDriverPhoneNumber)
+            .HasMaxLength(20);
+
+        builder.Property(x => x.SecondDriverLicenseNumber)
+            .HasMaxLength(50);
+
         builder.Property(x => x.SecondDriverLicenseClass)
             .HasMaxLength(20);
+
+        builder.Property(x => x.CargoTransportGoodsName)
+            .HasMaxLength(500);
+
+        builder.Property(x => x.CargoTransportRoute)
+            .HasMaxLength(2000);
+
+        builder.Property(x => x.CargoLoadingPoint)
+            .HasMaxLength(1000);
+
+        builder.Property(x => x.CargoDeliveryPoint)
+            .HasMaxLength(1000);
+
+        builder.Property(x => x.CargoOtherInformation)
+            .HasMaxLength(2000);
 
         builder.Property(x => x.RouteDescription)
             .HasMaxLength(2000);
@@ -201,6 +222,11 @@ public sealed class ContractConfiguration : IEntityTypeConfiguration<Contract>
             .WithOne(x => x.Contract)
             .HasForeignKey(x => x.ContractId)
             // Không cascade delete: hành khách là dữ liệu lịch sử của hợp đồng.
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasMany(x => x.CargoHandlingEvents)
+            .WithOne(x => x.Contract)
+            .HasForeignKey(x => x.ContractId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasMany(x => x.Signatures)
