@@ -6,6 +6,7 @@ public sealed class CompanyProfileListItemDto
     public string CompanyName { get; set; } = string.Empty;
     public string? BranchName { get; set; }
     public string TaxCode { get; set; } = string.Empty;
+    public string? BusinessLicenseIssuedPlace { get; set; }
     public string? PhoneNumber { get; set; }
     public string? Email { get; set; }
     public string? ComplaintContact { get; set; }

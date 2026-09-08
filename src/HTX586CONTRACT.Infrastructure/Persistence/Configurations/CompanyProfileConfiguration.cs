@@ -27,6 +27,9 @@ public sealed class CompanyProfileConfiguration : IEntityTypeConfiguration<Compa
         builder.Property(x => x.BusinessLicenseNumber)
             .HasMaxLength(100);
 
+        builder.Property(x => x.BusinessLicenseIssuedPlace)
+            .HasMaxLength(300);
+
         builder.Property(x => x.Address)
             .HasMaxLength(500)
             .IsRequired();

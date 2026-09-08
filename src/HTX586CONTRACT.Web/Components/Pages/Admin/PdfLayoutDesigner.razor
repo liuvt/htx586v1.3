@@ -1,12 +1,14 @@
 @page "/admin/pdf-layout-designer"
 @attribute [Authorize(Roles = "Owner,Admin")]
 @implements IAsyncDisposable
+@using System.Text.Json
+@using System.Text.Json.Serialization
 @inject PdfLayoutDesignerService LayoutDesignerService
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
 
 <PageTitle>PDF Layout Designer</PageTitle>
-<PageHeader Title="PDF Layout Designer" Subtitle="Chọn HĐ hành khách hoặc HĐ hàng hóa, sau đó kéo thả để chỉnh layout JSON tương ứng." />
+<PageHeader Title="PDF Layout Designer" Subtitle="Một JSON dùng chung cho HĐ hành khách + HĐ hàng hóa. Hỗ trợ kéo/thả, resize 4 góc, dữ liệu mẫu và tinh chỉnh tọa độ theo point." />
 
 @if (_loading)
 {
@@ -41,7 +43,7 @@ else if (_document is not null)
                     Đang chỉnh: <b>@_document.ContractTypeName</b>
                 </MudAlert>
                 <MudText Typo="Typo.caption" Class="d-block mt-2">PDF: @_document.TemplateFileName</MudText>
-                <MudText Typo="Typo.caption" Class="d-block">JSON: @_document.LayoutFileName</MudText>
+                <MudText Typo="Typo.caption" Class="d-block">JSON dùng chung: @_document.LayoutFileName</MudText>
                 <MudText Typo="Typo.caption" Class="d-block">Layout: @_document.LayoutPath</MudText>
 
                 <MudDivider Class="my-3" />
@@ -57,7 +59,25 @@ else if (_document is not null)
 
                 <MudDivider Class="my-3" />
 
-                <MudText Typo="Typo.subtitle2">Zoom</MudText>
+                <MudText Typo="Typo.subtitle2">Hiển thị & tinh chỉnh</MudText>
+                <MudStack Spacing="0" Class="mt-1">
+                    <MudCheckBox T="bool" Label="Hiển thị dữ liệu mẫu" Value="@_showSampleText" ValueChanged="SetShowSampleTextAsync" />
+                    <MudCheckBox T="bool" Label="Hiển thị khung field" Value="@_showFieldBoxes" ValueChanged="SetShowFieldBoxesAsync" />
+                    <MudCheckBox T="bool" Label="Hiển thị tất cả field" Value="@_showAllFields" ValueChanged="SetShowAllFieldsAsync" />
+                    <MudCheckBox T="bool" Label="Tâm/crosshair field đang chọn" Value="@_showCrosshair" ValueChanged="SetShowCrosshairAsync" />
+                    <MudCheckBox T="bool" Label="Snap theo lưới khi kéo" Value="@_snapToGrid" ValueChanged="SetSnapToGridAsync" />
+                </MudStack>
+
+                <MudGrid Spacing="2" Class="mt-1">
+                    <MudItem xs="6">
+                        <MudNumericField T="double" Label="Lưới (pt)" Margin="Margin.Dense" Value="@_gridSize" ValueChanged="SetGridSizeAsync" Step="0.05" Min="0.01" Immediate="true" />
+                    </MudItem>
+                    <MudItem xs="6">
+                        <MudNumericField T="double" Label="Bước phím (pt)" Margin="Margin.Dense" Value="@_nudgeStep" ValueChanged="SetNudgeStepAsync" Step="0.05" Min="0.01" Immediate="true" />
+                    </MudItem>
+                </MudGrid>
+
+                <MudText Typo="Typo.subtitle2" Class="mt-2">Zoom</MudText>
                 <MudStack Row="true" Spacing="1" Class="mt-1">
                     <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="ZoomOutAsync">-</MudButton>
                     <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="ResetZoomAsync">@($"{_zoom:0.00}x")</MudButton>
@@ -81,22 +101,42 @@ else if (_document is not null)
                 @if (_selectedField is not null)
                 {
                     <MudDivider Class="my-3" />
-                    <MudText Typo="Typo.subtitle2">Vị trí</MudText>
+                    <MudText Typo="Typo.subtitle2">Vị trí chính xác (PDF point)</MudText>
 
                     <MudGrid Spacing="2" Class="mt-1">
                         <MudItem xs="6">
-                            <MudNumericField T="double" Label="X" Margin="Margin.Dense" Value="@_selectedField.X" ValueChanged="SetXAsync" Step="0.5" Immediate="true" />
+                            <MudNumericField T="double" Label="X" Margin="Margin.Dense" Value="@_selectedField.X" ValueChanged="SetXAsync" Step="0.1" Immediate="true" />
                         </MudItem>
                         <MudItem xs="6">
-                            <MudNumericField T="double" Label="Y" Margin="Margin.Dense" Value="@_selectedField.Y" ValueChanged="SetYAsync" Step="0.5" Immediate="true" />
+                            <MudNumericField T="double" Label="Y" Margin="Margin.Dense" Value="@_selectedField.Y" ValueChanged="SetYAsync" Step="0.1" Immediate="true" />
                         </MudItem>
                         <MudItem xs="6">
-                            <MudNumericField T="double" Label="Rộng" Margin="Margin.Dense" Value="@_selectedField.Width" ValueChanged="SetWidthAsync" Step="0.5" Immediate="true" />
+                            <MudNumericField T="double" Label="Rộng" Margin="Margin.Dense" Value="@_selectedField.Width" ValueChanged="SetWidthAsync" Step="0.1" Immediate="true" />
                         </MudItem>
                         <MudItem xs="6">
-                            <MudNumericField T="double" Label="Cao" Margin="Margin.Dense" Value="@_selectedField.Height" ValueChanged="SetHeightAsync" Step="0.5" Immediate="true" />
+                            <MudNumericField T="double" Label="Cao" Margin="Margin.Dense" Value="@_selectedField.Height" ValueChanged="SetHeightAsync" Step="0.1" Immediate="true" />
                         </MudItem>
                     </MudGrid>
+
+                    <MudText Typo="Typo.caption" Class="d-block mt-2">Di chuyển @($"{_nudgeStep:0.##}")pt/lần</MudText>
+                    <div class="pdf-designer-nudge-grid">
+                        <span></span>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="MoveUpAsync">↑</MudButton>
+                        <span></span>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="MoveLeftAsync">←</MudButton>
+                        <div class="center-info">X/Y</div>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="MoveRightAsync">→</MudButton>
+                        <span></span>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="MoveDownAsync">↓</MudButton>
+                        <span></span>
+                    </div>
+
+                    <MudStack Row="true" Spacing="1" Class="mt-2">
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="WidthMinusAsync">W−</MudButton>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="WidthPlusAsync">W+</MudButton>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="HeightMinusAsync">H−</MudButton>
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="HeightPlusAsync">H+</MudButton>
+                    </MudStack>
 
                     @if (_selectedField.Kind == DesignerFieldKind.Text)
                     {
@@ -105,13 +145,13 @@ else if (_document is not null)
 
                         <MudGrid Spacing="2" Class="mt-1">
                             <MudItem xs="6">
-                                <MudNumericField T="float" Label="Size" Margin="Margin.Dense" Value="@_selectedField.FontSize" ValueChanged="SetFontSizeAsync" Step="0.5f" Immediate="true" />
+                                <MudNumericField T="float" Label="Cỡ chữ" Margin="Margin.Dense" Value="@_selectedField.FontSize" ValueChanged="SetFontSizeAsync" Step="0.1f" Immediate="true" />
                             </MudItem>
                             <MudItem xs="6">
-                                <MudNumericField T="float" Label="Min size" Margin="Margin.Dense" Value="@_selectedField.MinFontSize" ValueChanged="SetMinFontSizeAsync" Step="0.5f" Immediate="true" />
+                                <MudNumericField T="float" Label="Cỡ chữ nhỏ nhất" Margin="Margin.Dense" Value="@_selectedField.MinFontSize" ValueChanged="SetMinFontSizeAsync" Step="0.1f" Immediate="true" />
                             </MudItem>
                             <MudItem xs="6">
-                                <MudNumericField T="int" Label="Số dòng" Margin="Margin.Dense" Value="@_selectedField.MaxLines" ValueChanged="SetMaxLinesAsync" Min="1" Max="5" Immediate="true" />
+                                <MudNumericField T="int" Label="Số dòng" Margin="Margin.Dense" Value="@_selectedField.MaxLines" ValueChanged="SetMaxLinesAsync" Min="1" Max="20" Immediate="true" />
                             </MudItem>
                             <MudItem xs="6">
                                 <MudSelect T="string" Label="Canh ngang" Dense="true" Value="@_selectedField.Alignment" ValueChanged="SetAlignmentAsync">
@@ -129,6 +169,16 @@ else if (_document is not null)
                             </MudItem>
                         </MudGrid>
 
+                        <MudStack Row="true" Spacing="1" Class="mt-2" AlignItems="AlignItems.Center">
+                            <MudText Typo="Typo.caption">Cỡ nhanh:</MudText>
+                            <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="FontSizeMinusAsync">A−</MudButton>
+                            <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="SetFontSize10Async">10</MudButton>
+                            <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="SetFontSize11Async">11</MudButton>
+                            <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="SetFontSize1125Async">11.25</MudButton>
+                            <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="FontSizePlusAsync">A+</MudButton>
+                        </MudStack>
+                        <MudText Typo="Typo.caption" Class="d-block mt-1">Rộng/Cao ở phía trên chỉnh kích thước vùng text hoặc vùng chữ ký; Cỡ chữ chỉ áp dụng cho field text.</MudText>
+
                         <MudStack Spacing="0" Class="mt-2">
                             <MudCheckBox T="bool" Label="In đậm" Value="@_selectedField.Bold" ValueChanged="SetBoldAsync" />
                             <MudCheckBox T="bool" Label="In nghiêng" Value="@_selectedField.Italic" ValueChanged="SetItalicAsync" />
@@ -136,11 +186,43 @@ else if (_document is not null)
                             <MudCheckBox T="bool" Label="Che nền trắng trước khi vẽ" Value="@_selectedField.ClearBackground" ValueChanged="SetClearBackgroundAsync" />
                         </MudStack>
                     }
+                    else
+                    {
+                        <MudDivider Class="my-3" />
+                        <MudText Typo="Typo.subtitle2">Ảnh / chữ ký</MudText>
+                        <MudSelect T="string" Label="Fit" Dense="true" Value="@_selectedField.Fit" ValueChanged="SetFitAsync" Class="mt-2">
+                            <MudSelectItem T="string" Value="@("Contain")">Contain</MudSelectItem>
+                        </MudSelect>
+                    }
 
                     <MudDivider Class="my-3" />
                     <MudAlert Severity="Severity.Info" Dense="true">
-                        Kéo field trên PDF để đổi X/Y. Kéo góc phải dưới để resize. Nhấn Ctrl + phím mũi tên để tinh chỉnh 0.5pt.
+                        Kéo field để đổi X/Y, kéo 4 góc để resize. Khi field đang focus: phím mũi tên = di chuyển; Shift = x5; Ctrl = tinh chỉnh 1/5 bước; Alt + mũi tên = resize.
                     </MudAlert>
+                }
+
+                <MudDivider Class="my-3" />
+                <MudButton Variant="Variant.Outlined" FullWidth="true" OnClick="ToggleAdvancedJsonAsync">
+                    @(_showAdvancedJson ? "Ẩn JSON nâng cao" : "Chỉnh JSON nâng cao")
+                </MudButton>
+
+                @if (_showAdvancedJson)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">
+                        JSON bên dưới là layout của loại HĐ đang chọn. Khi bấm Áp dụng, hệ thống kiểm tra JSON rồi cập nhật preview; khi Lưu JSON, layout này được ghi vào file dùng chung.
+                    </MudAlert>
+                    <MudTextField T="string"
+                                  Label="Layout JSON"
+                                  Class="mt-2 pdf-designer-json-editor"
+                                  Variant="Variant.Outlined"
+                                  Lines="18"
+                                  Immediate="true"
+                                  Value="@_rawLayoutJson"
+                                  ValueChanged="SetRawLayoutJson" />
+                    <MudStack Row="true" Spacing="1" Class="mt-2">
+                        <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="ApplyRawJsonAsync">Áp dụng JSON</MudButton>
+                        <MudButton Variant="Variant.Outlined" OnClick="RefreshRawJsonAsync">Làm mới</MudButton>
+                    </MudStack>
                 }
             </MudPaper>
         </MudItem>
@@ -160,6 +242,16 @@ else if (_document is not null)
 }
 
 @code {
+    private static readonly JsonSerializerOptions RawJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        WriteIndented = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true
+    };
+
     private PdfLayoutDesignerDocument? _document;
     private DotNetObjectReference<PdfLayoutDesigner>? _dotNetReference;
     private ElementReference _designerHost;
@@ -172,6 +264,16 @@ else if (_document is not null)
     private string? _errorMessage;
     private double _zoom = 1.25d;
     private PdfLayoutDesignerContractType _contractType = PdfLayoutDesignerContractType.Passenger;
+
+    private bool _showSampleText = true;
+    private bool _showFieldBoxes = true;
+    private bool _showAllFields = true;
+    private bool _showCrosshair = true;
+    private bool _snapToGrid = true;
+    private double _gridSize = 0.25d;
+    private double _nudgeStep = 0.25d;
+    private bool _showAdvancedJson;
+    private string _rawLayoutJson = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -189,7 +291,8 @@ else if (_document is not null)
                 _document.TemplateBase64,
                 _fields,
                 _dotNetReference,
-                _zoom);
+                _zoom,
+                BuildDesignerOptions());
             _designerInitialized = true;
         }
     }
@@ -204,6 +307,7 @@ else if (_document is not null)
             RebuildFields();
             _selectedField = _fields.FirstOrDefault();
             _selectedFieldId = _selectedField?.Id;
+            RefreshRawLayoutJson();
         }
         catch (Exception ex)
         {
@@ -222,6 +326,24 @@ else if (_document is not null)
         _dotNetReference?.Dispose();
         _dotNetReference = null;
         await LoadDocumentAsync();
+    }
+
+    private async Task ReinitializeDesignerAsync()
+    {
+        if (_document is null)
+            return;
+
+        await JS.InvokeVoidAsync("htxPdfLayoutDesigner.destroy", _designerHost);
+        _dotNetReference ??= DotNetObjectReference.Create(this);
+        await JS.InvokeVoidAsync(
+            "htxPdfLayoutDesigner.init",
+            _designerHost,
+            _document.TemplateBase64,
+            _fields,
+            _dotNetReference,
+            _zoom,
+            BuildDesignerOptions());
+        _designerInitialized = true;
     }
 
     private async Task ChangeContractTypeAsync(PdfLayoutDesignerContractType contractType)
@@ -267,7 +389,7 @@ else if (_document is not null)
                 target.MinFontSize = field.MinFontSize;
                 target.MaxLines = field.MaxLines;
                 target.Alignment = field.Alignment;
-                target.VerticalAlignment = field.VerticalAlignment;
+                target.VerticalAlignment = NormalizeVerticalAlignment(field.VerticalAlignment);
                 target.Bold = field.Bold;
                 target.Italic = field.Italic;
                 target.Uppercase = field.Uppercase;
@@ -299,7 +421,12 @@ else if (_document is not null)
             _saving = true;
             ApplyFieldsToLayout();
             await LayoutDesignerService.SaveLayoutAsync(_contractType, _document.Layout);
-            Snackbar.Add($"Đã lưu JSON {_document.ContractTypeName} và tự tạo file backup.", Severity.Success);
+            RefreshRawLayoutJson();
+            Snackbar.Add($"Đã lưu {_document.ContractTypeName} vào JSON dùng chung và tự tạo file backup.", Severity.Success);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Snackbar.Add($"Không có quyền ghi file JSON: {ex.Message}. Hãy cấp quyền ghi thư mục Templates/Contracts cho user chạy service.", Severity.Error);
         }
         catch (Exception ex)
         {
@@ -353,8 +480,8 @@ else if (_document is not null)
         if (_selectedField is null)
             return;
 
-        _selectedField.X = Round(_selectedField.X);
-        _selectedField.Y = Round(_selectedField.Y);
+        _selectedField.X = Math.Max(0, Round(_selectedField.X));
+        _selectedField.Y = Math.Max(0, Round(_selectedField.Y));
         _selectedField.Width = Math.Max(2, Round(_selectedField.Width));
         _selectedField.Height = Math.Max(2, Round(_selectedField.Height));
 
@@ -364,14 +491,14 @@ else if (_document is not null)
     private async Task SetXAsync(double value)
     {
         if (_selectedField is null) return;
-        _selectedField.X = value;
+        _selectedField.X = Math.Max(0, value);
         await PushSelectedFieldAsync();
     }
 
     private async Task SetYAsync(double value)
     {
         if (_selectedField is null) return;
-        _selectedField.Y = value;
+        _selectedField.Y = Math.Max(0, value);
         await PushSelectedFieldAsync();
     }
 
@@ -393,15 +520,36 @@ else if (_document is not null)
     {
         if (_selectedField is null) return;
         _selectedField.FontSize = Math.Max(1, value);
+        if (_selectedField.MinFontSize > _selectedField.FontSize)
+            _selectedField.MinFontSize = _selectedField.FontSize;
         await PushSelectedFieldAsync();
     }
 
     private async Task SetMinFontSizeAsync(float value)
     {
         if (_selectedField is null) return;
-        _selectedField.MinFontSize = Math.Max(1, value);
+        _selectedField.MinFontSize = Math.Clamp(value, 1, _selectedField.FontSize);
         await PushSelectedFieldAsync();
     }
+
+    private Task FontSizeMinusAsync()
+        => _selectedField is null
+            ? Task.CompletedTask
+            : SetFontSizeAsync(Math.Max(1f, _selectedField.FontSize - 0.25f));
+
+    private Task FontSizePlusAsync()
+        => _selectedField is null
+            ? Task.CompletedTask
+            : SetFontSizeAsync(_selectedField.FontSize + 0.25f);
+
+    private Task SetFontSize10Async()
+        => _selectedField is null ? Task.CompletedTask : SetFontSizeAsync(10f);
+
+    private Task SetFontSize11Async()
+        => _selectedField is null ? Task.CompletedTask : SetFontSizeAsync(11f);
+
+    private Task SetFontSize1125Async()
+        => _selectedField is null ? Task.CompletedTask : SetFontSizeAsync(11.25f);
 
     private async Task SetMaxLinesAsync(int value)
     {
@@ -420,7 +568,7 @@ else if (_document is not null)
     private async Task SetVerticalAlignmentAsync(string value)
     {
         if (_selectedField is null) return;
-        _selectedField.VerticalAlignment = value;
+        _selectedField.VerticalAlignment = NormalizeVerticalAlignment(value);
         await PushSelectedFieldAsync();
     }
 
@@ -452,15 +600,48 @@ else if (_document is not null)
         await PushSelectedFieldAsync();
     }
 
+    private async Task SetFitAsync(string value)
+    {
+        if (_selectedField is null) return;
+        _selectedField.Fit = string.IsNullOrWhiteSpace(value) ? "Contain" : value;
+        await PushSelectedFieldAsync();
+    }
+
+    private async Task MoveLeftAsync() => await NudgeAsync(-_nudgeStep, 0);
+    private async Task MoveRightAsync() => await NudgeAsync(_nudgeStep, 0);
+    private async Task MoveUpAsync() => await NudgeAsync(0, -_nudgeStep);
+    private async Task MoveDownAsync() => await NudgeAsync(0, _nudgeStep);
+
+    private async Task NudgeAsync(double dx, double dy)
+    {
+        if (_selectedField is null) return;
+        _selectedField.X = Math.Max(0, _selectedField.X + dx);
+        _selectedField.Y = Math.Max(0, _selectedField.Y + dy);
+        await PushSelectedFieldAsync();
+    }
+
+    private async Task WidthMinusAsync() => await ResizeSelectedAsync(-_nudgeStep, 0);
+    private async Task WidthPlusAsync() => await ResizeSelectedAsync(_nudgeStep, 0);
+    private async Task HeightMinusAsync() => await ResizeSelectedAsync(0, -_nudgeStep);
+    private async Task HeightPlusAsync() => await ResizeSelectedAsync(0, _nudgeStep);
+
+    private async Task ResizeSelectedAsync(double widthDelta, double heightDelta)
+    {
+        if (_selectedField is null) return;
+        _selectedField.Width = Math.Max(2, _selectedField.Width + widthDelta);
+        _selectedField.Height = Math.Max(2, _selectedField.Height + heightDelta);
+        await PushSelectedFieldAsync();
+    }
+
     private async Task ZoomInAsync()
     {
-        _zoom = Math.Min(2.5d, _zoom + 0.1d);
+        _zoom = Math.Min(3d, _zoom + 0.1d);
         await JS.InvokeVoidAsync("htxPdfLayoutDesigner.setZoom", _designerHost, _zoom);
     }
 
     private async Task ZoomOutAsync()
     {
-        _zoom = Math.Max(0.6d, _zoom - 0.1d);
+        _zoom = Math.Max(0.5d, _zoom - 0.1d);
         await JS.InvokeVoidAsync("htxPdfLayoutDesigner.setZoom", _designerHost, _zoom);
     }
 
@@ -469,6 +650,190 @@ else if (_document is not null)
         _zoom = 1.25d;
         await JS.InvokeVoidAsync("htxPdfLayoutDesigner.setZoom", _designerHost, _zoom);
     }
+
+    private async Task SetShowSampleTextAsync(bool value)
+    {
+        _showSampleText = value;
+        await PushDesignerOptionsAsync();
+    }
+
+    private async Task SetShowFieldBoxesAsync(bool value)
+    {
+        _showFieldBoxes = value;
+        await PushDesignerOptionsAsync();
+    }
+
+    private async Task SetShowAllFieldsAsync(bool value)
+    {
+        _showAllFields = value;
+        await PushDesignerOptionsAsync();
+    }
+
+    private async Task SetShowCrosshairAsync(bool value)
+    {
+        _showCrosshair = value;
+        await PushDesignerOptionsAsync();
+    }
+
+    private async Task SetSnapToGridAsync(bool value)
+    {
+        _snapToGrid = value;
+        await PushDesignerOptionsAsync();
+    }
+
+    private async Task SetGridSizeAsync(double value)
+    {
+        _gridSize = Math.Max(0.01, value);
+        await PushDesignerOptionsAsync();
+    }
+
+    private async Task SetNudgeStepAsync(double value)
+    {
+        _nudgeStep = Math.Max(0.01, value);
+        await PushDesignerOptionsAsync();
+    }
+
+    private async Task PushDesignerOptionsAsync()
+    {
+        if (!_designerInitialized) return;
+        await JS.InvokeVoidAsync("htxPdfLayoutDesigner.setOptions", _designerHost, BuildDesignerOptions());
+    }
+
+    private DesignerOptionsView BuildDesignerOptions()
+        => new()
+        {
+            ShowSampleText = _showSampleText,
+            ShowFieldBoxes = _showFieldBoxes,
+            ShowAllFields = _showAllFields,
+            ShowCrosshair = _showCrosshair,
+            SnapToGrid = _snapToGrid,
+            GridSize = _gridSize,
+            NudgeStep = _nudgeStep,
+            FontFamily = _document?.Layout.FontFamily ?? "Times New Roman"
+        };
+
+    private Task ToggleAdvancedJsonAsync()
+    {
+        _showAdvancedJson = !_showAdvancedJson;
+        if (_showAdvancedJson)
+            RefreshRawLayoutJson();
+        return Task.CompletedTask;
+    }
+
+    private Task SetRawLayoutJson(string value)
+    {
+        _rawLayoutJson = value ?? string.Empty;
+        return Task.CompletedTask;
+    }
+
+    private Task RefreshRawJsonAsync()
+    {
+        ApplyFieldsToLayout();
+        RefreshRawLayoutJson();
+        return Task.CompletedTask;
+    }
+
+    private void RefreshRawLayoutJson()
+    {
+        if (_document is null)
+        {
+            _rawLayoutJson = string.Empty;
+            return;
+        }
+
+        _rawLayoutJson = JsonSerializer.Serialize(_document.Layout, RawJsonOptions);
+    }
+
+    private async Task ApplyRawJsonAsync()
+    {
+        if (_document is null)
+            return;
+
+        try
+        {
+            var layout = JsonSerializer.Deserialize<PdfTemplateLayoutDto>(_rawLayoutJson, RawJsonOptions)
+                ?? throw new InvalidOperationException("JSON rỗng hoặc không đúng cấu trúc layout.");
+
+            ValidateLayout(layout);
+            NormalizeLayout(layout);
+            _document.Layout = layout;
+            RebuildFields();
+            _selectedField = _fields.FirstOrDefault();
+            _selectedFieldId = _selectedField?.Id;
+            RefreshRawLayoutJson();
+            await ReinitializeDesignerAsync();
+            Snackbar.Add("Đã áp dụng JSON vào preview. Bấm Lưu JSON để ghi vào file dùng chung.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"JSON không hợp lệ: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private static void ValidateLayout(PdfTemplateLayoutDto layout)
+    {
+        if (layout.TextFields.Any(x => string.IsNullOrWhiteSpace(x.Key) || x.Page < 1 || x.Width <= 0 || x.Height <= 0))
+            throw new InvalidOperationException("Có text field thiếu key/page hoặc kích thước không hợp lệ.");
+
+        if (layout.ImageFields.Any(x => string.IsNullOrWhiteSpace(x.Key) || x.Page < 1 || x.Width <= 0 || x.Height <= 0))
+            throw new InvalidOperationException("Có image field thiếu key/page hoặc kích thước không hợp lệ.");
+
+        var duplicateText = layout.TextFields
+            .GroupBy(x => $"{x.Page}:{x.Key}", StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(x => x.Count() > 1);
+        if (duplicateText is not null)
+            throw new InvalidOperationException($"Text field bị trùng: {duplicateText.Key}.");
+
+        var duplicateImage = layout.ImageFields
+            .GroupBy(x => $"{x.Page}:{x.Key}", StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(x => x.Count() > 1);
+        if (duplicateImage is not null)
+            throw new InvalidOperationException($"Image field bị trùng: {duplicateImage.Key}.");
+    }
+
+    private static void NormalizeLayout(PdfTemplateLayoutDto layout)
+    {
+        layout.FontFamily = string.IsNullOrWhiteSpace(layout.FontFamily) ? "Times New Roman" : layout.FontFamily.Trim();
+        foreach (var field in layout.TextFields)
+        {
+            field.X = Math.Max(0, Round(field.X));
+            field.Y = Math.Max(0, Round(field.Y));
+            field.Width = Math.Max(2, Round(field.Width));
+            field.Height = Math.Max(2, Round(field.Height));
+            field.FontSize = Math.Max(1, field.FontSize);
+            field.MinFontSize = Math.Clamp(field.MinFontSize, 1, field.FontSize);
+            field.MaxLines = Math.Max(1, field.MaxLines);
+            field.Alignment = NormalizeHorizontalAlignment(field.Alignment);
+            field.VerticalAlignment = NormalizeVerticalAlignment(field.VerticalAlignment);
+        }
+
+        foreach (var field in layout.ImageFields)
+        {
+            field.X = Math.Max(0, Round(field.X));
+            field.Y = Math.Max(0, Round(field.Y));
+            field.Width = Math.Max(2, Round(field.Width));
+            field.Height = Math.Max(2, Round(field.Height));
+            field.Fit = string.IsNullOrWhiteSpace(field.Fit) ? "Contain" : field.Fit;
+        }
+    }
+
+    private static string NormalizeHorizontalAlignment(string? value)
+        => value?.Trim().ToLowerInvariant() switch
+        {
+            "center" => "Center",
+            "right" => "Right",
+            _ => "Left"
+        };
+
+    private static string NormalizeVerticalAlignment(string? value)
+        => value?.Trim().ToLowerInvariant() switch
+        {
+            "top" => "Top",
+            "bottom" => "Bottom",
+            "middle" => "Center",
+            "center" => "Center",
+            _ => "Center"
+        };
 
     private static string MakeId(DesignerFieldKind kind, int page, string key)
         => $"{kind.ToString().ToLowerInvariant()}:{page}:{key}";
@@ -488,6 +853,91 @@ else if (_document is not null)
         }
 
         _dotNetReference?.Dispose();
+    }
+
+    private static string PreviewSampleForKey(string key)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return string.Empty;
+
+        if (key.StartsWith("P", StringComparison.OrdinalIgnoreCase) && key.EndsWith("_NAME", StringComparison.OrdinalIgnoreCase)) return "Nguyễn Văn A";
+        if (key.StartsWith("P", StringComparison.OrdinalIgnoreCase) && key.EndsWith("_BIRTH_YEAR", StringComparison.OrdinalIgnoreCase)) return "1990";
+        if (key.StartsWith("P", StringComparison.OrdinalIgnoreCase) && key.EndsWith("_NOTE", StringComparison.OrdinalIgnoreCase)) return "Ghi chú";
+
+        return key.ToUpperInvariant() switch
+        {
+            "CONTRACT_NUMBER" => "90H-000.01-01",
+            "CONTRACT_TIME" => "08:30",
+            "CONTRACT_DAY" => "08",
+            "CONTRACT_MONTH" => "09",
+            "CONTRACT_YEAR" => "2026",
+            "HEADER_COMPANY_LICENSE_ISSUED_PLACE" => "SỞ GIAO THÔNG VẬN TẢI CẦN THƠ",
+            "HEADER_COMPANY_OFFICE_NAME" => "HỢP TÁC XÃ VẬN TẢI 586 - CẦN THƠ",
+            "COMPANY_OFFICE_NAME" => "HTX VẬN TẢI 586 - CẦN THƠ",
+            "COMPANY_NAME" => "HỢP TÁC XÃ VẬN TẢI 586 - CẦN THƠ",
+            "COMPANY_TAX_CODE" => "1801774247",
+            "COMPANY_LICENSE" => "922512639/GPKDVT",
+            "COMPANY_ADDRESS" => "Khu dân cư lô số 11B - KĐT Nam Cần Thơ, TP. Cần Thơ",
+            "COMPANY_PHONE" => "0931.176565",
+            "COMPANY_COMPLAINT_CONTACT" => "Sở GTVT Cần Thơ: 0939.984.333 - 0907.877.758",
+            "COMPANY_REPRESENTATIVE" => "NGUYỄN VIỆT KIỀU ANH",
+            "COMPANY_REP_CITIZEN_ID" => "092196007693",
+            "COMPANY_REP_ISSUED_DATE" => "14/08/2021",
+            "OWNER_NAME" => "NGUYỄN VĂN CHỦ XE",
+            "OWNER_CITIZEN_ID" => "092094003129",
+            "OWNER_ISSUED_DATE" => "08/09/2025",
+            "CUSTOMER_NAME" => "CÔNG TY TNHH KHÁCH HÀNG MẪU",
+            "CUSTOMER_TAX_CODE" => "1801234567",
+            "CUSTOMER_ADDRESS" => "An Hòa, Cần Thơ",
+            "CUSTOMER_PHONE" => "0868752251",
+            "CUSTOMER_REPRESENTATIVE" => "MAI NHỰT TRƯỜNG",
+            "CUSTOMER_CITIZEN_ID" => "092094003111",
+            "CUSTOMER_ISSUED_DATE" => "08/09/2025",
+            "VEHICLE_PLATE" => "90H-000.01",
+            "VEHICLE_BRAND_MODEL" => "TOYOTA INNOVA",
+            "SEAT_COUNT" => "7",
+            "PASSENGER_COUNT" => "06",
+            "PASSENGER_COUNT_2D" => "06",
+            "DRIVER_NAME" => "NGUYỄN VĂN TÀI XẾ",
+            "DRIVER_LICENSE_CLASS" => "D",
+            "SECOND_DRIVER_NAME" => "TRẦN VĂN B",
+            "SECOND_DRIVER_LICENSE_CLASS" => "D",
+            "PICKUP_DATETIME_LOCATION" => "07/09/2026 08:00 - Cần Thơ",
+            "DROPOFF_DATETIME_LOCATION" => "08/09/2026 18:30 - Kiên Giang",
+            "PICKUP_LOCATION" => "Phong Điền, Cần Thơ",
+            "DROPOFF_LOCATION" => "An Hòa, Kiên Giang",
+            "CARGO_START_TIME" => "07/09/2026 08:00",
+            "CARGO_END_TIME" => "08/09/2026 18:30",
+            "ROUTE_DESCRIPTION" => "Cần Thơ → Kiên Giang",
+            "TOTAL_KILOMETERS" => "100",
+            "CONTRACT_VALUE" => "1.000.000",
+            "CONTRACT_VALUE_WITH_UNIT" => "1.000.000 đồng",
+            "CONTRACT_VALUE_WORDS" => "Một triệu đồng",
+            "PAYMENT_METHOD" => "Chuyển khoản",
+            "PAYMENT_TIME" => "Sau khi hoàn thành chuyến",
+            "PAYMENT_DESCRIPTION" => "Giao hàng nhận tiền",
+            "CARGO_NAME" => "Điện tử",
+            "CARGO_SPECIFICATION" => "9x16",
+            "CARGO_QUANTITY" => "20",
+            "CARGO_WEIGHT_UNIT" => "300,00 kg",
+            "PASSENGER_LIST_SUBTITLE" => "DANH SÁCH HÀNH KHÁCH",
+            "SIG_OFFICE_NAME" => "NGUYỄN VIỆT KIỀU ANH",
+            "SIG_OWNER_NAME" => "NGUYỄN VĂN CHỦ XE",
+            "SIG_CUSTOMER_NAME" => "MAI NHỰT TRƯỜNG",
+            "SIG_DRIVER_NAME" => "NGUYỄN VĂN TÀI XẾ",
+            _ => key
+        };
+    }
+
+    private sealed class DesignerOptionsView
+    {
+        public bool ShowSampleText { get; set; }
+        public bool ShowFieldBoxes { get; set; }
+        public bool ShowAllFields { get; set; }
+        public bool ShowCrosshair { get; set; }
+        public bool SnapToGrid { get; set; }
+        public double GridSize { get; set; }
+        public double NudgeStep { get; set; }
+        public string FontFamily { get; set; } = "Times New Roman";
     }
 
     private enum DesignerFieldKind
@@ -516,6 +966,7 @@ else if (_document is not null)
         public bool Uppercase { get; set; }
         public bool ClearBackground { get; set; }
         public string Fit { get; set; } = "Contain";
+        public string PreviewText { get; set; } = string.Empty;
 
         public string DisplayName => $"P{Page} · {Kind} · {Key}";
 
@@ -534,11 +985,12 @@ else if (_document is not null)
                 MinFontSize = field.MinFontSize,
                 MaxLines = field.MaxLines,
                 Alignment = field.Alignment,
-                VerticalAlignment = field.VerticalAlignment,
+                VerticalAlignment = NormalizeVerticalAlignment(field.VerticalAlignment),
                 Bold = field.Bold,
                 Italic = field.Italic,
                 Uppercase = field.Uppercase,
-                ClearBackground = field.ClearBackground
+                ClearBackground = field.ClearBackground,
+                PreviewText = PreviewSampleForKey(field.Key)
             };
 
         public static DesignerFieldView FromImage(PdfImageFieldLayoutDto field)
@@ -552,7 +1004,8 @@ else if (_document is not null)
                 Y = field.Y,
                 Width = field.Width,
                 Height = field.Height,
-                Fit = field.Fit
+                Fit = field.Fit,
+                PreviewText = $"[ẢNH: {field.Key}]"
             };
     }
 }

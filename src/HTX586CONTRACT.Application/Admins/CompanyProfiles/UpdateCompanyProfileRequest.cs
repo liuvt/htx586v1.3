@@ -6,6 +6,7 @@ public sealed class UpdateCompanyProfileRequest
     public string? BranchName { get; set; }
     public string TaxCode { get; set; } = string.Empty;
     public string? BusinessLicenseNumber { get; set; }
+    public string? BusinessLicenseIssuedPlace { get; set; }
     public string Address { get; set; } = string.Empty;
     public string? PhoneNumber { get; set; }
     public string? Email { get; set; }

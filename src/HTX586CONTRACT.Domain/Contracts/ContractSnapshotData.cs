@@ -42,6 +42,7 @@ public sealed class ContractSnapshotData
                 BranchName = company.BranchName,
                 TaxCode = company.TaxCode,
                 BusinessLicenseNumber = company.BusinessLicenseNumber,
+                BusinessLicenseIssuedPlace = company.BusinessLicenseIssuedPlace,
                 Address = company.Address,
                 PhoneNumber = company.PhoneNumber,
                 Email = company.Email,
@@ -145,6 +146,7 @@ public sealed class ContractSnapshotData
                 BranchName = company?.BranchName,
                 TaxCode = First(contract.CompanyTaxCodeSnapshot, company?.TaxCode),
                 BusinessLicenseNumber = company?.BusinessLicenseNumber,
+                BusinessLicenseIssuedPlace = company?.BusinessLicenseIssuedPlace,
                 Address = First(contract.CompanyAddressSnapshot, company?.Address),
                 PhoneNumber = company?.PhoneNumber,
                 Email = company?.Email,
@@ -241,6 +243,7 @@ public sealed class CompanySnapshot
     public string? BranchName { get; set; }
     public string? TaxCode { get; set; }
     public string? BusinessLicenseNumber { get; set; }
+    public string? BusinessLicenseIssuedPlace { get; set; }
     public string? Address { get; set; }
     public string? PhoneNumber { get; set; }
     public string? Email { get; set; }

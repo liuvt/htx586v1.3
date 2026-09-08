@@ -25,6 +25,8 @@ else
                     <MudText Typo="Typo.h6">@CompanyDisplay(company)</MudText>
                     <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3">@company.TaxCode</MudText>
                     <MudGrid>
+                        <MudItem xs="12" md="6"><InfoListItem Label="GPKDVT" Value="@Display(company.BusinessLicenseNumber)" /></MudItem>
+                        <MudItem xs="12" md="6"><InfoListItem Label="Nơi cấp Phép" Value="@Display(company.BusinessLicenseIssuedPlace)" /></MudItem>
                         <MudItem xs="12" md="6"><InfoListItem Label="Điện thoại" Value="@Display(company.PhoneNumber)" /></MudItem>
                         <MudItem xs="12" md="6"><InfoListItem Label="Email" Value="@Display(company.Email)" /></MudItem>
                         <MudItem xs="12"><InfoListItem Label="Địa chỉ" Value="@company.Address" /></MudItem>

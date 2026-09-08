@@ -4,8 +4,8 @@ using System.Text.Json.Serialization;
 namespace HTX586CONTRACT.Web.Services;
 
 /// <summary>
-/// Service quản lý template PDF và file layout.json cho màn hình kéo thả vị trí data.
-/// Không tham gia xuất hợp đồng thật, chỉ dùng để chỉnh tọa độ/format layout.
+/// Service quản lý template PDF và một file layout JSON dùng chung cho cả
+/// hợp đồng hành khách và hợp đồng hàng hóa.
 /// </summary>
 public sealed class PdfLayoutDesignerService(
     IWebHostEnvironment environment,
@@ -26,6 +26,9 @@ public sealed class PdfLayoutDesignerService(
         WriteIndented = true
     };
 
+    // Tránh hai phiên designer lưu đè lẫn nhau khi cùng chỉnh 2 loại HĐ.
+    private static readonly SemaphoreSlim LayoutWriteLock = new(1, 1);
+
     public async Task<PdfLayoutDesignerDocument> LoadAsync(
         PdfLayoutDesignerContractType contractType = PdfLayoutDesignerContractType.Passenger,
         CancellationToken cancellationToken = default)
@@ -36,11 +39,11 @@ public sealed class PdfLayoutDesignerService(
             throw new FileNotFoundException($"Không tìm thấy PDF template tại '{paths.TemplatePath}'.", paths.TemplatePath);
 
         if (!File.Exists(paths.LayoutPath))
-            throw new FileNotFoundException($"Không tìm thấy layout JSON tại '{paths.LayoutPath}'.", paths.LayoutPath);
+            throw new FileNotFoundException($"Không tìm thấy layout JSON dùng chung tại '{paths.LayoutPath}'.", paths.LayoutPath);
 
-        var layoutJson = await File.ReadAllTextAsync(paths.LayoutPath, cancellationToken);
-        var layout = JsonSerializer.Deserialize<PdfTemplateLayoutDto>(layoutJson, ReadJsonOptions)
-            ?? throw new InvalidOperationException("Không thể đọc layout JSON.");
+        var bundle = await ReadBundleAsync(paths.LayoutPath, cancellationToken);
+        var layout = SelectLayout(bundle, contractType)
+            ?? throw new InvalidOperationException($"JSON dùng chung chưa có layout cho {GetContractTypeName(contractType)}.");
 
         var pdfBytes = await File.ReadAllBytesAsync(paths.TemplatePath, cancellationToken);
 
@@ -62,28 +65,71 @@ public sealed class PdfLayoutDesignerService(
     {
         var paths = ResolveDesignerPaths(contractType);
         var layoutPath = paths.LayoutPath;
+        var layoutDirectory = Path.GetDirectoryName(layoutPath)!;
 
-        Directory.CreateDirectory(Path.GetDirectoryName(layoutPath)!);
+        Directory.CreateDirectory(layoutDirectory);
 
-        if (File.Exists(layoutPath))
+        await LayoutWriteLock.WaitAsync(cancellationToken);
+        try
         {
-            var backupPath = Path.Combine(
-                Path.GetDirectoryName(layoutPath)!,
-                $"{Path.GetFileName(layoutPath)}.bak-{DateTime.Now:yyyyMMddHHmmss}");
-            File.Copy(layoutPath, backupPath, overwrite: false);
+            var bundle = File.Exists(layoutPath)
+                ? await ReadBundleAsync(layoutPath, cancellationToken)
+                : new PdfTemplateLayoutBundleDto();
+
+            if (contractType == PdfLayoutDesignerContractType.Cargo)
+                bundle.Cargo = layout;
+            else
+                bundle.Passenger = layout;
+
+            bundle.Version = Math.Max(1, bundle.Version);
+            bundle.Description = string.IsNullOrWhiteSpace(bundle.Description)
+                ? "Unified PDF layouts for passenger and cargo contracts"
+                : bundle.Description;
+
+            if (File.Exists(layoutPath))
+            {
+                var backupPath = Path.Combine(
+                    layoutDirectory,
+                    $"{Path.GetFileName(layoutPath)}.bak-{DateTime.Now:yyyyMMddHHmmssfff}");
+                File.Copy(layoutPath, backupPath, overwrite: false);
+                logger.LogInformation(
+                    "Đã backup layout PDF dùng chung. ContractType={ContractType}, Backup={BackupPath}",
+                    contractType,
+                    backupPath);
+            }
+
+            var json = JsonSerializer.Serialize(bundle, WriteJsonOptions);
+            var tempPath = Path.Combine(
+                layoutDirectory,
+                $".{Path.GetFileName(layoutPath)}.{Guid.NewGuid():N}.tmp");
+
+            try
+            {
+                await File.WriteAllTextAsync(tempPath, json, cancellationToken);
+                File.Move(tempPath, layoutPath, overwrite: true);
+            }
+            finally
+            {
+                try
+                {
+                    if (File.Exists(tempPath))
+                        File.Delete(tempPath);
+                }
+                catch
+                {
+                    // Không che lỗi lưu chính.
+                }
+            }
+
             logger.LogInformation(
-                "Đã backup layout PDF. ContractType={ContractType}, Backup={BackupPath}",
+                "Đã lưu layout PDF vào JSON dùng chung. ContractType={ContractType}, Layout={LayoutPath}",
                 contractType,
-                backupPath);
+                layoutPath);
         }
-
-        var json = JsonSerializer.Serialize(layout, WriteJsonOptions);
-        await File.WriteAllTextAsync(layoutPath, json, cancellationToken);
-
-        logger.LogInformation(
-            "Đã lưu layout PDF. ContractType={ContractType}, Layout={LayoutPath}",
-            contractType,
-            layoutPath);
+        finally
+        {
+            LayoutWriteLock.Release();
+        }
     }
 
     public static string GetContractTypeName(PdfLayoutDesignerContractType contractType)
@@ -92,6 +138,22 @@ public sealed class PdfLayoutDesignerService(
             PdfLayoutDesignerContractType.Cargo => "Hợp đồng vận chuyển hàng hóa",
             _ => "Hợp đồng vận chuyển hành khách"
         };
+
+    private static PdfTemplateLayoutDto? SelectLayout(
+        PdfTemplateLayoutBundleDto bundle,
+        PdfLayoutDesignerContractType contractType)
+        => contractType == PdfLayoutDesignerContractType.Cargo
+            ? bundle.Cargo
+            : bundle.Passenger;
+
+    private async Task<PdfTemplateLayoutBundleDto> ReadBundleAsync(
+        string layoutPath,
+        CancellationToken cancellationToken)
+    {
+        var layoutJson = await File.ReadAllTextAsync(layoutPath, cancellationToken);
+        return JsonSerializer.Deserialize<PdfTemplateLayoutBundleDto>(layoutJson, ReadJsonOptions)
+            ?? throw new InvalidOperationException("Không thể đọc layout JSON dùng chung.");
+    }
 
     private DesignerPaths ResolveDesignerPaths(PdfLayoutDesignerContractType contractType)
     {
@@ -109,15 +171,8 @@ public sealed class PdfLayoutDesignerService(
                     : "HopDongVanChuyenHanhKhach.template.pdf"));
 
         var layoutPath = ResolveContentPath(
-            configuration[isCargo
-                ? "DocumentGeneration:CargoContractLayoutPath"
-                : "DocumentGeneration:ContractLayoutPath"],
-            Path.Combine(
-                "Templates",
-                "Contracts",
-                isCargo
-                    ? "HopDongVanChuyenHangHoa.layout.json"
-                    : "HopDongVanChuyenHanhKhach.layout.json"));
+            configuration["DocumentGeneration:ContractLayoutsPath"],
+            Path.Combine("Templates", "Contracts", "HopDongVanChuyen.layout.json"));
 
         return new DesignerPaths(templatePath, layoutPath);
     }
@@ -152,6 +207,14 @@ public sealed class PdfLayoutDesignerDocument
     public string LayoutFileName => Path.GetFileName(LayoutPath);
     public string TemplateBase64 { get; set; } = string.Empty;
     public PdfTemplateLayoutDto Layout { get; set; } = new();
+}
+
+public sealed class PdfTemplateLayoutBundleDto
+{
+    public int Version { get; set; } = 1;
+    public string Description { get; set; } = "Unified PDF layouts for passenger and cargo contracts";
+    public PdfTemplateLayoutDto Passenger { get; set; } = new();
+    public PdfTemplateLayoutDto Cargo { get; set; } = new();
 }
 
 public sealed class PdfTemplateLayoutDto

@@ -11,12 +11,14 @@ namespace HTX586CONTRACT.Domain.Companies;
 public class CompanyProfile : ISoftDeletable
 {
     public const string DefaultComplaintContact = "Sở GTVT Cần Thơ: 0939.984.333 - 0907.877.758";
+    public const string DefaultBusinessLicenseIssuedPlace = "Sở Giao Thông Vận Tải Cần Thơ";
 
     public Guid Id { get; set; } = Guid.NewGuid();
     public string CompanyName { get; set; } = string.Empty;
     public string? BranchName { get; set; }
     public string TaxCode { get; set; } = string.Empty;
     public string? BusinessLicenseNumber { get; set; }
+    public string? BusinessLicenseIssuedPlace { get; set; }
     public string Address { get; set; } = string.Empty;
     public string? PhoneNumber { get; set; }
     public string? Email { get; set; }

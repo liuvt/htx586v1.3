@@ -36,7 +36,8 @@ public sealed class CompanyExcelImportService(
         "BankAccountNumber",
         "BankName",
         "IsActive",
-        "ComplaintContact"
+        "ComplaintContact",
+        "BusinessLicenseIssuedPlace"
     ];
 
     private static readonly string[] SupportedDateFormats =
@@ -107,6 +108,7 @@ public sealed class CompanyExcelImportService(
                         BankAccountNumber = NullIfWhiteSpace(values[12]),
                         BankName = NullIfWhiteSpace(values[13]),
                         ComplaintContact = NullIfWhiteSpace(values[15]) ?? CompanyProfile.DefaultComplaintContact,
+                        BusinessLicenseIssuedPlace = NullIfWhiteSpace(values[16]) ?? CompanyProfile.DefaultBusinessLicenseIssuedPlace,
                         IsActive = true
                     }
                 };
@@ -285,6 +287,7 @@ public sealed class CompanyExcelImportService(
         Maximum(row, data.BranchName, 300, "BranchName");
         Maximum(row, data.TaxCode, 50, "TaxCode");
         Maximum(row, data.BusinessLicenseNumber, 100, "BusinessLicenseNumber");
+        Maximum(row, data.BusinessLicenseIssuedPlace, 300, "BusinessLicenseIssuedPlace");
         Maximum(row, data.Address, 500, "Address");
         Maximum(row, data.PhoneNumber, 20, "PhoneNumber");
         Maximum(row, data.Email, 256, "Email");
@@ -356,6 +359,7 @@ public sealed class CompanyExcelImportService(
             BranchName = NullIfWhiteSpace(request.BranchName),
             TaxCode = request.TaxCode.Trim(),
             BusinessLicenseNumber = NullIfWhiteSpace(request.BusinessLicenseNumber),
+            BusinessLicenseIssuedPlace = NullIfWhiteSpace(request.BusinessLicenseIssuedPlace) ?? CompanyProfile.DefaultBusinessLicenseIssuedPlace,
             Address = request.Address.Trim(),
             PhoneNumber = NullIfWhiteSpace(request.PhoneNumber),
             Email = NullIfWhiteSpace(request.Email),

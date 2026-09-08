@@ -73,6 +73,7 @@ else
                     <MudItem xs="12"><MudTextField @bind-Value="_model.BranchName" Label="Tên chi nhánh / văn phòng" Variant="Variant.Outlined" /></MudItem>
                     <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.TaxCode" Label="Mã số thuế" Required="true" Variant="Variant.Outlined" /></MudItem>
                     <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.BusinessLicenseNumber" Label="Giấy phép kinh doanh" Variant="Variant.Outlined" /></MudItem>
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.BusinessLicenseIssuedPlace" Label="Nơi cấp Phép" Variant="Variant.Outlined" /></MudItem>
                     <MudItem xs="12"><MudTextField @bind-Value="_model.Address" Label="Địa chỉ" Required="true" Variant="Variant.Outlined" /></MudItem>
                 </MudGrid>
             </MudPaper>
@@ -210,6 +211,7 @@ else
                     BranchName = _detail.BranchName,
                     TaxCode = _detail.TaxCode,
                     BusinessLicenseNumber = _detail.BusinessLicenseNumber,
+                    BusinessLicenseIssuedPlace = _detail.BusinessLicenseIssuedPlace ?? CompanyProfile.DefaultBusinessLicenseIssuedPlace,
                     Address = _detail.Address,
                     PhoneNumber = _detail.PhoneNumber,
                     Email = _detail.Email,

@@ -29,6 +29,7 @@ public static class DatabaseSeeder
         await SeedRolesAsync(roleManager);
         await SeedOwnerAsync(userManager, configuration);
         await SeedCompanyComplaintContactsAsync(db);
+        await SeedCompanyBusinessLicenseIssuedPlacesAsync(db);
         await SeedContractTypesAsync(db);
     }
 
@@ -38,6 +39,14 @@ public static class DatabaseSeeder
             .Where(x => !x.IsDeleted && (x.ComplaintContact == null || x.ComplaintContact == ""))
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(x => x.ComplaintContact, CompanyProfile.DefaultComplaintContact));
+    }
+
+    private static async Task SeedCompanyBusinessLicenseIssuedPlacesAsync(ApplicationDbContext db)
+    {
+        await db.CompanyProfiles
+            .Where(x => !x.IsDeleted && (x.BusinessLicenseIssuedPlace == null || x.BusinessLicenseIssuedPlace == ""))
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.BusinessLicenseIssuedPlace, CompanyProfile.DefaultBusinessLicenseIssuedPlace));
     }
 
     private static async Task SeedRolesAsync(RoleManager<IdentityRole> roleManager)

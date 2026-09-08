@@ -104,6 +104,7 @@ public sealed class ContractService(
                     : x.CompanyNameSnapshot,
                 CompanyTaxCode = x.CompanyTaxCodeSnapshot,
                 CompanyBusinessLicenseNumber = x.CompanyProfile != null ? x.CompanyProfile.BusinessLicenseNumber : null,
+                CompanyBusinessLicenseIssuedPlace = x.CompanyProfile != null ? x.CompanyProfile.BusinessLicenseIssuedPlace : null,
                 CompanyAddress = x.CompanyAddressSnapshot,
                 CompanyPhoneNumber = x.CompanyProfile != null ? x.CompanyProfile.PhoneNumber : null,
                 CompanyComplaintContact = x.CompanyProfile != null ? x.CompanyProfile.ComplaintContact : null,
@@ -1636,6 +1637,9 @@ public sealed class ContractService(
             : snapshot.Company.BranchName;
         detail.CompanyTaxCode = snapshot.Company.TaxCode;
         detail.CompanyBusinessLicenseNumber = snapshot.Company.BusinessLicenseNumber;
+        detail.CompanyBusinessLicenseIssuedPlace = string.IsNullOrWhiteSpace(snapshot.Company.BusinessLicenseIssuedPlace)
+            ? CompanyProfile.DefaultBusinessLicenseIssuedPlace
+            : snapshot.Company.BusinessLicenseIssuedPlace;
         detail.CompanyAddress = snapshot.Company.Address;
         detail.CompanyPhoneNumber = snapshot.Company.PhoneNumber;
         detail.CompanyComplaintContact = string.IsNullOrWhiteSpace(snapshot.Company.ComplaintContact)

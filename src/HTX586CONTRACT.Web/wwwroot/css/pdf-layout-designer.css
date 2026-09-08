@@ -59,31 +59,74 @@
     pointer-events: auto;
     cursor: move;
     border: 1px dashed rgba(25, 118, 210, 0.9);
-    background: rgba(25, 118, 210, 0.08);
+    background: rgba(25, 118, 210, 0.035);
     min-width: 8px;
     min-height: 8px;
     outline: none;
+    overflow: visible;
+}
+
+.pdf-designer-field.hide-box {
+    border-color: transparent;
+    background: transparent;
+}
+
+.pdf-designer-field.hide-field {
+    opacity: 0;
+    pointer-events: none;
 }
 
 .pdf-designer-field-image {
     border-color: rgba(216, 67, 21, 0.95);
-    background: rgba(216, 67, 21, 0.08);
+    background: rgba(216, 67, 21, 0.035);
 }
 
 .pdf-designer-field.is-selected {
-    border: 2px solid #00acc1;
-    background: rgba(0, 172, 193, 0.12);
-    z-index: 10;
+    border: 2px solid #00acc1 !important;
+    background: rgba(0, 172, 193, 0.08) !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    z-index: 20;
+}
+
+.pdf-designer-field.is-dragging {
+    z-index: 30;
+}
+
+.pdf-designer-field-preview {
+    position: absolute;
+    box-sizing: border-box;
+    overflow: hidden;
+    color: rgba(0, 0, 0, 0.88);
+    white-space: nowrap;
+    word-break: normal;
+    pointer-events: none;
+}
+
+.pdf-designer-preview-line {
+    display: block;
+    margin: 0;
+    padding: 0;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.pdf-designer-image-placeholder {
+    color: rgba(216, 67, 21, 0.78);
+    font: 600 9px/1.1 Arial, sans-serif !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
 }
 
 .pdf-designer-field-label {
     position: absolute;
     left: 0;
-    top: -17px;
-    max-width: 220px;
+    top: -18px;
+    max-width: 250px;
     padding: 1px 4px;
     border-radius: 3px;
-    background: rgba(38, 50, 56, 0.88);
+    background: rgba(38, 50, 56, 0.9);
     color: white;
     font-size: 10px;
     line-height: 14px;
@@ -91,16 +134,92 @@
     overflow: hidden;
     text-overflow: ellipsis;
     pointer-events: none;
+    display: none;
+}
+
+.pdf-designer-field.is-selected .pdf-designer-field-label {
+    display: block;
+}
+
+.pdf-designer-field-coordinates {
+    position: absolute;
+    left: 0;
+    bottom: -18px;
+    padding: 1px 4px;
+    border-radius: 3px;
+    background: rgba(0, 96, 100, 0.92);
+    color: white;
+    font: 600 9px/14px Arial, sans-serif;
+    white-space: nowrap;
+    pointer-events: none;
+    display: none;
+}
+
+.pdf-designer-field.is-selected .pdf-designer-field-coordinates {
+    display: block;
+}
+
+.pdf-designer-field.show-crosshair::before,
+.pdf-designer-field.show-crosshair::after {
+    content: '';
+    position: absolute;
+    pointer-events: none;
+    z-index: 22;
+    background: rgba(0, 172, 193, 0.62);
+}
+
+.pdf-designer-field.show-crosshair::before {
+    left: 50%;
+    top: -8px;
+    bottom: -8px;
+    width: 1px;
+}
+
+.pdf-designer-field.show-crosshair::after {
+    top: 50%;
+    left: -8px;
+    right: -8px;
+    height: 1px;
 }
 
 .pdf-designer-field-resize {
     position: absolute;
-    width: 10px;
-    height: 10px;
-    right: -5px;
-    bottom: -5px;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
     background: #00acc1;
     border: 1px solid white;
-    cursor: nwse-resize;
+    display: none;
+    z-index: 25;
+}
+
+.pdf-designer-field.is-selected .pdf-designer-field-resize {
+    display: block;
+}
+
+.pdf-designer-field-resize.resize-nw { left: -5px; top: -5px; cursor: nwse-resize; }
+.pdf-designer-field-resize.resize-ne { right: -5px; top: -5px; cursor: nesw-resize; }
+.pdf-designer-field-resize.resize-sw { left: -5px; bottom: -5px; cursor: nesw-resize; }
+.pdf-designer-field-resize.resize-se { right: -5px; bottom: -5px; cursor: nwse-resize; }
+
+.pdf-designer-nudge-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.pdf-designer-nudge-grid .center-info {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    color: #607d8b;
+    text-align: center;
+}
+
+.pdf-designer-json-editor textarea {
+    font-family: Consolas, "Courier New", monospace !important;
+    font-size: 12px !important;
+    line-height: 1.45 !important;
 }

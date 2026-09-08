@@ -49,6 +49,10 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("BusinessLicenseIssuedPlace")
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
                     b.Property<string>("CompanyName")
                         .IsRequired()
                         .HasMaxLength(300)

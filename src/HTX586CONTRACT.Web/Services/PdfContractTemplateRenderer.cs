@@ -39,10 +39,8 @@ public sealed class PdfContractTemplateRenderer(
                 : "HopDongVanChuyenHanhKhach.template.pdf"));
 
         var layoutPath = ResolveContentPath(
-            configuration[isCargo ? "DocumentGeneration:CargoContractLayoutPath" : "DocumentGeneration:ContractLayoutPath"],
-            Path.Combine("Templates", "Contracts", isCargo
-                ? "HopDongVanChuyenHangHoa.layout.json"
-                : "HopDongVanChuyenHanhKhach.layout.json"));
+            configuration["DocumentGeneration:ContractLayoutsPath"],
+            Path.Combine("Templates", "Contracts", "HopDongVanChuyen.layout.json"));
 
         if (!File.Exists(templatePath))
             throw new FileNotFoundException(
@@ -52,9 +50,14 @@ public sealed class PdfContractTemplateRenderer(
             throw new FileNotFoundException(
                 $"Không tìm thấy file tọa độ PDF tại '{layoutPath}'.", layoutPath);
 
-        var layout = JsonSerializer.Deserialize<PdfTemplateLayout>(
+        var layoutBundle = JsonSerializer.Deserialize<PdfTemplateLayoutBundle>(
                 File.ReadAllText(layoutPath), JsonOptions)
-            ?? throw new InvalidOperationException("Không thể đọc cấu hình tọa độ PDF.");
+            ?? throw new InvalidOperationException("Không thể đọc cấu hình tọa độ PDF dùng chung.");
+
+        var layout = isCargo ? layoutBundle.Cargo : layoutBundle.Passenger;
+        if (layout is null)
+            throw new InvalidOperationException(
+                $"File layout dùng chung chưa có cấu hình cho {(isCargo ? "hợp đồng hàng hóa" : "hợp đồng hành khách")}.");
 
         var textValues = BuildTextValues(contract);
         var imageValues = BuildImageValues(contract);
@@ -381,10 +384,21 @@ public sealed class PdfContractTemplateRenderer(
                 $"(Kèm theo hợp đồng vận chuyển số {First(contract.ContractNumber, "...")}/HĐVC-HTX " +
                 $"ngày {contractDate:dd} tháng {contractDate:MM} năm {contractDate:yyyy})",
 
+            // Tiêu đề góc trái HĐ hàng hóa lấy động từ snapshot Công ty/Văn phòng.
+            ["HEADER_COMPANY_LICENSE_ISSUED_PLACE"] = FrozenText(
+                snapshot?.Company.BusinessLicenseIssuedPlace,
+                company?.BusinessLicenseIssuedPlace,
+                CompanyProfile.DefaultBusinessLicenseIssuedPlace),
+            ["HEADER_COMPANY_OFFICE_NAME"] = companyOfficeName,
+
             ["COMPANY_NAME"] = isCargo ? companyOfficeName : companyName,
             ["COMPANY_OFFICE_NAME"] = companyOfficeName,
             ["COMPANY_TAX_CODE"] = FrozenText(snapshot?.Company.TaxCode, contract.CompanyTaxCodeSnapshot, company?.TaxCode, "..."),
             ["COMPANY_LICENSE"] = FrozenText(snapshot?.Company.BusinessLicenseNumber, company?.BusinessLicenseNumber, "..."),
+            ["COMPANY_LICENSE_ISSUED_PLACE"] = FrozenText(
+                snapshot?.Company.BusinessLicenseIssuedPlace,
+                company?.BusinessLicenseIssuedPlace,
+                CompanyProfile.DefaultBusinessLicenseIssuedPlace),
             ["COMPANY_ADDRESS"] = FrozenText(snapshot?.Company.Address, contract.CompanyAddressSnapshot, company?.Address, "..."),
             ["COMPANY_PHONE"] = FrozenText(snapshot?.Company.PhoneNumber, company?.PhoneNumber, "..."),
             ["COMPANY_COMPLAINT_CONTACT"] = companyComplaintContact,
@@ -690,6 +704,13 @@ public sealed class PdfContractTemplateRenderer(
         {
             // Không che lỗi gốc.
         }
+    }
+
+    private sealed class PdfTemplateLayoutBundle
+    {
+        public int Version { get; set; } = 1;
+        public PdfTemplateLayout? Passenger { get; set; }
+        public PdfTemplateLayout? Cargo { get; set; }
     }
 
     private sealed class PdfTemplateLayout

@@ -53,6 +53,7 @@ public sealed class ContractDetailDto
     public string? CompanyOfficeName { get; set; }
     public string? CompanyTaxCode { get; set; }
     public string? CompanyBusinessLicenseNumber { get; set; }
+    public string? CompanyBusinessLicenseIssuedPlace { get; set; }
     public string? CompanyAddress { get; set; }
     public string? CompanyPhoneNumber { get; set; }
     public string? CompanyComplaintContact { get; set; }

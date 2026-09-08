@@ -25,6 +25,7 @@ public sealed class CompanyProfileService(
                 x.TaxCode.Contains(keyword) ||
                 x.RepresentativeName.Contains(keyword) ||
                 (x.PhoneNumber != null && x.PhoneNumber.Contains(keyword)) ||
+                (x.BusinessLicenseIssuedPlace != null && x.BusinessLicenseIssuedPlace.Contains(keyword)) ||
                 (x.ComplaintContact != null && x.ComplaintContact.Contains(keyword)));
         }
 
@@ -44,6 +45,7 @@ public sealed class CompanyProfileService(
                 CompanyName = x.CompanyName,
                 BranchName = x.BranchName,
                 TaxCode = x.TaxCode,
+                BusinessLicenseIssuedPlace = x.BusinessLicenseIssuedPlace,
                 PhoneNumber = x.PhoneNumber,
                 Email = x.Email,
                 ComplaintContact = x.ComplaintContact,
@@ -72,6 +74,7 @@ public sealed class CompanyProfileService(
                 BranchName = x.BranchName,
                 TaxCode = x.TaxCode,
                 BusinessLicenseNumber = x.BusinessLicenseNumber,
+                BusinessLicenseIssuedPlace = x.BusinessLicenseIssuedPlace,
                 Address = x.Address,
                 PhoneNumber = x.PhoneNumber,
                 Email = x.Email,
@@ -187,6 +190,7 @@ public sealed class CompanyProfileService(
         e.BranchName = N(r.BranchName);
         e.TaxCode = r.TaxCode.Trim();
         e.BusinessLicenseNumber = N(r.BusinessLicenseNumber);
+        e.BusinessLicenseIssuedPlace = N(r.BusinessLicenseIssuedPlace) ?? CompanyProfile.DefaultBusinessLicenseIssuedPlace;
         e.Address = r.Address.Trim();
         e.PhoneNumber = N(r.PhoneNumber);
         e.Email = N(r.Email);
@@ -207,6 +211,7 @@ public sealed class CompanyProfileService(
         e.BranchName = N(r.BranchName);
         e.TaxCode = r.TaxCode.Trim();
         e.BusinessLicenseNumber = N(r.BusinessLicenseNumber);
+        e.BusinessLicenseIssuedPlace = N(r.BusinessLicenseIssuedPlace) ?? CompanyProfile.DefaultBusinessLicenseIssuedPlace;
         e.Address = r.Address.Trim();
         e.PhoneNumber = N(r.PhoneNumber);
         e.Email = N(r.Email);
