@@ -2,6 +2,7 @@ using HTX586CONTRACT.Domain.Common;
 using HTX586CONTRACT.Domain.Companies;
 using HTX586CONTRACT.Domain.Contracts;
 using HTX586CONTRACT.Domain.Customers;
+using HTX586CONTRACT.Domain.Drivers;
 using HTX586CONTRACT.Domain.Identity;
 using HTX586CONTRACT.Domain.Notifications;
 using HTX586CONTRACT.Domain.Offices;
@@ -17,6 +18,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 {
     public DbSet<CompanyProfile> CompanyProfiles => Set<CompanyProfile>();
     public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<SavedDriver> SavedDrivers => Set<SavedDriver>();
     public DbSet<Vehicle> Vehicles => Set<Vehicle>();
     public DbSet<ContractType> ContractTypes => Set<ContractType>();
     public DbSet<ContractTemplate> ContractTemplates => Set<ContractTemplate>();

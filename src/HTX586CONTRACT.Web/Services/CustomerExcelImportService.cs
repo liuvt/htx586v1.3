@@ -91,6 +91,9 @@ public sealed partial class CustomerExcelImportService(IDbContextFactory<Applica
             ct.ThrowIfCancellationRequested();
             try
             {
+                if (string.IsNullOrWhiteSpace(row.CitizenId))
+                    throw new InvalidOperationException("CitizenId/CCCD khách hàng là bắt buộc.");
+
                 await using var db = await factory.CreateDbContextAsync(ct);
                 var exists = await db.Customers.IgnoreQueryFilters().AsNoTracking().AnyAsync(x =>
                     !x.IsDeleted && x.CreatedByDriverId == createdByUserId && x.PhoneNumber == row.PhoneNumber, ct);
@@ -156,6 +159,7 @@ public sealed partial class CustomerExcelImportService(IDbContextFactory<Applica
     {
         ExcelImportUtility.Required(row.Errors, row.FullName, "FullName");
         ExcelImportUtility.Required(row.Errors, row.PhoneNumber, "PhoneNumber");
+        ExcelImportUtility.Required(row.Errors, row.CitizenId, "CitizenId");
         if (row.Type == CustomerType.Organization)
             ExcelImportUtility.Required(row.Errors, row.OrganizationName, "OrganizationName");
         ExcelImportUtility.Maximum(row.Errors, row.FullName, 200, "FullName");

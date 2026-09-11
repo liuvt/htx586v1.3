@@ -151,6 +151,7 @@ builder.Services.AddScoped<AccountExcelImportService>();
 builder.Services.AddScoped<VehicleExcelImportService>();
 builder.Services.AddScoped<CustomerExcelImportService>();
 builder.Services.AddScoped<IContractService, ContractService>();
+builder.Services.AddScoped<ISavedDriverService, SavedDriverService>();
 builder.Services.AddScoped<IDriverNotificationService, DriverNotificationService>();
 builder.Services.AddSingleton<IUploadFileStorage, LocalUploadFileStorage>();
 builder.Services.AddSingleton<PdfContractTemplateRenderer>();

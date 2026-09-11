@@ -6,6 +6,7 @@ using HTX586CONTRACT.Application.Contracts;
 using HTX586CONTRACT.Domain.Companies;
 using HTX586CONTRACT.Domain.Contracts;
 using HTX586CONTRACT.Domain.Customers;
+using HTX586CONTRACT.Domain.Drivers;
 using HTX586CONTRACT.Domain.Enums;
 using HTX586CONTRACT.Domain.Identity;
 using HTX586CONTRACT.Domain.Notifications;
@@ -314,6 +315,9 @@ public sealed class ContractService(
         var cargoHandlingError = ValidateCargoHandlingEvents(request);
         if (cargoHandlingError is not null)
             return new(false, null, cargoHandlingError);
+        var driverRequirementError = ValidateDriverRequirements(request);
+        if (driverRequirementError is not null)
+            return new(false, null, driverRequirementError);
         var passengerCount = CountPassengers(request.Passengers, request.CustomerTravelsWithGroup);
         if (request.BusinessType == ContractBusinessType.Passenger && passengerCount > 20)
             return new(false, null, "Danh sách hành khách tối đa 20 người theo mẫu PDF hiện tại.");
@@ -408,6 +412,9 @@ public sealed class ContractService(
             AddCargoHandlingEvents(entity, request.CargoHandlingEvents ?? [], currentUserId);
         entity.ContractDataJson = createdSnapshot.ToJson();
 
+        if (access.IsVehicleOwner && !canManage)
+            await RememberSavedDriversAsync(db, request, currentUserId, ct);
+
         if (canManage)
         {
             entity.AuditLogs.Add(new ContractAuditLog
@@ -460,13 +467,15 @@ public sealed class ContractService(
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, ct);
         if (entity is null)
             return new(false, null, "Không tìm thấy hợp đồng.");
-        if (IsFinal(entity.Status))
-            return new(false, id, "Hợp đồng đã hủy hoặc đã hoàn thành nên bị khóa vĩnh viễn.");
-        if (entity.Signatures.Any(x => !x.IsDeleted &&
-            (x.Party == SignatureParty.Driver || x.Party == SignatureParty.Customer)))
-            return new(false, id, "Hợp đồng đã có chữ ký người lái hoặc khách hàng nên nội dung không thể thay đổi.");
+        if (IsEditLocked(entity.Status))
+            return new(false, id, "Hợp đồng đã hủy hoặc đã hoàn thành nên không thể cập nhật.");
 
+        var originalStatus = entity.Status;
         var originalVehicleOwnerId = entity.DriverId;
+        var originalReceivedAt = entity.ReceivedAt;
+        var originalAssignedByUserId = entity.AssignedByUserId;
+        var originalAssignedByName = entity.AssignedByNameSnapshot;
+        var originalAssignedAt = entity.AssignedAt;
         var existingSnapshot = ContractSnapshotData.FromJson(entity.ContractDataJson);
 
         var access = await GetAccessAsync(db, currentUserId, ct);
@@ -479,6 +488,9 @@ public sealed class ContractService(
         var cargoHandlingError = ValidateCargoHandlingEvents(request);
         if (cargoHandlingError is not null)
             return new(false, id, cargoHandlingError);
+        var driverRequirementError = ValidateDriverRequirements(request);
+        if (driverRequirementError is not null)
+            return new(false, id, driverRequirementError);
 
         var passengerCount = CountPassengers(request.Passengers, request.CustomerTravelsWithGroup);
         if (request.BusinessType == ContractBusinessType.Passenger && passengerCount > 20)
@@ -535,12 +547,29 @@ public sealed class ContractService(
         entity.CustomerId = customerResult.Customer.Id;
         entity.VehicleId = vehicle.Id;
         entity.BusinessType = request.BusinessType;
+        var recipientChanged = !string.Equals(originalVehicleOwnerId, vehicleOwner.Id, StringComparison.Ordinal);
         entity.IsSelfCreated = false;
-        entity.Status = ContractStatus.Assigned;
-        entity.AssignedByUserId = currentUserId;
-        entity.AssignedByNameSnapshot = actorName;
-        entity.AssignedAt = now;
-        entity.ReceivedAt = null;
+
+        // Cập nhật HĐ đã phát không được tự động đưa trạng thái quay về "Chờ nhận".
+        // Nếu vẫn cùng tài khoản Chủ xe nhận HĐ thì giữ nguyên trạng thái/ReceivedAt.
+        // Chỉ khi đổi sang Chủ xe khác mới xem là phát lại và yêu cầu tài khoản mới bấm Nhận HĐ.
+        if (recipientChanged)
+        {
+            entity.Status = ContractStatus.Assigned;
+            entity.AssignedByUserId = currentUserId;
+            entity.AssignedByNameSnapshot = actorName;
+            entity.AssignedAt = now;
+            entity.ReceivedAt = null;
+        }
+        else
+        {
+            entity.Status = NormalizeEditableStatus(originalStatus, false, originalReceivedAt);
+            entity.AssignedByUserId = originalAssignedByUserId ?? currentUserId;
+            entity.AssignedByNameSnapshot = originalAssignedByName ?? actorName;
+            entity.AssignedAt = originalAssignedAt ?? now;
+            entity.ReceivedAt = originalReceivedAt;
+        }
+
         Apply(entity, request);
         ApplySnapshots(entity, vehicleOwner, company, customerResult.Customer, vehicle);
         var updatedSnapshot = ContractSnapshotData.Capture(
@@ -565,13 +594,15 @@ public sealed class ContractService(
             AddPassengers(entity, request.Passengers, currentUserId);
         else
             AddCargoHandlingEvents(entity, request.CargoHandlingEvents ?? [], currentUserId);
+
+        var invalidatedSignatureCount = InvalidateEditablePartySignatures(entity, currentUserId, now);
         entity.UpdatedAt = now;
         entity.UpdatedBy = currentUserId;
 
         entity.AuditLogs.Add(new ContractAuditLog
         {
             ContractId = entity.Id,
-            Action = "AssignedToVehicleOwner",
+            Action = recipientChanged ? "ReassignedToVehicleOwner" : "ManagerUpdatedContract",
             UserId = currentUserId,
             UserName = actorName,
             NewDataJson = $"{{\"vehicleOwnerId\":\"{vehicleOwner.Id}\",\"vehicleId\":\"{vehicle.Id}\"}}",
@@ -580,9 +611,11 @@ public sealed class ContractService(
         db.DriverNotifications.Add(new DriverNotification
         {
             DriverId = vehicleOwner.Id,
-            Type = "ContractAssigned",
-            Title = "Hợp đồng được cập nhật/phát xuống",
-            Message = $"Hợp đồng đã được {actorName} cập nhật/phát cho xe {vehicle.PlateNumber}.",
+            Type = recipientChanged ? "ContractAssigned" : "ContractUpdated",
+            Title = recipientChanged ? "Hợp đồng được phát lại" : "Hợp đồng vừa được cập nhật",
+            Message = recipientChanged
+                ? $"Hợp đồng đã được {actorName} phát lại cho xe {vehicle.PlateNumber}."
+                : $"Hợp đồng xe {vehicle.PlateNumber} vừa được {actorName} cập nhật.",
             LinkUrl = $"/vehicle-owner/contracts/{entity.Id}",
             RelatedContractId = entity.Id,
             RelatedVehicleId = vehicle.Id,
@@ -590,9 +623,14 @@ public sealed class ContractService(
         });
 
         await db.SaveChangesAsync(ct);
-        return new(true, id, customerResult.CreatedNew
-            ? "Đã tạo khách hàng mới, lưu vào danh mục và cập nhật/phát lại hợp đồng cho Chủ xe."
-            : "Đã cập nhật và phát lại hợp đồng cho Chủ xe.");
+        var updateMessage = customerResult.CreatedNew
+            ? "Đã tạo khách hàng mới, lưu vào danh mục và cập nhật hợp đồng."
+            : recipientChanged
+                ? "Đã cập nhật và phát lại hợp đồng cho Chủ xe mới."
+                : "Đã cập nhật hợp đồng. Trạng thái nhận HĐ hiện tại được giữ nguyên.";
+        if (invalidatedSignatureCount > 0)
+            updateMessage += " Nội dung đã thay đổi nên chữ ký Tài xế/Khách hàng trước đó đã được vô hiệu; vui lòng ký lại trước khi hoàn thành.";
+        return new(true, id, updateMessage);
     }
 
     public async Task<SaveContractResult> ReceiveAsync(
@@ -688,6 +726,8 @@ public sealed class ContractService(
             return new(false, id, "Hợp đồng tự tạo không ở trạng thái cho phép hoàn thành.");
         if (entity.CompanyProfile is null || entity.Driver is null || entity.Customer is null || entity.Vehicle is null)
             return new(false, id, "Dữ liệu Công ty/Văn phòng, Chủ xe, khách hàng hoặc xe của hợp đồng không còn đầy đủ.");
+        if (string.IsNullOrWhiteSpace(entity.CustomerCitizenIdSnapshot))
+            return new(false, id, "Căn cước công dân (CCCD) của khách hàng/người đại diện là bắt buộc trước khi hoàn thành hợp đồng.");
         if (string.IsNullOrWhiteSpace(entity.Vehicle.PermitNumber))
             return new(false, id, "Xe chưa có số phù hiệu. Vui lòng cập nhật số phù hiệu xe trước khi hoàn thành hợp đồng.");
 
@@ -700,9 +740,16 @@ public sealed class ContractService(
             return new(false, id, "Vui lòng nhập họ tên Tài xế 1.");
         if (!AutomobileDrivingLicenseClasses.IsValid(entity.OperatingDriverLicenseClass))
             return new(false, id, "Vui lòng chọn hạng GPLX ô tô hợp lệ cho Tài xế 1.");
+        if (entity.BusinessType == ContractBusinessType.Cargo && string.IsNullOrWhiteSpace(entity.OperatingDriverLicenseNumber))
+            return new(false, id, "Hợp đồng hàng hóa bắt buộc nhập Số GPLX của Tài xế 1.");
         if (!string.IsNullOrWhiteSpace(entity.SecondDriverName) &&
             !AutomobileDrivingLicenseClasses.IsValid(entity.SecondDriverLicenseClass))
             return new(false, id, "Vui lòng chọn hạng GPLX ô tô hợp lệ cho Tài xế 2.");
+        if (entity.BusinessType == ContractBusinessType.Cargo &&
+            (!string.IsNullOrWhiteSpace(entity.SecondDriverName) || !string.IsNullOrWhiteSpace(entity.SecondDriverLicenseClass) ||
+             !string.IsNullOrWhiteSpace(entity.SecondDriverLicenseNumber) || !string.IsNullOrWhiteSpace(entity.SecondDriverPhoneNumber)) &&
+            string.IsNullOrWhiteSpace(entity.SecondDriverLicenseNumber))
+            return new(false, id, "Nếu khai báo Tài xế 2 cho hợp đồng hàng hóa thì bắt buộc nhập Số GPLX.");
 
         if (entity.BusinessType == ContractBusinessType.Cargo)
         {
@@ -902,9 +949,11 @@ public sealed class ContractService(
         string currentUserId,
         CancellationToken ct)
     {
-        if (entity.Status is not ContractStatus.Created and not ContractStatus.Assigned and not ContractStatus.Received)
-            return new(false, entity.Id, "Hợp đồng không còn ở trạng thái cho phép Chủ xe cập nhật.");
+        if (IsEditLocked(entity.Status))
+            return new(false, entity.Id, "Hợp đồng đã hủy hoặc đã hoàn thành nên không thể cập nhật.");
 
+        var originalStatus = entity.Status;
+        var originalReceivedAt = entity.ReceivedAt;
         var existingSnapshot = ContractSnapshotData.FromJson(entity.ContractDataJson);
 
         // Hợp đồng được Owner/Admin phát xuống giữ nguyên xe và khách hàng.
@@ -1028,15 +1077,17 @@ public sealed class ContractService(
         else
             AddCargoHandlingEvents(entity, request.CargoHandlingEvents ?? [], currentUserId);
 
-        // Assigned thể hiện nội dung đã lưu và có thể ghi nhận chữ ký khách hàng.
-        // Received vẫn được giữ nếu tài khoản đã bấm nhận trước đó.
-        entity.Status = entity.Status == ContractStatus.Received
-            ? ContractStatus.Received
-            : entity.IsSelfCreated
-                ? ContractStatus.Created
-                : ContractStatus.Assigned;
-        entity.UpdatedAt = DateTime.UtcNow;
+        // Cho phép Chủ xe sửa/lưu bất kỳ lúc nào trước khi HĐ bị Hủy/Hoàn thành.
+        // Nếu HĐ đã nhận thì giữ trạng thái Received; nếu chưa nhận thì giữ Assigned.
+        entity.Status = NormalizeEditableStatus(originalStatus, entity.IsSelfCreated, originalReceivedAt);
+        entity.ReceivedAt = originalReceivedAt;
+
+        var now = DateTime.UtcNow;
+        var invalidatedSignatureCount = InvalidateEditablePartySignatures(entity, currentUserId, now);
+        entity.UpdatedAt = now;
         entity.UpdatedBy = currentUserId;
+        await RememberSavedDriversAsync(db, request, currentUserId, ct);
+
         entity.AuditLogs.Add(new ContractAuditLog
         {
             ContractId = entity.Id,
@@ -1044,13 +1095,16 @@ public sealed class ContractService(
             UserId = currentUserId,
             UserName = await GetUserDisplayNameAsync(db, currentUserId, ct),
             NewDataJson = $"{{\"passengerCount\":{passengerCount},\"vehicleId\":\"{vehicle!.Id}\"}}",
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = now
         });
 
         await db.SaveChangesAsync(ct);
-        return new(true, entity.Id, entity.BusinessType == ContractBusinessType.Cargo
-            ? "Đã lưu tạm nội dung hợp đồng và thông tin vận chuyển hàng hóa."
-            : "Đã lưu tạm nội dung hợp đồng, thông tin chuyến đi và danh sách hành khách.");
+        var vehicleOwnerMessage = entity.BusinessType == ContractBusinessType.Cargo
+            ? "Đã lưu cập nhật nội dung hợp đồng và thông tin vận chuyển hàng hóa."
+            : "Đã lưu cập nhật nội dung hợp đồng, thông tin chuyến đi và danh sách hành khách.";
+        if (invalidatedSignatureCount > 0)
+            vehicleOwnerMessage += " Nội dung đã thay đổi nên chữ ký Tài xế/Khách hàng trước đó đã được vô hiệu; vui lòng ký lại trước khi hoàn thành.";
+        return new(true, entity.Id, vehicleOwnerMessage);
     }
 
     private sealed record UserAccess(
@@ -1133,6 +1187,9 @@ public sealed class ContractService(
         Guid? existingCustomerId,
         CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(request.CustomerCitizenId))
+            throw new InvalidOperationException("Căn cước công dân (CCCD) của khách hàng/người đại diện là bắt buộc.");
+
         if (canManage)
         {
             // Owner/Quản lý có thể chọn khách hàng đã có hoặc tạo mới trực tiếp ngay trên form Hợp đồng.
@@ -1493,6 +1550,104 @@ public sealed class ContractService(
         return (vehicle, vehicleOwner, selectedOfficeLink.CompanyProfile, null);
     }
 
+    private static string? ValidateDriverRequirements(SaveContractRequest request)
+    {
+        if (request.BusinessType != ContractBusinessType.Cargo)
+            return null;
+
+        if (string.IsNullOrWhiteSpace(request.OperatingDriverName))
+            return "Hợp đồng hàng hóa bắt buộc nhập Họ tên Tài xế 1.";
+        if (!AutomobileDrivingLicenseClasses.IsValid(request.OperatingDriverLicenseClass))
+            return "Hợp đồng hàng hóa bắt buộc chọn Hạng GPLX ô tô hợp lệ cho Tài xế 1.";
+        if (string.IsNullOrWhiteSpace(request.OperatingDriverLicenseNumber))
+            return "Hợp đồng hàng hóa bắt buộc nhập Số GPLX của Tài xế 1.";
+
+        var hasSecondDriver =
+            !string.IsNullOrWhiteSpace(request.SecondDriverName) ||
+            !string.IsNullOrWhiteSpace(request.SecondDriverLicenseClass) ||
+            !string.IsNullOrWhiteSpace(request.SecondDriverLicenseNumber) ||
+            !string.IsNullOrWhiteSpace(request.SecondDriverPhoneNumber);
+        if (!hasSecondDriver)
+            return null;
+
+        if (string.IsNullOrWhiteSpace(request.SecondDriverName))
+            return "Nếu khai báo Tài xế 2 thì bắt buộc nhập Họ tên.";
+        if (!AutomobileDrivingLicenseClasses.IsValid(request.SecondDriverLicenseClass))
+            return "Nếu khai báo Tài xế 2 thì bắt buộc chọn Hạng GPLX ô tô hợp lệ.";
+        if (string.IsNullOrWhiteSpace(request.SecondDriverLicenseNumber))
+            return "Nếu khai báo Tài xế 2 cho hợp đồng hàng hóa thì bắt buộc nhập Số GPLX.";
+        if (NormalizeDriverLicenseNumber(request.OperatingDriverLicenseNumber!) == NormalizeDriverLicenseNumber(request.SecondDriverLicenseNumber))
+            return "Tài xế 1 và Tài xế 2 không được dùng cùng một Số GPLX.";
+
+        return null;
+    }
+
+    private static async Task RememberSavedDriversAsync(
+        ApplicationDbContext db,
+        SaveContractRequest request,
+        string currentUserId,
+        CancellationToken ct)
+    {
+        await RememberOneSavedDriverAsync(
+            db, request.OperatingDriverName, request.OperatingDriverLicenseClass,
+            request.OperatingDriverLicenseNumber, request.OperatingDriverPhoneNumber, currentUserId, ct);
+
+        await RememberOneSavedDriverAsync(
+            db, request.SecondDriverName, request.SecondDriverLicenseClass,
+            request.SecondDriverLicenseNumber, request.SecondDriverPhoneNumber, currentUserId, ct);
+    }
+
+    private static async Task RememberOneSavedDriverAsync(
+        ApplicationDbContext db,
+        string? fullName,
+        string? licenseClass,
+        string? licenseNumber,
+        string? phoneNumber,
+        string currentUserId,
+        CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(fullName) ||
+            string.IsNullOrWhiteSpace(licenseNumber) ||
+            !AutomobileDrivingLicenseClasses.IsValid(licenseClass))
+            return;
+
+        var normalizedLicense = NormalizeDriverLicenseNumber(licenseNumber);
+        var existing = db.SavedDrivers.Local.FirstOrDefault(x => x.DriverLicenseNumber == normalizedLicense)
+            ?? await db.SavedDrivers.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(x => x.DriverLicenseNumber == normalizedLicense, ct);
+
+        // Số GPLX là khóa chính toàn cục. Không đọc/ghi đè bản ghi do tài khoản khác tạo.
+        if (existing is not null && !string.Equals(existing.CreatedByUserId, currentUserId, StringComparison.Ordinal))
+            return;
+
+        var now = DateTime.UtcNow;
+        if (existing is null)
+        {
+            existing = new SavedDriver
+            {
+                DriverLicenseNumber = normalizedLicense,
+                CreatedByUserId = currentUserId,
+                CreatedAt = now
+            };
+            db.SavedDrivers.Add(existing);
+        }
+        else if (existing.IsDeleted)
+        {
+            existing.IsDeleted = false;
+            existing.DeletedAt = null;
+            existing.DeletedBy = null;
+        }
+
+        existing.FullName = fullName.Trim();
+        existing.DriverLicenseClass = licenseClass!.Trim().ToUpperInvariant();
+        existing.PhoneNumber = N(phoneNumber);
+        existing.UpdatedAt = now;
+        existing.UpdatedByUserId = currentUserId;
+    }
+
+    private static string NormalizeDriverLicenseNumber(string value)
+        => new string(value.Trim().Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+
     private static string? ValidateCargoHandlingEvents(SaveContractRequest request)
     {
         if (request.BusinessType != ContractBusinessType.Cargo)
@@ -1801,6 +1956,56 @@ public sealed class ContractService(
         => string.IsNullOrWhiteSpace(request.CustomerName) ||
            string.IsNullOrWhiteSpace(request.CustomerPhone) ||
            (request.CustomerIsCompany && string.IsNullOrWhiteSpace(request.CustomerRepresentativeName));
+
+    // Quy tắc chỉnh sửa HĐ: chỉ Hủy hoặc Hoàn thành mới khóa cập nhật.
+    // Expired/Invalidated được giữ tương thích dữ liệu cũ nhưng không còn dùng làm khóa edit.
+    private static bool IsEditLocked(ContractStatus status)
+        => status is ContractStatus.Completed or ContractStatus.Cancelled;
+
+    private static ContractStatus NormalizeEditableStatus(
+        ContractStatus status,
+        bool isSelfCreated,
+        DateTime? receivedAt)
+    {
+        if (status == ContractStatus.Received || receivedAt.HasValue)
+            return ContractStatus.Received;
+
+        return isSelfCreated ? ContractStatus.Created : ContractStatus.Assigned;
+    }
+
+    private static int InvalidateEditablePartySignatures(
+        Contract entity,
+        string userId,
+        DateTime now)
+    {
+        var signatures = entity.Signatures
+            .Where(x => !x.IsDeleted &&
+                (x.Party == SignatureParty.Driver || x.Party == SignatureParty.Customer))
+            .ToList();
+
+        foreach (var signature in signatures)
+        {
+            signature.IsDeleted = true;
+            signature.DeletedAt = now;
+            signature.DeletedBy = userId;
+            signature.UpdatedAt = now;
+            signature.UpdatedBy = userId;
+        }
+
+        if (signatures.Count > 0)
+        {
+            entity.AuditLogs.Add(new ContractAuditLog
+            {
+                ContractId = entity.Id,
+                Action = "SignaturesInvalidatedByEdit",
+                UserId = userId,
+                NewDataJson = $"{{\"count\":{signatures.Count}}}",
+                CreatedAt = now
+            });
+        }
+
+        return signatures.Count;
+    }
 
     private static bool IsFinal(ContractStatus status)
         => status is ContractStatus.Completed or ContractStatus.Cancelled or ContractStatus.Expired or ContractStatus.Invalidated;

@@ -1,8 +1,19 @@
+@using HTX586CONTRACT.Application.Drivers
+@inject ISavedDriverService SavedDriverService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ISnackbar Snackbar
+
 <MudPaper Class="pa-3" Elevation="0" Outlined="true">
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
         <div>
             <MudText Typo="Typo.subtitle1">Tài xế lái</MudText>
-            <MudText Typo="Typo.caption" Color="Color.Secondary">Tối đa 2 tài xế. Tài xế 1 là người ký xác nhận hợp đồng.</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Tối đa 2 tài xế. Tài xế 1 là người ký xác nhận hợp đồng.
+                @if (IsCargo)
+                {
+                    <span> HĐ hàng hóa bắt buộc Họ tên, Hạng GPLX ô tô và Số GPLX.</span>
+                }
+            </MudText>
         </div>
         <MudSpacer />
         @if (!_showSecondDriver && !Disabled)
@@ -12,6 +23,24 @@
             </MudButton>
         }
     </MudStack>
+
+    @if (_isVehicleOwner && _savedDrivers.Count > 0 && !Disabled)
+    {
+        <MudAutocomplete T="SavedDriverDto"
+                         Value="@_selectedFirstDriver"
+                         ValueChanged="ApplyFirstSavedDriver"
+                         SearchFunc="SearchSavedDriversAsync"
+                         ToStringFunc="SavedDriverDisplay"
+                         Label="Gợi ý Tài xế 1 đã từng tạo"
+                         Placeholder="Gõ họ tên, Số GPLX hoặc SĐT"
+                         HelperText="Chỉ hiển thị tài xế do chính tài khoản của bạn đã tạo."
+                         Variant="Variant.Outlined"
+                         Clearable="true"
+                         ResetValueOnEmptyText="true"
+                         CoerceText="true"
+                         MaxItems="20"
+                         Class="mb-3" />
+    }
 
     <MudText Typo="Typo.subtitle2" Class="mb-2">Tài xế 1</MudText>
     <MudGrid Spacing="2">
@@ -27,12 +56,21 @@
             </MudSelect>
         </MudItem>
         <MudItem xs="12" md="3">
-            <MudTextField @bind-Value="Model.OperatingDriverLicenseNumber" Label="Số GPLX" Variant="Variant.Outlined" Disabled="@Disabled" />
+            <MudTextField @bind-Value="Model.OperatingDriverLicenseNumber" Label="Số GPLX" Required="@IsCargo" Variant="Variant.Outlined" Disabled="@Disabled" />
         </MudItem>
         <MudItem xs="12" md="2">
             <MudTextField @bind-Value="Model.OperatingDriverPhoneNumber" Label="SĐT" Variant="Variant.Outlined" Disabled="@Disabled" />
         </MudItem>
     </MudGrid>
+
+    @if (_isVehicleOwner && !Disabled)
+    {
+        <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-2">
+            <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.BookmarkAdd" OnClick="SaveFirstDriverAsync">
+                Lưu Tài xế 1 vào danh sách
+            </MudButton>
+        </MudStack>
+    }
 
     @if (_showSecondDriver)
     {
@@ -45,6 +83,25 @@
                 <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" title="Bỏ Tài xế 2" OnClick="RemoveSecondDriver" />
             }
         </MudStack>
+
+        @if (_isVehicleOwner && _savedDrivers.Count > 0 && !Disabled)
+        {
+            <MudAutocomplete T="SavedDriverDto"
+                             Value="@_selectedSecondDriver"
+                             ValueChanged="ApplySecondSavedDriver"
+                             SearchFunc="SearchSavedDriversAsync"
+                             ToStringFunc="SavedDriverDisplay"
+                             Label="Gợi ý Tài xế 2 đã từng tạo"
+                             Placeholder="Gõ họ tên, Số GPLX hoặc SĐT"
+                             HelperText="Chỉ hiển thị tài xế do chính tài khoản của bạn đã tạo."
+                             Variant="Variant.Outlined"
+                             Clearable="true"
+                             ResetValueOnEmptyText="true"
+                             CoerceText="true"
+                             MaxItems="20"
+                             Class="mb-3" />
+        }
+
         <MudGrid Spacing="2">
             <MudItem xs="12" md="4">
                 <MudTextField @bind-Value="Model.SecondDriverName" Label="Họ và tên" Required="true" Variant="Variant.Outlined" Disabled="@Disabled" />
@@ -58,12 +115,21 @@
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" md="3">
-                <MudTextField @bind-Value="Model.SecondDriverLicenseNumber" Label="Số GPLX" Variant="Variant.Outlined" Disabled="@Disabled" />
+                <MudTextField @bind-Value="Model.SecondDriverLicenseNumber" Label="Số GPLX" Required="@IsCargo" Variant="Variant.Outlined" Disabled="@Disabled" />
             </MudItem>
             <MudItem xs="12" md="2">
                 <MudTextField @bind-Value="Model.SecondDriverPhoneNumber" Label="SĐT" Variant="Variant.Outlined" Disabled="@Disabled" />
             </MudItem>
         </MudGrid>
+
+        @if (_isVehicleOwner && !Disabled)
+        {
+            <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-2">
+                <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.BookmarkAdd" OnClick="SaveSecondDriverAsync">
+                    Lưu Tài xế 2 vào danh sách
+                </MudButton>
+            </MudStack>
+        }
     }
     else
     {
@@ -77,7 +143,22 @@
     [Parameter, EditorRequired] public SaveContractRequest Model { get; set; } = null!;
     [Parameter] public bool Disabled { get; set; }
 
+    private readonly List<SavedDriverDto> _savedDrivers = [];
     private bool _showSecondDriver;
+    private bool _isVehicleOwner;
+    private string _currentUserId = string.Empty;
+    private SavedDriverDto? _selectedFirstDriver;
+    private SavedDriverDto? _selectedSecondDriver;
+    private bool IsCargo => Model.BusinessType == ContractBusinessType.Cargo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _currentUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        _isVehicleOwner = auth.User.IsInRole("VehicleOwner");
+        if (_isVehicleOwner && !string.IsNullOrWhiteSpace(_currentUserId))
+            await ReloadSavedDriversAsync();
+    }
 
     protected override void OnParametersSet()
     {
@@ -91,6 +172,76 @@
         }
     }
 
+    private Task<IEnumerable<SavedDriverDto>> SearchSavedDriversAsync(string? value, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        IEnumerable<SavedDriverDto> result = _savedDrivers;
+        var search = value?.Trim();
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            result = result.Where(x =>
+                Contains(x.FullName, search) ||
+                Contains(x.DriverLicenseNumber, search) ||
+                Contains(x.DriverLicenseClass, search) ||
+                Contains(x.PhoneNumber, search));
+        }
+        return Task.FromResult(result.Take(20));
+    }
+
+    private static string SavedDriverDisplay(SavedDriverDto? driver)
+        => driver is null
+            ? string.Empty
+            : $"{driver.FullName} · {driver.DriverLicenseClass} · GPLX {driver.DriverLicenseNumber}";
+
+    private void ApplyFirstSavedDriver(SavedDriverDto? driver)
+    {
+        _selectedFirstDriver = driver;
+        if (driver is null) return;
+        Model.OperatingDriverName = driver.FullName;
+        Model.OperatingDriverLicenseClass = driver.DriverLicenseClass;
+        Model.OperatingDriverLicenseNumber = driver.DriverLicenseNumber;
+        Model.OperatingDriverPhoneNumber = driver.PhoneNumber;
+    }
+
+    private void ApplySecondSavedDriver(SavedDriverDto? driver)
+    {
+        _selectedSecondDriver = driver;
+        if (driver is null) return;
+        _showSecondDriver = true;
+        Model.SecondDriverName = driver.FullName;
+        Model.SecondDriverLicenseClass = driver.DriverLicenseClass;
+        Model.SecondDriverLicenseNumber = driver.DriverLicenseNumber;
+        Model.SecondDriverPhoneNumber = driver.PhoneNumber;
+    }
+
+    private Task SaveFirstDriverAsync()
+        => SaveDriverAsync(Model.OperatingDriverName, Model.OperatingDriverLicenseClass,
+            Model.OperatingDriverLicenseNumber, Model.OperatingDriverPhoneNumber);
+
+    private Task SaveSecondDriverAsync()
+        => SaveDriverAsync(Model.SecondDriverName, Model.SecondDriverLicenseClass,
+            Model.SecondDriverLicenseNumber, Model.SecondDriverPhoneNumber);
+
+    private async Task SaveDriverAsync(string? fullName, string? licenseClass, string? licenseNumber, string? phone)
+    {
+        var result = await SavedDriverService.SaveAsync(new SaveSavedDriverRequest
+        {
+            FullName = fullName ?? string.Empty,
+            DriverLicenseClass = licenseClass ?? string.Empty,
+            DriverLicenseNumber = licenseNumber ?? string.Empty,
+            PhoneNumber = phone
+        }, _currentUserId);
+        Snackbar.Add(result.Message, result.Succeeded ? Severity.Success : Severity.Warning);
+        if (result.Succeeded)
+            await ReloadSavedDriversAsync();
+    }
+
+    private async Task ReloadSavedDriversAsync()
+    {
+        _savedDrivers.Clear();
+        _savedDrivers.AddRange(await SavedDriverService.GetMineAsync(_currentUserId));
+    }
+
     private void ShowSecondDriver() => _showSecondDriver = true;
 
     private void RemoveSecondDriver()
@@ -99,6 +250,10 @@
         Model.SecondDriverPhoneNumber = null;
         Model.SecondDriverLicenseNumber = null;
         Model.SecondDriverLicenseClass = null;
+        _selectedSecondDriver = null;
         _showSecondDriver = false;
     }
+
+    private static bool Contains(string? value, string search)
+        => !string.IsNullOrWhiteSpace(value) && value.Contains(search, StringComparison.OrdinalIgnoreCase);
 }

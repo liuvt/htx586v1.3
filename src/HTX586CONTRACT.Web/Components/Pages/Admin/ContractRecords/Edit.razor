@@ -20,6 +20,13 @@
         <MudText Typo="Typo.subtitle2" Class="mr-3">Trạng thái hợp đồng:</MudText>
         <ContractStatusChip Status="_model.Status" ChipSize="Size.Medium" />
     </MudPaper>
+
+    @if (_signatures.Count > 0 && !IsHistoryLocked)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
+            Hợp đồng đã có chữ ký Tài xế/Khách hàng. Hợp đồng vẫn được phép sửa; khi bấm <b>Lưu cập nhật HĐ</b>, các chữ ký cũ sẽ được vô hiệu và cần ký lại.
+        </MudAlert>
+    }
 }
 
 @if (IsHistoryLocked && _detail is not null)
@@ -203,6 +210,7 @@ else
                         <MudItem xs="12" md="4">
                             <MudTextField @bind-Value="_model.CustomerCitizenId"
                                           Label="CCCD người đại diện"
+                                          Required="true"
                                           Variant="Variant.Outlined" />
                         </MudItem>
                         <MudItem xs="12" md="4">
@@ -240,6 +248,7 @@ else
                         <MudItem xs="12" md="4">
                             <MudTextField @bind-Value="_model.CustomerCitizenId"
                                           Label="CCCD khách hàng"
+                                          Required="true"
                                           Variant="Variant.Outlined" />
                         </MudItem>
                         <MudItem xs="12" md="4">
@@ -577,9 +586,7 @@ else
     private SaveContractRequest _model = new() { Passengers = [] };
     private readonly ContractPassengerDto _customerTravelRow = new() { SortOrder = 0 };
     private bool IsHistoryLocked => _model.Status is ContractStatus.Completed
-        or ContractStatus.Cancelled
-        or ContractStatus.Expired
-        or ContractStatus.Invalidated;
+        or ContractStatus.Cancelled;
     private int PassengerCount => _model.Passengers.Count(x => !string.IsNullOrWhiteSpace(x.FullName)) + (_model.CustomerTravelsWithGroup ? 1 : 0);
     private IEnumerable<ContractPassengerDto> PassengerRows =>
         _model.CustomerTravelsWithGroup && !string.IsNullOrWhiteSpace(TravelCompanionDisplayName)
@@ -1072,7 +1079,21 @@ else
 
             Snackbar.Add(result.Message, result.Succeeded ? Severity.Success : Severity.Error);
             if (result.Succeeded && !Id.HasValue)
+            {
                 Navigation.NavigateTo($"/admin/contracts/{result.Id}");
+                return;
+            }
+
+            if (result.Succeeded && Id.HasValue)
+            {
+                var refreshed = await ContractService.GetByIdAsync(Id.Value);
+                if (refreshed is not null)
+                {
+                    _detail = refreshed;
+                    _model.Status = refreshed.Status;
+                    _signatures = refreshed.Signatures;
+                }
+            }
         }
         finally
         {

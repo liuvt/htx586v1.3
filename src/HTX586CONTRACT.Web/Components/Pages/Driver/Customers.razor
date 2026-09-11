@@ -73,7 +73,7 @@
                 <MudItem xs="12" md="8"><MudTextField @bind-Value="_model.OrganizationName" Label="Tên đơn vị/Tổ chức" Required="true" Variant="Variant.Outlined" /></MudItem>
                 <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.TaxCode" Label="Mã số thuế" Variant="Variant.Outlined" /></MudItem>
             }
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.CitizenId" Label="CCCD" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.CitizenId" Label="CCCD" Required="true" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="4"><MudDatePicker @bind-Date="_model.CitizenIdIssuedDate" Label="Ngày cấp CCCD" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Culture="@AppCulture.Vietnamese" Variant="Variant.Outlined" /></MudItem>
             <MudItem xs="12" md="4"><CitizenIdIssuedPlaceInput @bind-Value="_model.CitizenIdIssuedPlace" /></MudItem>
             <MudItem xs="12" md="4"><MudDatePicker @bind-Date="_model.DateOfBirth" Label="Ngày sinh" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Culture="@AppCulture.Vietnamese" Variant="Variant.Outlined" /></MudItem>
@@ -197,9 +197,9 @@
 
     private async Task SaveAsync()
     {
-        if (string.IsNullOrWhiteSpace(_model.FullName) || string.IsNullOrWhiteSpace(_model.PhoneNumber))
+        if (string.IsNullOrWhiteSpace(_model.FullName) || string.IsNullOrWhiteSpace(_model.PhoneNumber) || string.IsNullOrWhiteSpace(_model.CitizenId))
         {
-            Snackbar.Add("Vui lòng nhập họ tên và số điện thoại.", Severity.Warning);
+            Snackbar.Add("Vui lòng nhập họ tên, số điện thoại và CCCD khách hàng.", Severity.Warning);
             return;
         }
         _saving = true;

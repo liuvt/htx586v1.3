@@ -1019,6 +1019,67 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                     b.ToTable("Customers", (string)null);
                 });
 
+            modelBuilder.Entity("HTX586CONTRACT.Domain.Drivers.SavedDriver", b =>
+                {
+                    b.Property<string>("DriverLicenseNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("CreatedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("DriverLicenseClass")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UpdatedByUserId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("DriverLicenseNumber");
+
+                    b.HasIndex("CreatedByUserId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("IX_SavedDrivers_CreatedBy_CreatedAt");
+
+                    b.HasIndex("CreatedByUserId", "IsDeleted")
+                        .HasDatabaseName("IX_SavedDrivers_CreatedBy_IsDeleted");
+
+                    b.ToTable("SavedDrivers", (string)null);
+                });
+
             modelBuilder.Entity("HTX586CONTRACT.Domain.Identity.ApplicationUser", b =>
                 {
                     b.Property<string>("Id")
@@ -1947,6 +2008,17 @@ namespace HTX586CONTRACT.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("CreatedByDriver");
+                });
+
+            modelBuilder.Entity("HTX586CONTRACT.Domain.Drivers.SavedDriver", b =>
+                {
+                    b.HasOne("HTX586CONTRACT.Domain.Identity.ApplicationUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("CreatedByUser");
                 });
 
             modelBuilder.Entity("HTX586CONTRACT.Domain.Notifications.DriverNotification", b =>

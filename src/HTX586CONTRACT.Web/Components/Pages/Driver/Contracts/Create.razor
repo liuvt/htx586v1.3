@@ -49,10 +49,23 @@ else
             Hợp đồng đã hoàn tất và được khóa dữ liệu.
         </MudAlert>
     }
-    else if (_model.Status == ContractStatus.Received && !HasAnyFinalPartySignature)
+    else if (_model.Status == ContractStatus.Assigned)
     {
         <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">
-            Đã nhận hợp đồng. Bạn có thể chỉnh sửa phần <b>Nội dung hợp đồng</b> và bấm <b>Lưu tạm nội dung</b> trước khi thực hiện ký.
+            Hợp đồng đã được phát xuống. Bạn vẫn có thể bấm <b>Chỉnh sửa</b> và <b>Lưu cập nhật</b>; cần bấm <b>Nhận hợp đồng</b> trước khi ký.
+        </MudAlert>
+    }
+    else if (_model.Status == ContractStatus.Received)
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">
+            Đã nhận hợp đồng. Hợp đồng vẫn được phép chỉnh sửa/lưu lại cho đến khi <b>Hoàn thành</b> hoặc <b>Hủy</b>.
+        </MudAlert>
+    }
+
+    @if (HasAnyFinalPartySignature && !IsEditLocked)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mb-4">
+            Hợp đồng đã có chữ ký Tài xế/Khách hàng. Nếu chỉnh sửa và bấm <b>Lưu cập nhật</b>, các chữ ký này sẽ được vô hiệu và phải ký lại trước khi hoàn thành.
         </MudAlert>
     }
 
@@ -152,6 +165,7 @@ else
                             <MudItem xs="12" md="4">
                                 <MudTextField @bind-Value="_model.CustomerCitizenId"
                                               Label="CCCD người đại diện"
+                                              Required="true"
                                               Variant="Variant.Outlined" />
                             </MudItem>
                             <MudItem xs="12" md="4">
@@ -189,6 +203,7 @@ else
                             <MudItem xs="12" md="4">
                                 <MudTextField @bind-Value="_model.CustomerCitizenId"
                                               Label="CCCD khách hàng"
+                                              Required="true"
                                               Variant="Variant.Outlined" />
                             </MudItem>
                             <MudItem xs="12" md="4">
@@ -536,7 +551,7 @@ else
                                Variant="Variant.Filled"
                                Disabled="@(_saving || _cancelling)"
                                OnClick="SaveAsync">
-                        @(Id.HasValue ? "Lưu tạm nội dung" : "Tạo hợp đồng")
+                        @(Id.HasValue ? "Lưu cập nhật" : "Tạo hợp đồng")
                     </MudButton>
                 }
             </MudStack>
@@ -706,24 +721,21 @@ else
     private bool HasDriverSignature => HasSignature(SignatureParty.Driver);
     private bool HasCustomerSignature => HasSignature(SignatureParty.Customer);
     private bool HasAnyFinalPartySignature => HasDriverSignature || HasCustomerSignature;
+    private bool IsEditLocked =>
+        _model.Status is ContractStatus.Completed or ContractStatus.Cancelled;
     private bool IsFinalLocked =>
         _model.Status is ContractStatus.Completed
             or ContractStatus.Cancelled
             or ContractStatus.Expired
             or ContractStatus.Invalidated;
     private bool IsDriverEditableContentLocked =>
-        IsFinalLocked || HasAnyFinalPartySignature ||
-        (Id.HasValue && !_editingContent);
+        IsEditLocked || (Id.HasValue && !_editingContent);
     private bool CanEditSavedContract =>
         Id.HasValue &&
-        !IsFinalLocked &&
-        !HasAnyFinalPartySignature &&
-        !CanReceive &&
+        !IsEditLocked &&
         !_editingContent;
     private bool CanSaveContent =>
-        !IsFinalLocked &&
-        !HasAnyFinalPartySignature &&
-        !CanReceive &&
+        !IsEditLocked &&
         (!Id.HasValue || _editingContent);
     private bool CanDriverSign =>
         Id.HasValue &&
@@ -812,9 +824,7 @@ else
             }
 
             var isHistory = detail.Status is ContractStatus.Completed
-                or ContractStatus.Cancelled
-                or ContractStatus.Expired
-                or ContractStatus.Invalidated;
+                or ContractStatus.Cancelled;
             var vehicleStillAssigned = detail.VehicleId.HasValue &&
                 _vehicles.Any(x => x.Id == detail.VehicleId.Value);
 
@@ -1007,7 +1017,7 @@ else
     {
         if (!CanSaveContent)
         {
-            Snackbar.Add("Hợp đồng đang bị khóa hoặc chưa chuyển sang chế độ chỉnh sửa.", Severity.Error);
+            Snackbar.Add("Hợp đồng đã hủy/hoàn thành hoặc chưa chuyển sang chế độ chỉnh sửa.", Severity.Error);
             return;
         }
 

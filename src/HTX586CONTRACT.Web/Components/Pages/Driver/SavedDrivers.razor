@@ -1,0 +1,190 @@
+@page "/vehicle-owner/drivers"
+@attribute [Authorize(Roles = "VehicleOwner")]
+@using HTX586CONTRACT.Application.Drivers
+@inject ISavedDriverService SavedDriverService
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ISnackbar Snackbar
+
+<PageTitle>Quản lý tài xế</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-4">
+    <div>
+        <MudText Typo="Typo.h4">Quản lý tài xế</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            Danh sách riêng của tài khoản. Khi tạo hợp đồng, hệ thống chỉ gợi ý các tài xế do chính bạn đã tạo.
+        </MudText>
+    </div>
+    <MudSpacer />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="NewDriver">
+        Thêm tài xế
+    </MudButton>
+</MudStack>
+
+@if (_editing)
+{
+    <MudPaper Class="pa-4 mb-4" Outlined="true" Elevation="0">
+        <MudText Typo="Typo.h6" Class="mb-3">@(_isNew ? "Thêm tài xế" : "Cập nhật tài xế")</MudText>
+        <MudGrid Spacing="2">
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="_model.FullName" Label="Họ tên" Required="true" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudSelect T="string" @bind-Value="_model.DriverLicenseClass" Label="Hạng GPLX" Required="true" Variant="Variant.Outlined">
+                    @foreach (var licenseClass in AutomobileDrivingLicenseClasses.All)
+                    {
+                        <MudSelectItem T="string" Value="@licenseClass">@AutomobileDrivingLicenseClasses.DisplayName(licenseClass)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="3">
+                <MudTextField @bind-Value="_model.DriverLicenseNumber"
+                              Label="Số GPLX"
+                              Required="true"
+                              ReadOnly="@(!_isNew)"
+                              HelperText="Số GPLX là khóa chính; không thể đổi sau khi tạo."
+                              Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" md="2">
+                <MudTextField @bind-Value="_model.PhoneNumber" Label="Số điện thoại" Variant="Variant.Outlined" />
+            </MudItem>
+        </MudGrid>
+        <MudStack Row="true" Class="mt-3">
+            <MudButton Variant="Variant.Outlined" OnClick="CancelEdit">Hủy</MudButton>
+            <MudSpacer />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@_saving" OnClick="SaveAsync">Lưu tài xế</MudButton>
+        </MudStack>
+    </MudPaper>
+}
+
+<MudPaper Class="pa-4" Elevation="1">
+    <MudTextField @bind-Value="_search" Label="Tìm theo họ tên / GPLX / SĐT" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Variant="Variant.Outlined" Class="mb-3" />
+    <div style="overflow-x:auto;">
+        <MudTable T="SavedDriverDto" Items="FilteredItems" Hover="true" Striped="true" Dense="true" Breakpoint="Breakpoint.None">
+            <HeaderContent>
+                <MudTh>Họ tên</MudTh>
+                <MudTh>Hạng GPLX</MudTh>
+                <MudTh>Số GPLX</MudTh>
+                <MudTh>Số điện thoại</MudTh>
+                <MudTh>Thời gian tạo</MudTh>
+                <MudTh>Tạo bởi</MudTh>
+                <MudTh>Thời gian xóa</MudTh>
+                <MudTh></MudTh>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Họ tên"><b>@context.FullName</b></MudTd>
+                <MudTd DataLabel="Hạng GPLX">@context.DriverLicenseClass</MudTd>
+                <MudTd DataLabel="Số GPLX">@context.DriverLicenseNumber</MudTd>
+                <MudTd DataLabel="Số điện thoại">@(string.IsNullOrWhiteSpace(context.PhoneNumber) ? "-" : context.PhoneNumber)</MudTd>
+                <MudTd DataLabel="Thời gian tạo">@FormatDateTime(context.CreatedAt)</MudTd>
+                <MudTd DataLabel="Tạo bởi">@context.CreatedByName</MudTd>
+                <MudTd DataLabel="Thời gian xóa">@(context.DeletedAt.HasValue ? FormatDateTime(context.DeletedAt.Value) : "-")</MudTd>
+                <MudTd DataLabel="Tác vụ">
+                    <MudStack Row="true" Spacing="0">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" title="Sửa" Disabled="@context.DeletedAt.HasValue" OnClick="@(() => Edit(context))" />
+                        <MudIconButton Icon="@Icons.Material.Filled.DeleteOutline" Color="Color.Error" title="Xóa mềm" Disabled="@context.DeletedAt.HasValue" OnClick="@(() => DeleteAsync(context.DriverLicenseNumber))" />
+                    </MudStack>
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Class="pa-4">Chưa có tài xế trong danh sách của bạn.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    </div>
+</MudPaper>
+
+@code {
+    private string _currentUserId = string.Empty;
+    private string? _search;
+    private bool _editing;
+    private bool _saving;
+    private bool _isNew;
+    private List<SavedDriverDto> _items = [];
+    private SaveSavedDriverRequest _model = new();
+
+    private IEnumerable<SavedDriverDto> FilteredItems
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(_search))
+                return _items;
+            var term = _search.Trim();
+            return _items.Where(x =>
+                Contains(x.FullName, term) ||
+                Contains(x.DriverLicenseNumber, term) ||
+                Contains(x.DriverLicenseClass, term) ||
+                Contains(x.PhoneNumber, term));
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        _currentUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+        => _items = (await SavedDriverService.GetMineAsync(_currentUserId, includeDeleted: true)).ToList();
+
+    private void NewDriver()
+    {
+        _model = new();
+        _isNew = true;
+        _editing = true;
+    }
+
+    private void Edit(SavedDriverDto row)
+    {
+        _model = new SaveSavedDriverRequest
+        {
+            FullName = row.FullName,
+            DriverLicenseClass = row.DriverLicenseClass,
+            DriverLicenseNumber = row.DriverLicenseNumber,
+            PhoneNumber = row.PhoneNumber
+        };
+        _isNew = false;
+        _editing = true;
+    }
+
+    private void CancelEdit()
+    {
+        _editing = false;
+        _model = new();
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        try
+        {
+            var result = await SavedDriverService.SaveAsync(_model, _currentUserId);
+            Snackbar.Add(result.Message, result.Succeeded ? Severity.Success : Severity.Warning);
+            if (result.Succeeded)
+            {
+                _editing = false;
+                await LoadAsync();
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DeleteAsync(string licenseNumber)
+    {
+        var result = await SavedDriverService.DeleteAsync(licenseNumber, _currentUserId);
+        Snackbar.Add(result.Message, result.Succeeded ? Severity.Success : Severity.Warning);
+        if (result.Succeeded)
+            await LoadAsync();
+    }
+
+    private static bool Contains(string? value, string term)
+        => !string.IsNullOrWhiteSpace(value) && value.Contains(term, StringComparison.OrdinalIgnoreCase);
+
+    private static DateTime VietnamTime(DateTime value)
+        => value.Kind == DateTimeKind.Utc ? value.AddHours(7) : value;
+
+    private static string FormatDateTime(DateTime value)
+        => VietnamTime(value).ToString("dd/MM/yyyy HH:mm");
+}
