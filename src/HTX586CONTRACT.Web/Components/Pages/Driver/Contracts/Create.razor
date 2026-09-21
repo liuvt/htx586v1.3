@@ -8,6 +8,7 @@
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 @inject IDialogService Dialog
+@inject ILoggerFactory LoggerFactory
 
 <PageTitle>@(Id.HasValue ? "Chi tiết hợp đồng" : "Tạo hợp đồng")</PageTitle>
 <PageHeader Title="@(Id.HasValue ? "Hợp đồng vận chuyển" : "Tạo hợp đồng")" />
@@ -15,6 +16,16 @@
 @if (_loading)
 {
     <MudProgressCircular Indeterminate="true" />
+}
+else if (!string.IsNullOrWhiteSpace(_loadError))
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mb-3">
+        @_loadError
+    </MudAlert>
+    <MudStack Row="true" Spacing="2">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ReloadPageAsync">Tải lại dữ liệu</MudButton>
+        <MudButton Variant="Variant.Outlined" Href="/vehicle-owner/contracts">Quay lại danh sách</MudButton>
+    </MudStack>
 }
 else if (_driver is null)
 {
@@ -52,13 +63,20 @@ else
     else if (_model.Status == ContractStatus.Assigned)
     {
         <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">
-            Hợp đồng đã được phát xuống. Bạn vẫn có thể bấm <b>Chỉnh sửa</b> và <b>Lưu cập nhật</b>; cần bấm <b>Nhận hợp đồng</b> trước khi ký.
+            <span>Hợp đồng đã được phát xuống. Bạn có thể bấm <b>Chỉnh sửa</b> và <b>Lưu cập nhật</b> ngay; cần bấm <b>Nhận hợp đồng</b> trước khi ký và hoàn thành.</span>
         </MudAlert>
     }
     else if (_model.Status == ContractStatus.Received)
     {
         <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4">
-            Đã nhận hợp đồng. Hợp đồng vẫn được phép chỉnh sửa/lưu lại cho đến khi <b>Hoàn thành</b> hoặc <b>Hủy</b>.
+            @if (_model.BusinessType == ContractBusinessType.Cargo)
+            {
+                <span>Đã nhận hợp đồng hàng hóa. Tài xế được cập nhật <b>3. Thông tin tài xế đi thật</b>, <b>4. Nội dung hợp đồng</b> và <b>Danh sách xếp/dỡ hàng</b> cho đến khi Chủ xe bấm <b>Hoàn thành hợp đồng</b>. Nếu sửa sau khi đã ký, chữ ký cũ sẽ được vô hiệu và cần ký lại.</span>
+            }
+            else
+            {
+                <span>Đã nhận hợp đồng. Hợp đồng vẫn được phép chỉnh sửa/lưu lại cho đến khi <b>Hoàn thành</b> hoặc <b>Hủy</b>.</span>
+            }
         </MudAlert>
     }
 
@@ -236,7 +254,7 @@ else
             </MudPaper>
 
             <MudPaper Class="pa-4 mb-4 driver-contract-section" Elevation="0" Outlined="true">
-                <MudText Typo="Typo.h6" Class="mb-3">3. Thông tin tài xế</MudText>
+                <MudText Typo="Typo.h6" Class="mb-3">3. @(_model.BusinessType == ContractBusinessType.Cargo ? "Thông tin tài xế đi thật" : "Thông tin tài xế")</MudText>
                 <ContractDriverEditor Model="_model" Disabled="@IsDriverEditableContentLocked" />
             </MudPaper>
 
@@ -682,6 +700,7 @@ else
     private MudForm? _form;
     private bool _valid;
     private bool _loading = true;
+    private string? _loadError;
     private bool _saving;
     private bool _savingSignature;
     private bool _cancelling;
@@ -721,6 +740,8 @@ else
     private bool HasDriverSignature => HasSignature(SignatureParty.Driver);
     private bool HasCustomerSignature => HasSignature(SignatureParty.Customer);
     private bool HasAnyFinalPartySignature => HasDriverSignature || HasCustomerSignature;
+    // Chữ ký không khóa nội dung. Chỉ Completed/Cancelled mới khóa edit.
+    // Nếu sửa sau khi ký, service sẽ vô hiệu chữ ký cũ và yêu cầu ký lại trước Complete.
     private bool IsEditLocked =>
         _model.Status is ContractStatus.Completed or ContractStatus.Cancelled;
     private bool IsFinalLocked =>
@@ -728,14 +749,19 @@ else
             or ContractStatus.Cancelled
             or ContractStatus.Expired
             or ContractStatus.Invalidated;
+    // Assigned/Received đều được edit. Nhận HĐ chỉ còn là điều kiện để ký/Complete.
+    private bool CanEditAtCurrentStatus =>
+        !Id.HasValue || !IsEditLocked;
     private bool IsDriverEditableContentLocked =>
-        IsEditLocked || (Id.HasValue && !_editingContent);
+        IsEditLocked || !CanEditAtCurrentStatus || (Id.HasValue && !_editingContent);
     private bool CanEditSavedContract =>
         Id.HasValue &&
         !IsEditLocked &&
+        CanEditAtCurrentStatus &&
         !_editingContent;
     private bool CanSaveContent =>
         !IsEditLocked &&
+        CanEditAtCurrentStatus &&
         (!Id.HasValue || _editingContent);
     private bool CanDriverSign =>
         Id.HasValue &&
@@ -774,6 +800,7 @@ else
     protected override async Task OnParametersSetAsync()
     {
         _loading = true;
+        _loadError = null;
         try
         {
             var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
@@ -835,70 +862,90 @@ else
                 return;
             }
 
-            _detail = detail;
-            _editingContent = false;
-
-            _model = new SaveContractRequest
-            {
-                Id = detail.Id,
-                BusinessType = detail.BusinessType,
-                ContractTypeId = detail.ContractTypeId,
-                CompanyProfileId = detail.CompanyProfileId,
-                DriverId = detail.DriverId,
-                CustomerId = detail.CustomerId,
-                CustomerName = detail.CustomerName,
-                CustomerRepresentativeName = detail.CustomerRepresentativeName,
-                CustomerPhone = detail.CustomerPhone,
-                CustomerCitizenId = detail.CustomerCitizenId,
-                CustomerCitizenIdIssuedDate = detail.CustomerCitizenIdIssuedDate,
-                CustomerTaxCode = detail.CustomerTaxCode,
-                CustomerIsCompany = detail.CustomerIsCompany,
-                CustomerAddress = detail.CustomerAddress,
-                AreaCode = detail.AreaCode,
-                VehicleId = detail.VehicleId,
-                ActualPassengerCount = detail.ActualPassengerCount,
-                CustomerTravelsWithGroup = detail.CustomerTravelsWithGroup,
-                CustomerTravelBirthYear = detail.CustomerTravelBirthYear,
-                CustomerTravelNote = detail.CustomerTravelNote,
-                OperatingDriverName = detail.OperatingDriverName,
-                OperatingDriverPhoneNumber = detail.OperatingDriverPhoneNumber,
-                OperatingDriverLicenseNumber = detail.OperatingDriverLicenseNumber,
-                OperatingDriverLicenseClass = detail.OperatingDriverLicenseClass,
-                SecondDriverName = detail.SecondDriverName,
-                SecondDriverPhoneNumber = detail.SecondDriverPhoneNumber,
-                SecondDriverLicenseNumber = detail.SecondDriverLicenseNumber,
-                SecondDriverLicenseClass = detail.SecondDriverLicenseClass,
-                CargoName = detail.CargoName,
-                CargoTransportGoodsName = detail.CargoTransportGoodsName,
-                CargoTransportRoute = detail.CargoTransportRoute,
-                CargoLoadingPoint = detail.CargoLoadingPoint,
-                CargoDeliveryPoint = detail.CargoDeliveryPoint,
-                CargoOtherInformation = detail.CargoOtherInformation,
-                CargoSpecification = detail.CargoSpecification,
-                CargoQuantity = detail.CargoQuantity,
-                CargoWeight = detail.CargoWeight,
-                CargoUnit = detail.CargoUnit,
-                PickupLocation = detail.PickupLocation,
-                DropoffLocation = detail.DropoffLocation,
-                StartTime = detail.StartTime,
-                EndTime = detail.EndTime,
-                RouteDescription = detail.RouteDescription,
-                TotalKilometers = detail.TotalKilometers,
-                ContractValue = detail.ContractValue,
-                PaymentMethod = detail.PaymentMethod,
-                PaymentTime = detail.PaymentTime,
-                Note = detail.Note,
-                Status = detail.Status,
-                CargoHandlingEvents = detail.CargoHandlingEvents,
-                Passengers = detail.Passengers
-            };
-            _signatures = detail.Signatures;
-            _startDate = detail.StartTime?.Date;
-            _startTime = detail.StartTime?.TimeOfDay;
-            _endDate = detail.EndTime?.Date;
-            _endTime = detail.EndTime?.TimeOfDay;
+            ApplyDetailToEditor(detail, editing: false);
+        }
+        catch (NavigationException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger("VehicleOwnerContractEdit")
+                .LogError(ex, "Không tải được trang cập nhật hợp đồng {ContractId} của {UserId}", Id, _userId);
+            _loadError = "Không thể tải dữ liệu hợp đồng để cập nhật. Vui lòng tải lại; nếu vẫn lỗi hãy báo quản trị viên kiểm tra log máy chủ.";
         }
         finally { _loading = false; }
+    }
+
+    private void ApplyDetailToEditor(ContractDetailDto detail, bool editing)
+    {
+        _detail = detail;
+        _editingContent = editing;
+        _model = new SaveContractRequest
+        {
+            Id = detail.Id,
+            BusinessType = detail.BusinessType,
+            ContractTypeId = detail.ContractTypeId,
+            CompanyProfileId = detail.CompanyProfileId,
+            DriverId = detail.DriverId,
+            CustomerId = detail.CustomerId,
+            CustomerName = detail.CustomerName,
+            CustomerRepresentativeName = detail.CustomerRepresentativeName,
+            CustomerPhone = detail.CustomerPhone,
+            CustomerCitizenId = detail.CustomerCitizenId,
+            CustomerCitizenIdIssuedDate = detail.CustomerCitizenIdIssuedDate,
+            CustomerTaxCode = detail.CustomerTaxCode,
+            CustomerIsCompany = detail.CustomerIsCompany,
+            CustomerAddress = detail.CustomerAddress,
+            AreaCode = detail.AreaCode,
+            VehicleId = detail.VehicleId,
+            ActualPassengerCount = detail.ActualPassengerCount,
+            CustomerTravelsWithGroup = detail.CustomerTravelsWithGroup,
+            CustomerTravelBirthYear = detail.CustomerTravelBirthYear,
+            CustomerTravelNote = detail.CustomerTravelNote,
+            OperatingDriverName = detail.OperatingDriverName,
+            OperatingDriverPhoneNumber = detail.OperatingDriverPhoneNumber,
+            OperatingDriverLicenseNumber = detail.OperatingDriverLicenseNumber,
+            OperatingDriverLicenseClass = detail.OperatingDriverLicenseClass,
+            SecondDriverName = detail.SecondDriverName,
+            SecondDriverPhoneNumber = detail.SecondDriverPhoneNumber,
+            SecondDriverLicenseNumber = detail.SecondDriverLicenseNumber,
+            SecondDriverLicenseClass = detail.SecondDriverLicenseClass,
+            CargoName = detail.CargoName,
+            CargoTransportGoodsName = detail.CargoTransportGoodsName,
+            CargoTransportRoute = detail.CargoTransportRoute,
+            CargoLoadingPoint = detail.CargoLoadingPoint,
+            CargoDeliveryPoint = detail.CargoDeliveryPoint,
+            CargoOtherInformation = detail.CargoOtherInformation,
+            CargoSpecification = detail.CargoSpecification,
+            CargoQuantity = detail.CargoQuantity,
+            CargoWeight = detail.CargoWeight,
+            CargoUnit = detail.CargoUnit,
+            PickupLocation = detail.PickupLocation,
+            DropoffLocation = detail.DropoffLocation,
+            StartTime = detail.StartTime,
+            EndTime = detail.EndTime,
+            RouteDescription = detail.RouteDescription,
+            TotalKilometers = detail.TotalKilometers,
+            ContractValue = detail.ContractValue,
+            PaymentMethod = detail.PaymentMethod,
+            PaymentTime = detail.PaymentTime,
+            Note = detail.Note,
+            Status = detail.Status,
+            CargoHandlingEvents = detail.CargoHandlingEvents,
+            Passengers = detail.Passengers
+        };
+        _signatures = detail.Signatures;
+        _startDate = detail.StartTime?.Date;
+        _startTime = detail.StartTime?.TimeOfDay;
+        _endDate = detail.EndTime?.Date;
+        _endTime = detail.EndTime?.TimeOfDay;
+    }
+
+    private Task ReloadPageAsync()
+    {
+        Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
+        return Task.CompletedTask;
     }
 
     private void VehicleChanged(Guid? vehicleId)
@@ -919,13 +966,14 @@ else
             Snackbar.Add(result.Message, result.Succeeded ? Severity.Success : Severity.Error);
             if (result.Succeeded)
             {
-                _model.Status = ContractStatus.Received;
-                if (_detail is not null)
-                {
-                    _detail.Status = ContractStatus.Received;
-                    _detail.ReceivedAt = DateTime.UtcNow;
-                }
-                _editingContent = true;
+                // Sau khi Nhận HĐ, tải lại TOÀN BỘ bản mới nhất từ DB. Admin/Owner có
+                // thể vừa phát/cập nhật trước đó; không tiếp tục chỉnh trên model cũ
+                // của Blazor circuit vì sẽ ghi đè dữ liệu mới hoặc gây conflict giả.
+                var latest = await ContractService.GetByIdAsync(Id.Value);
+                if (latest is not null && latest.DriverId == _userId)
+                    ApplyDetailToEditor(latest, editing: true);
+                else
+                    _editingContent = true;
             }
         }
         finally
@@ -1017,7 +1065,8 @@ else
     {
         if (!CanSaveContent)
         {
-            Snackbar.Add("Hợp đồng đã hủy/hoàn thành hoặc chưa chuyển sang chế độ chỉnh sửa.", Severity.Error);
+            var message = "Hợp đồng đã hủy/hoàn thành hoặc chưa chuyển sang chế độ chỉnh sửa.";
+            Snackbar.Add(message, Severity.Error);
             return;
         }
 
@@ -1041,13 +1090,16 @@ else
             {
                 var detail = await ContractService.GetByIdAsync(Id.Value);
                 if (detail is not null)
-                {
-                    _detail = detail;
-                    _model.Status = detail.Status;
-                    _signatures = detail.Signatures;
-                    _editingContent = false;
-                }
+                    ApplyDetailToEditor(detail, editing: false);
             }
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger("VehicleOwnerContractEdit")
+                .LogError(ex, "Lỗi khi lưu cập nhật hợp đồng {ContractId} của {UserId}", Id, _userId);
+            Snackbar.Add(
+                "Không thể lưu cập nhật hợp đồng. Trang vẫn được giữ nguyên để bạn thử lại; quản trị viên có thể kiểm tra log theo thời điểm xảy ra lỗi.",
+                Severity.Error);
         }
         finally { _saving = false; }
     }
@@ -1182,7 +1234,7 @@ else
         if (!CanCustomerSign)
             throw new InvalidOperationException("Tài xế 1 phải ký trước và hợp đồng phải còn ở trạng thái cho phép ghi nhận chữ ký khách hàng.");
 
-        // Luôn lưu dữ liệu được phép chỉnh sửa trước khi khách ký và khóa hợp đồng.
+        // Luôn lưu dữ liệu được phép chỉnh sửa trước khi khách ký. Chữ ký chưa khóa hợp đồng.
         if (_editingContent)
         {
             await SaveAsync();
@@ -1196,8 +1248,8 @@ else
             CustomerSignatureSignerName,
             data,
             _model.BusinessType == ContractBusinessType.Cargo
-                ? "Đã lưu chữ ký Đại diện Bên A. Hãy bấm Hoàn thành hợp đồng để chốt và khóa dữ liệu."
-                : "Đã lưu chữ ký khách hàng. Đã đủ 2 chữ ký cuối; hãy bấm Hoàn thành hợp đồng để chốt và khóa dữ liệu.");
+                ? "Đã lưu chữ ký Đại diện Bên A. Hợp đồng vẫn có thể chỉnh sửa trước khi Chủ xe bấm Hoàn thành; nếu sửa nội dung, chữ ký hiện tại sẽ được vô hiệu và phải ký lại."
+                : "Đã lưu chữ ký khách hàng. Hợp đồng vẫn có thể chỉnh sửa trước khi Chủ xe bấm Hoàn thành; nếu sửa nội dung, chữ ký hiện tại sẽ được vô hiệu và phải ký lại.");
     }
 
     private async Task SaveSignature(

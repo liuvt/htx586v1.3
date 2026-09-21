@@ -44,6 +44,19 @@
                 Tổng quan điều hành
             </MudNavLink>
 
+            @* Ưu tiên nghiệp vụ Hợp đồng/Khách hàng ngay sau Tổng quan. *@
+            <MudNavGroup Title="Hợp đồng & khách hàng" Icon="@Icons.Material.Filled.BusinessCenter" Expanded="true">
+                <MudNavLink Href="/admin/customers" Icon="@Icons.Material.Filled.Groups">
+                    Khách hàng
+                </MudNavLink>
+                <MudNavLink Href="/owner/contracts" Icon="@Icons.Material.Filled.Description">
+                    Hợp đồng
+                </MudNavLink>
+                <MudNavLink Href="/owner/reports" Icon="@Icons.Material.Filled.QueryStats">
+                    Báo cáo &amp; xuất Excel
+                </MudNavLink>
+            </MudNavGroup>
+
             <MudNavGroup Title="Tổ chức & nhân sự" Icon="@Icons.Material.Filled.CorporateFare" Expanded="true">
                 <MudNavLink Href="/owner/companies" Icon="@Icons.Material.Filled.Apartment">
                     Công ty / Văn phòng
@@ -62,18 +75,9 @@
                 </MudNavLink>
             </MudNavGroup>
 
-            <MudNavGroup Title="Vận hành kinh doanh" Icon="@Icons.Material.Filled.Hub" Expanded="true">
+            <MudNavGroup Title="Nguồn lực vận hành" Icon="@Icons.Material.Filled.Hub" Expanded="true">
                 <MudNavLink Href="/admin/vehicles" Icon="@Icons.Material.Filled.DirectionsCarFilled">
                     Xe
-                </MudNavLink>
-                <MudNavLink Href="/admin/customers" Icon="@Icons.Material.Filled.Groups">
-                    Khách hàng
-                </MudNavLink>
-                <MudNavLink Href="/owner/contracts" Icon="@Icons.Material.Filled.Description">
-                    Hợp đồng
-                </MudNavLink>
-                <MudNavLink Href="/owner/reports" Icon="@Icons.Material.Filled.QueryStats">
-                    Báo cáo &amp; xuất Excel
                 </MudNavLink>
             </MudNavGroup>
 
@@ -81,8 +85,9 @@
                 Tài khoản Owner
             </MudNavLink>
 
+            @* Chỉ Owner được phép nhìn thấy và sử dụng cấu hình PDF. *@
             <MudNavGroup Title="Cấu hình nâng cao" Icon="@Icons.Material.Filled.Tune" Expanded="false">
-                <MudNavLink Href="/admin/pdf-layout-designer" Icon="@Icons.Material.Filled.DesignServices">
+                <MudNavLink Href="/owner/pdf-layout-designer" Icon="@Icons.Material.Filled.DesignServices">
                     Thiết kế mẫu PDF
                 </MudNavLink>
             </MudNavGroup>
@@ -95,6 +100,20 @@
             <MudNavLink Href="/admin/dashboard" Icon="@Icons.Material.Filled.SpaceDashboard" Match="NavLinkMatch.All">
                 Tổng quan
             </MudNavLink>
+
+            @* Ưu tiên nghiệp vụ Hợp đồng/Khách hàng ngay sau Tổng quan. *@
+            <MudNavGroup Title="Hợp đồng & khách hàng" Icon="@Icons.Material.Filled.BusinessCenter" Expanded="true">
+                <MudNavLink Href="/admin/customers" Icon="@Icons.Material.Filled.Groups">
+                    Khách hàng
+                </MudNavLink>
+                <MudNavLink Href="/admin/contracts" Icon="@Icons.Material.Filled.Description">
+                    Hợp đồng
+                </MudNavLink>
+                <MudNavLink Href="/admin/reports" Icon="@Icons.Material.Filled.QueryStats">
+                    Báo cáo &amp; xuất Excel
+                </MudNavLink>
+            </MudNavGroup>
+
             <MudNavLink Href="/admin/account" Icon="@Icons.Material.Filled.AccountCircle">
                 Tài khoản cá nhân
             </MudNavLink>
@@ -120,23 +139,8 @@
                 </MudNavLink>
             </MudNavGroup>
 
-            <MudNavGroup Title="Hợp đồng & khách hàng" Icon="@Icons.Material.Filled.BusinessCenter" Expanded="true">
-                <MudNavLink Href="/admin/customers" Icon="@Icons.Material.Filled.Groups">
-                    Khách hàng
-                </MudNavLink>
-                <MudNavLink Href="/admin/contracts" Icon="@Icons.Material.Filled.Description">
-                    Hợp đồng
-                </MudNavLink>
-                <MudNavLink Href="/admin/reports" Icon="@Icons.Material.Filled.QueryStats">
-                    Báo cáo &amp; xuất Excel
-                </MudNavLink>
-            </MudNavGroup>
-
-            <MudNavGroup Title="Cấu hình" Icon="@Icons.Material.Filled.SettingsSuggest" Expanded="false">
-                <MudNavLink Href="/admin/pdf-layout-designer" Icon="@Icons.Material.Filled.DesignServices">
-                    Thiết kế mẫu PDF
-                </MudNavLink>
-            </MudNavGroup>
+            @* KHÔNG hiển thị Cấu hình/Thiết kế mẫu PDF cho Admin.
+               Quyền server-side vẫn được PdfLayoutDesignerService chặn chỉ Owner. *@
         </Authorized>
     </AuthorizeView>
 </MudNavMenu>

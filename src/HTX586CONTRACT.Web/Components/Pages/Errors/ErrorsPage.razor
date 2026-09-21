@@ -7,98 +7,107 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject NavigationManager Navigation
 
-<PageTitle>@PageTitleText</PageTitle>
+@if (SuppressForbiddenPage)
+{
+    @* Không render màn hình 403 trung gian. RedirectToRequiredPage tự đưa
+       tài khoản đã đăng nhập về dashboard đúng role. *@
+    <RedirectToRequiredPage />
+}
+else
+{
+    <PageTitle>@PageTitleText</PageTitle>
 
-<section class="system-error-page" aria-labelledby="system-error-title">
-    <div class="system-error-glow system-error-glow-one"></div>
-    <div class="system-error-glow system-error-glow-two"></div>
+    <section class="system-error-page" aria-labelledby="system-error-title">
+        <div class="system-error-glow system-error-glow-one"></div>
+        <div class="system-error-glow system-error-glow-two"></div>
 
-    <MudPaper Class="system-error-card" Elevation="0">
-        <div class="system-error-visual" aria-hidden="true">
-            <div class="system-error-orbit orbit-one"></div>
-            <div class="system-error-orbit orbit-two"></div>
-            <div class="system-error-icon-wrap">
-                <MudIcon Icon="@ErrorIcon" Class="system-error-icon" />
-            </div>
-            <div class="system-error-code">@DisplayCode</div>
-        </div>
-
-        <div class="system-error-content">
-            <MudChip T="string"
-                     Size="Size.Small"
-                     Variant="Variant.Outlined"
-                     Color="@AccentColor"
-                     Class="system-error-chip">
-                @Eyebrow
-            </MudChip>
-
-            <h1 id="system-error-title" class="system-error-title">
-                @Title
-            </h1>
-
-            <MudText Typo="Typo.body1" Class="system-error-description">
-                @Description
-            </MudText>
-
-            @if (!string.IsNullOrWhiteSpace(SafeReturnUrl))
-            {
-                <div class="system-error-request">
-                    <MudIcon Icon="@Icons.Material.Filled.Link" Size="Size.Small" />
-                    <div>
-                        <span>Đường dẫn được yêu cầu</span>
-                        <strong title="@SafeReturnUrl">@SafeReturnUrl</strong>
-                    </div>
+        <MudPaper Class="system-error-card" Elevation="0">
+            <div class="system-error-visual" aria-hidden="true">
+                <div class="system-error-orbit orbit-one"></div>
+                <div class="system-error-orbit orbit-two"></div>
+                <div class="system-error-icon-wrap">
+                    <MudIcon Icon="@ErrorIcon" Class="system-error-icon" />
                 </div>
-            }
-
-            <div class="system-error-actions">
-                <MudButton Variant="Variant.Filled"
-                           Color="Color.Primary"
-                           Size="Size.Large"
-                           StartIcon="@PrimaryActionIcon"
-                           OnClick="GoToPrimaryPage">
-                    @PrimaryActionText
-                </MudButton>
-
-                <MudButton Variant="Variant.Outlined"
-                           Color="Color.Default"
-                           Size="Size.Large"
-                           StartIcon="@Icons.Material.Filled.Home"
-                           OnClick="GoHome">
-                    Trang chủ
-                </MudButton>
-
-                @if (_isAuthenticated)
-                {
-                    <MudButton Variant="Variant.Text"
-                               Color="Color.Secondary"
-                               Size="Size.Large"
-                               StartIcon="@Icons.Material.Filled.Logout"
-                               Href="/account/logout?returnUrl=/account/login">
-                        Đổi tài khoản
-                    </MudButton>
-                }
-                else
-                {
-                    <MudButton Variant="Variant.Text"
-                               Color="Color.Secondary"
-                               Size="Size.Large"
-                               StartIcon="@Icons.Material.Filled.Login"
-                               Href="@LoginUrl">
-                        Đăng nhập
-                    </MudButton>
-                }
+                <div class="system-error-code">@DisplayCode</div>
             </div>
 
-            <div class="system-error-help">
-                <MudIcon Icon="@Icons.Material.Filled.SupportAgent" Size="Size.Small" />
-                <span>
-                    Nếu bạn cần truy cập chức năng này, hãy liên hệ Chủ hệ thống hoặc Quản lý để kiểm tra lại quyền tài khoản.
-                </span>
+            <div class="system-error-content">
+                <MudChip T="string"
+                         Size="Size.Small"
+                         Variant="Variant.Outlined"
+                         Color="@AccentColor"
+                         Class="system-error-chip">
+                    @Eyebrow
+                </MudChip>
+
+                <h1 id="system-error-title" class="system-error-title">
+                    @Title
+                </h1>
+
+                <MudText Typo="Typo.body1" Class="system-error-description">
+                    @Description
+                </MudText>
+
+                @if (!string.IsNullOrWhiteSpace(SafeReturnUrl))
+                {
+                    <div class="system-error-request">
+                        <MudIcon Icon="@Icons.Material.Filled.Link" Size="Size.Small" />
+                        <div>
+                            <span>Đường dẫn được yêu cầu</span>
+                            <strong title="@SafeReturnUrl">@SafeReturnUrl</strong>
+                        </div>
+                    </div>
+                }
+
+                <div class="system-error-actions">
+                    <MudButton Variant="Variant.Filled"
+                               Color="Color.Primary"
+                               Size="Size.Large"
+                               StartIcon="@PrimaryActionIcon"
+                               OnClick="GoToPrimaryPage">
+                        @PrimaryActionText
+                    </MudButton>
+
+                    <MudButton Variant="Variant.Outlined"
+                               Color="Color.Default"
+                               Size="Size.Large"
+                               StartIcon="@Icons.Material.Filled.Home"
+                               OnClick="GoHome">
+                        Trang chủ
+                    </MudButton>
+
+                    @if (_isAuthenticated)
+                    {
+                        <MudButton Variant="Variant.Text"
+                                   Color="Color.Secondary"
+                                   Size="Size.Large"
+                                   StartIcon="@Icons.Material.Filled.Logout"
+                                   Href="/account/logout?returnUrl=/account/login">
+                            Đổi tài khoản
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Variant="Variant.Text"
+                                   Color="Color.Secondary"
+                                   Size="Size.Large"
+                                   StartIcon="@Icons.Material.Filled.Login"
+                                   Href="@LoginUrl">
+                            Đăng nhập
+                        </MudButton>
+                    }
+                </div>
+
+                <div class="system-error-help">
+                    <MudIcon Icon="@Icons.Material.Filled.SupportAgent" Size="Size.Small" />
+                    <span>
+                        Nếu bạn cần truy cập chức năng này, hãy liên hệ Chủ hệ thống hoặc Quản lý để kiểm tra lại quyền tài khoản.
+                    </span>
+                </div>
             </div>
-        </div>
-    </MudPaper>
-</section>
+        </MudPaper>
+    </section>
+}
 
 @code {
     [Parameter]
@@ -110,6 +119,11 @@
     private bool _isAuthenticated;
     private string _roleHomeUrl = "/";
     private string _roleName = "người dùng";
+
+    private bool SuppressForbiddenPage =>
+        StatusCode == 403 ||
+        Navigation.ToBaseRelativePath(Navigation.Uri)
+            .StartsWith("account/access-denied", StringComparison.OrdinalIgnoreCase);
 
     private int EffectiveStatusCode
     {

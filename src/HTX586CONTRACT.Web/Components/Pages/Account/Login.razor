@@ -101,7 +101,7 @@
     public bool PasswordChanged { get; set; }
 
     private string SafeReturnUrl =>
-        IsLocalUrl(ReturnUrl)
+        IsLocalUrl(ReturnUrl) && !IsRootUrl(ReturnUrl)
             ? ReturnUrl!
             : string.Empty;
 
@@ -141,6 +141,16 @@
             _ =>
                 "Không thể đăng nhập. Vui lòng thử lại."
         };
+
+    private static bool IsRootUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return false;
+
+        var normalized = url.Trim();
+        return string.Equals(normalized, "/", StringComparison.Ordinal) ||
+               string.Equals(normalized, "/#", StringComparison.Ordinal);
+    }
 
     private static bool IsLocalUrl(string? url)
     {

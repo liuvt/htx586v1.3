@@ -1,16 +1,36 @@
-@page "/admin/pdf-layout-designer"
-@attribute [Authorize(Roles = "Owner,Admin")]
+@page "/owner/pdf-layout-designer"
+@attribute [Authorize(Roles = "Owner")]
 @implements IAsyncDisposable
 @using System.Text.Json
 @using System.Text.Json.Serialization
 @inject PdfLayoutDesignerService LayoutDesignerService
+@inject AuthenticationStateProvider AuthenticationStateProvider
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
 
 <PageTitle>PDF Layout Designer</PageTitle>
 <PageHeader Title="PDF Layout Designer" Subtitle="Một JSON dùng chung cho HĐ hành khách + HĐ hàng hóa. Hỗ trợ kéo/thả, resize 4 góc, dữ liệu mẫu và tinh chỉnh tọa độ theo point." />
 
-@if (_loading)
+@if (!_authorizationChecked)
+{
+    <MudPaper Class="pa-6">
+        <MudProgressCircular Indeterminate="true" />
+        <MudText Class="mt-3">Đang kiểm tra quyền truy cập...</MudText>
+    </MudPaper>
+}
+else if (!_isOwner)
+{
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Filled">
+        <MudText Typo="Typo.h6">Không có quyền chỉnh sửa file PDF hợp đồng</MudText>
+        <MudText Class="mt-2">
+            @_accessWarning
+        </MudText>
+        <MudText Class="mt-1">
+            Chỉ tài khoản <b>Owner</b> mới được sử dụng tính năng thiết kế/chỉnh sửa mẫu PDF hợp đồng.
+        </MudText>
+    </MudAlert>
+}
+else if (_loading)
 {
     <MudPaper Class="pa-6">
         <MudProgressCircular Indeterminate="true" />
@@ -260,7 +280,11 @@ else if (_document is not null)
     private string? _selectedFieldId;
     private bool _loading = true;
     private bool _saving;
+    private bool _authorizationChecked;
+    private bool _isOwner;
+    private string _accessWarning = "Tài khoản hiện tại không được cấp quyền sử dụng tính năng này.";
     private bool _designerInitialized;
+    private bool _designerInitializationAttempted;
     private string? _errorMessage;
     private double _zoom = 1.25d;
     private PdfLayoutDesignerContractType _contractType = PdfLayoutDesignerContractType.Passenger;
@@ -277,12 +301,35 @@ else if (_document is not null)
 
     protected override async Task OnInitializedAsync()
     {
+        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = auth.User;
+
+        _isOwner = user.IsInRole("Owner");
+        _authorizationChecked = true;
+
+        if (!_isOwner)
+        {
+            _loading = false;
+            _document = null;
+            _accessWarning = user.IsInRole("Admin")
+                ? "Tài khoản Quản lý (Admin) không có quyền chỉnh sửa file PDF hợp đồng."
+                : user.IsInRole("VehicleOwner")
+                    ? "Tài khoản Chủ xe (VehicleOwner) không có quyền chỉnh sửa file PDF hợp đồng."
+                    : "Tài khoản hiện tại không có quyền chỉnh sửa file PDF hợp đồng.";
+            return;
+        }
+
         await LoadDocumentAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!_designerInitialized && _document is not null && !_loading)
+        if (!_isOwner || _designerInitializationAttempted || _designerInitialized || _document is null || _loading ||
+            !string.IsNullOrWhiteSpace(_errorMessage))
+            return;
+
+        _designerInitializationAttempted = true;
+        try
         {
             _dotNetReference = DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync(
@@ -295,14 +342,30 @@ else if (_document is not null)
                 BuildDesignerOptions());
             _designerInitialized = true;
         }
+        catch (Exception ex)
+        {
+            _designerInitialized = false;
+            _dotNetReference?.Dispose();
+            _dotNetReference = null;
+            _errorMessage = $"Không thể mở preview PDF Layout Designer: {ex.Message}";
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     private async Task LoadDocumentAsync()
     {
+        if (!_isOwner)
+        {
+            _document = null;
+            _loading = false;
+            return;
+        }
+
         try
         {
             _loading = true;
             _errorMessage = null;
+            _designerInitializationAttempted = false;
             _document = await LayoutDesignerService.LoadAsync(_contractType);
             RebuildFields();
             _selectedField = _fields.FirstOrDefault();
@@ -321,8 +384,17 @@ else if (_document is not null)
 
     private async Task ReloadAsync()
     {
-        await JS.InvokeVoidAsync("htxPdfLayoutDesigner.destroy", _designerHost);
+        try
+        {
+            await JS.InvokeVoidAsync("htxPdfLayoutDesigner.destroy", _designerHost);
+        }
+        catch
+        {
+            // Preview có thể chưa khởi tạo hoặc circuit JS vừa lỗi; vẫn cho phép tải lại dữ liệu.
+        }
+
         _designerInitialized = false;
+        _designerInitializationAttempted = false;
         _dotNetReference?.Dispose();
         _dotNetReference = null;
         await LoadDocumentAsync();
@@ -334,6 +406,7 @@ else if (_document is not null)
             return;
 
         await JS.InvokeVoidAsync("htxPdfLayoutDesigner.destroy", _designerHost);
+        _designerInitializationAttempted = true;
         _dotNetReference ??= DotNetObjectReference.Create(this);
         await JS.InvokeVoidAsync(
             "htxPdfLayoutDesigner.init",
@@ -413,6 +486,12 @@ else if (_document is not null)
 
     private async Task SaveAsync()
     {
+        if (!_isOwner)
+        {
+            Snackbar.Add("Chỉ tài khoản Owner mới có quyền chỉnh sửa file PDF hợp đồng.", Severity.Warning);
+            return;
+        }
+
         if (_document is null)
             return;
 
@@ -420,9 +499,11 @@ else if (_document is not null)
         {
             _saving = true;
             ApplyFieldsToLayout();
+            NormalizeLayout(_document.Layout);
+            ValidateLayout(_document.Layout);
             await LayoutDesignerService.SaveLayoutAsync(_contractType, _document.Layout);
             RefreshRawLayoutJson();
-            Snackbar.Add($"Đã lưu {_document.ContractTypeName} vào JSON dùng chung và tự tạo file backup.", Severity.Success);
+            Snackbar.Add($"Đã lưu {_document.ContractTypeName} vào JSON dùng chung. PDF cũ sẽ tự tạo bản đồng bộ theo layout mới khi mở lại.", Severity.Success);
         }
         catch (UnauthorizedAccessException ex)
         {

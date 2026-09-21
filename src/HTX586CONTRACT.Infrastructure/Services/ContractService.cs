@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Data;
 using System.Security.Cryptography;
 using System.Text;
@@ -15,6 +16,7 @@ using HTX586CONTRACT.Infrastructure.Identity;
 using HTX586CONTRACT.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace HTX586CONTRACT.Infrastructure.Services;
 
@@ -22,11 +24,19 @@ namespace HTX586CONTRACT.Infrastructure.Services;
 /// Luồng hợp đồng dùng ba role Owner, Admin và VehicleOwner.
 /// Company/Văn phòng của VehicleOwner luôn được suy ra từ xe được chọn.
 /// Completed và Cancelled là hai trạng thái khóa vĩnh viễn.
+/// Chữ ký chưa khóa nội dung; nếu sửa sau khi ký thì chữ ký cũ bị vô hiệu và phải ký lại.
+/// Hợp đồng chỉ khóa cố định khi VehicleOwner hoàn thành (Completed) hoặc khi bị hủy (Cancelled).
 /// </summary>
 public sealed class ContractService(
     IDbContextFactory<ApplicationDbContext> factory,
-    SafeUserManager userManager) : IContractService
+    SafeUserManager userManager,
+    ILogger<ContractService> logger) : IContractService
 {
+    // Một HĐ chỉ có một luồng ghi trong cùng instance ứng dụng tại một thời điểm.
+    // Owner/Admin/VehicleOwner vẫn có thể mở và sửa song song; khi bấm Lưu, các lượt
+    // ghi sẽ xếp hàng rất ngắn thay vì cùng đập vào RowVersion/unique SortOrder.
+    private static readonly ConcurrentDictionary<Guid, SemaphoreSlim> ContractWriteGates = new();
+
     public async Task<IReadOnlyList<ContractListItemDto>> GetAsync(
         ContractFilter filter,
         CancellationToken ct = default)
@@ -412,9 +422,6 @@ public sealed class ContractService(
             AddCargoHandlingEvents(entity, request.CargoHandlingEvents ?? [], currentUserId);
         entity.ContractDataJson = createdSnapshot.ToJson();
 
-        if (access.IsVehicleOwner && !canManage)
-            await RememberSavedDriversAsync(db, request, currentUserId, ct);
-
         if (canManage)
         {
             entity.AuditLogs.Add(new ContractAuditLog
@@ -441,6 +448,12 @@ public sealed class ContractService(
 
         db.Contracts.Add(entity);
         await db.SaveChangesAsync(ct);
+
+        // Danh sách tài xế đã lưu chỉ là tiện ích gợi ý. Không được để lỗi của
+        // chức năng phụ này làm thất bại việc tạo/lưu hợp đồng chính.
+        if (access.IsVehicleOwner && !canManage)
+            await TryRememberSavedDriversAsync(request, currentUserId, ct);
+
         return new(
             true,
             entity.Id,
@@ -459,6 +472,101 @@ public sealed class ContractService(
         string currentUserId,
         CancellationToken ct = default)
     {
+        var gate = ContractWriteGates.GetOrAdd(id, static _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(ct);
+        try
+        {
+            return await UpdateWithRealtimeRetryAsync(id, request, currentUserId, ct);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task<SaveContractResult> UpdateWithRealtimeRetryAsync(
+        Guid id,
+        SaveContractRequest request,
+        string currentUserId,
+        CancellationToken ct)
+    {
+        // Owner/Admin/VehicleOwner có thể cùng thao tác trên một HĐ.
+        // Không bắt người dùng tải lại thủ công khi RowVersion vừa thay đổi ở phiên khác.
+        // Mỗi lần retry tạo DbContext/tải graph mới, sau đó áp lại request hiện tại
+        // (last successful save wins). Điều này cũng xử lý va chạm unique SortOrder
+        // khi hai phiên đồng thời thêm/xóa dòng hành khách hoặc xếp/dỡ.
+        const int maxAttempts = 4;
+        Exception? lastDatabaseException = null;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                var result = await UpdateOnceAsync(id, request, currentUserId, ct);
+
+                // Bản VehicleOwner cũ có thể trả conflict dưới dạng result thay vì throw.
+                // Giữ tương thích trong trường hợp còn nhánh nào phát sinh message này.
+                if (!result.Succeeded &&
+                    result.Message.Contains("cập nhật ở một phiên khác", StringComparison.OrdinalIgnoreCase) &&
+                    attempt < maxAttempts)
+                {
+                    logger.LogInformation(
+                        "Retry contract {ContractId} after optimistic concurrency conflict. Attempt {Attempt}/{MaxAttempts}, user {UserId}",
+                        id, attempt + 1, maxAttempts, currentUserId);
+                    await Task.Delay(TimeSpan.FromMilliseconds(40 * attempt), ct);
+                    continue;
+                }
+
+                return result;
+            }
+            catch (DbUpdateConcurrencyException ex) when (attempt < maxAttempts)
+            {
+                lastDatabaseException = ex;
+                logger.LogInformation(ex,
+                    "Retry contract {ContractId} after DbUpdateConcurrencyException. Attempt {Attempt}/{MaxAttempts}, user {UserId}",
+                    id, attempt + 1, maxAttempts, currentUserId);
+                await Task.Delay(TimeSpan.FromMilliseconds(40 * attempt), ct);
+            }
+            catch (DbUpdateException ex) when (attempt < maxAttempts)
+            {
+                // Concurrent collection writes can surface as a unique-index DbUpdateException
+                // before EF reaches the Contract RowVersion UPDATE. Reload and apply again.
+                lastDatabaseException = ex;
+                logger.LogInformation(ex,
+                    "Retry contract {ContractId} after concurrent database write. Attempt {Attempt}/{MaxAttempts}, user {UserId}",
+                    id, attempt + 1, maxAttempts, currentUserId);
+                await Task.Delay(TimeSpan.FromMilliseconds(60 * attempt), ct);
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                lastDatabaseException = ex;
+                break;
+            }
+            catch (DbUpdateException ex)
+            {
+                lastDatabaseException = ex;
+                break;
+            }
+        }
+
+        if (lastDatabaseException is not null)
+        {
+            logger.LogError(lastDatabaseException,
+                "Contract {ContractId} could not be saved after realtime retries. User {UserId}",
+                id, currentUserId);
+        }
+
+        return new SaveContractResult(false, id,
+            "Chưa thể ghi thay đổi vào cơ sở dữ liệu sau khi hệ thống đã tự đồng bộ bản mới nhất. Vui lòng thử Lưu cập nhật lại; quản trị viên có thể kiểm tra log ContractService để xem lỗi SQL cụ thể.");
+    }
+
+    private async Task<SaveContractResult> UpdateOnceAsync(
+        Guid id,
+        SaveContractRequest request,
+        string currentUserId,
+        CancellationToken ct)
+    {
         await using var db = await factory.CreateDbContextAsync(ct);
         var entity = await db.Contracts
             .Include(x => x.Passengers)
@@ -467,8 +575,8 @@ public sealed class ContractService(
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, ct);
         if (entity is null)
             return new(false, null, "Không tìm thấy hợp đồng.");
-        if (IsEditLocked(entity.Status))
-            return new(false, id, "Hợp đồng đã hủy hoặc đã hoàn thành nên không thể cập nhật.");
+        if (IsContentEditLocked(entity))
+            return new(false, id, ContentEditLockedMessage(entity));
 
         var originalStatus = entity.Status;
         var originalVehicleOwnerId = entity.DriverId;
@@ -497,7 +605,7 @@ public sealed class ContractService(
             return new(false, id, "Danh sách hành khách tối đa 20 người theo mẫu PDF hiện tại.");
 
         if (!canManage)
-            return await UpdateByVehicleOwnerAsync(db, entity, request, currentUserId, ct);
+            return await UpdateByVehicleOwnerWithRetryAsync(id, request, currentUserId, ct);
 
         var assignment = await ResolveAssignmentAsync(db, request, currentUserId, access, ct);
         if (assignment.Error is not null)
@@ -588,14 +696,21 @@ public sealed class ContractService(
             PreserveVehicleOwnerSignature(existingSnapshot, updatedSnapshot);
 
         entity.ContractDataJson = updatedSnapshot.ToJson();
-        db.ContractPassengers.RemoveRange(entity.Passengers);
-        db.ContractCargoHandlingEvents.RemoveRange(entity.CargoHandlingEvents);
         if (request.BusinessType == ContractBusinessType.Passenger)
-            AddPassengers(entity, request.Passengers, currentUserId);
+        {
+            SyncPassengers(db, entity, request.Passengers, currentUserId);
+            RemoveAllCargoHandlingEvents(db, entity);
+        }
         else
-            AddCargoHandlingEvents(entity, request.CargoHandlingEvents ?? [], currentUserId);
+        {
+            RemoveAllPassengers(db, entity);
+            SyncCargoHandlingEvents(db, entity, request.CargoHandlingEvents ?? [], currentUserId);
+        }
 
         var invalidatedSignatureCount = InvalidateEditablePartySignatures(entity, currentUserId, now);
+        // Chữ ký không còn là mốc khóa. Nếu HĐ từng được ký bằng bản cũ có
+        // LockedAt thì mở lại cho tới khi VehicleOwner thực sự Complete.
+        entity.LockedAt = null;
         entity.UpdatedAt = now;
         entity.UpdatedBy = currentUserId;
 
@@ -637,6 +752,23 @@ public sealed class ContractService(
         Guid id,
         string currentUserId,
         CancellationToken ct = default)
+    {
+        var gate = ContractWriteGates.GetOrAdd(id, static _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(ct);
+        try
+        {
+            return await ReceiveCoreAsync(id, currentUserId, ct);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task<SaveContractResult> ReceiveCoreAsync(
+        Guid id,
+        string currentUserId,
+        CancellationToken ct)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
         var entity = await db.Contracts
@@ -682,6 +814,23 @@ public sealed class ContractService(
         Guid id,
         string currentUserId,
         CancellationToken ct = default)
+    {
+        var gate = ContractWriteGates.GetOrAdd(id, static _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(ct);
+        try
+        {
+            return await CompleteWithLockAsync(id, currentUserId, ct);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private async Task<SaveContractResult> CompleteWithLockAsync(
+        Guid id,
+        string currentUserId,
+        CancellationToken ct)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
         var strategy = db.Database.CreateExecutionStrategy();
@@ -942,15 +1091,125 @@ public sealed class ContractService(
         return true;
     }
 
-    private async Task<SaveContractResult> UpdateByVehicleOwnerAsync(
+    /// <summary>
+    /// VehicleOwner update needs two SaveChanges calls inside one transaction because the
+    /// active SortOrder keys are unique. SQL Server retry is enabled globally, so every
+    /// user transaction must be created inside the provider execution strategy.
+    /// The entity graph is reloaded on every retry to avoid reusing mutated/tracked state.
+    /// </summary>
+    private async Task<SaveContractResult> UpdateByVehicleOwnerWithRetryAsync(
+        Guid contractId,
+        SaveContractRequest request,
+        string currentUserId,
+        CancellationToken ct)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var strategy = db.Database.CreateExecutionStrategy();
+
+        return await strategy.ExecuteAsync(async () =>
+        {
+            // ExecuteAsync may invoke this delegate again after a transient SQL error.
+            // Always start the retry from a clean tracker and reload the full editable graph.
+            db.ChangeTracker.Clear();
+
+            await using var transaction = await db.Database.BeginTransactionAsync(
+                IsolationLevel.ReadCommitted,
+                ct);
+
+            try
+            {
+                // Khóa đúng dòng HĐ TRƯỚC khi tải entity để luôn lấy bản mới nhất sau
+                // lần lưu của Owner/Admin. HOLDLOCK giữ khóa đến commit; các lượt ghi
+                // khác sẽ chờ thay vì tạo conflict RowVersion giả ở phía tài xế.
+                var lockedContractId = await db.Contracts
+                    .FromSqlInterpolated($"""
+                        SELECT *
+                        FROM [dbo].[Contracts] WITH (UPDLOCK, HOLDLOCK, ROWLOCK)
+                        WHERE [Id] = {contractId} AND [IsDeleted] = 0
+                        """)
+                    .IgnoreQueryFilters()
+                    .AsNoTracking()
+                    .Select(x => x.Id)
+                    .FirstOrDefaultAsync(ct);
+
+                if (lockedContractId == Guid.Empty)
+                {
+                    await transaction.RollbackAsync(ct);
+                    return new SaveContractResult(false, null, "Không tìm thấy hợp đồng.");
+                }
+
+                // Không load Passengers/CargoHandlingEvents vào tracker. Hai collection này
+                // được thay thế theo trạng thái UI bằng bulk soft-delete + insert mới để
+                // không phụ thuộc RowVersion của các dòng cũ.
+                var entity = await db.Contracts
+                    .Include(x => x.Signatures)
+                    .FirstOrDefaultAsync(x => x.Id == contractId && !x.IsDeleted, ct);
+
+                if (entity is null)
+                {
+                    await transaction.RollbackAsync(ct);
+                    return new SaveContractResult(false, null, "Không tìm thấy hợp đồng.");
+                }
+
+                if (IsContentEditLocked(entity))
+                {
+                    await transaction.RollbackAsync(ct);
+                    return new SaveContractResult(false, entity.Id, ContentEditLockedMessage(entity));
+                }
+
+                var access = await GetAccessAsync(db, currentUserId, ct);
+                if (!access.IsVehicleOwner || !string.Equals(entity.DriverId, currentUserId, StringComparison.Ordinal))
+                {
+                    await transaction.RollbackAsync(ct);
+                    return new SaveContractResult(false, entity.Id, "Bạn không có quyền cập nhật hợp đồng này.");
+                }
+
+                var result = await UpdateByVehicleOwnerCoreAsync(db, entity, request, currentUserId, ct);
+                if (result.Succeeded)
+                {
+                    await transaction.CommitAsync(ct);
+                    await TryRememberSavedDriversAsync(request, currentUserId, ct);
+                }
+                else
+                {
+                    await transaction.RollbackAsync(ct);
+                }
+
+                return result;
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                await transaction.RollbackAsync(ct);
+                logger.LogInformation(ex,
+                    "VehicleOwner update concurrency conflict for contract {ContractId}, user {UserId}; outer realtime retry will reload latest data.",
+                    contractId, currentUserId);
+                throw;
+            }
+            catch (DbUpdateException ex)
+            {
+                await transaction.RollbackAsync(ct);
+                logger.LogInformation(ex,
+                    "VehicleOwner concurrent database write for contract {ContractId}, user {UserId}; outer realtime retry will reload latest data. Database detail: {DatabaseDetail}",
+                    contractId, currentUserId, ex.GetBaseException().Message);
+                throw;
+            }
+        });
+    }
+
+    private async Task<SaveContractResult> UpdateByVehicleOwnerCoreAsync(
         ApplicationDbContext db,
         Contract entity,
         SaveContractRequest request,
         string currentUserId,
         CancellationToken ct)
     {
-        if (IsEditLocked(entity.Status))
-            return new(false, entity.Id, "Hợp đồng đã hủy hoặc đã hoàn thành nên không thể cập nhật.");
+        if (IsContentEditLocked(entity))
+            return new(false, entity.Id, ContentEditLockedMessage(entity));
+
+        // VehicleOwner được cập nhật các vùng được phép ngay cả khi HĐ đang Assigned.
+        // Thao tác Nhận HĐ vẫn là điều kiện trước khi ký/hoàn thành, nhưng không còn
+        // là điều kiện để chỉnh sửa/lưu nội dung. Điều này giúp Owner/Admin/VehicleOwner
+        // cùng cập nhật nối tiếp trên dữ liệu mới nhất cho tới khi Completed/Cancelled.
 
         var originalStatus = entity.Status;
         var originalReceivedAt = entity.ReceivedAt;
@@ -1017,8 +1276,10 @@ public sealed class ContractService(
                 .Include(x => x.OfficeVehicles)
                 .FirstOrDefaultAsync(x => x.Id == entity.VehicleId && x.IsActive && !x.IsDeleted, ct);
             vehicleOwner = await db.Users.FirstOrDefaultAsync(x => x.Id == currentUserId, ct);
-            customer = await db.Customers.FirstOrDefaultAsync(x => x.Id == entity.CustomerId && !x.IsDeleted, ct)
-                ?? throw new InvalidOperationException("Không tìm thấy khách hàng của hợp đồng.");
+            customer = await db.Customers.FirstOrDefaultAsync(x => x.Id == entity.CustomerId && !x.IsDeleted, ct);
+            if (customer is null)
+                return new(false, entity.Id, "Không tìm thấy hồ sơ khách hàng của hợp đồng. Vui lòng liên hệ quản trị viên kiểm tra dữ liệu khách hàng.");
+
             company = await db.CompanyProfiles.FirstOrDefaultAsync(x => x.Id == entity.CompanyProfileId && x.IsActive && !x.IsDeleted, ct);
             var vehicleStillAssignedToOffice = vehicle?.OfficeVehicles.Any(x => x.IsActive && !x.IsDeleted &&
                 x.AssignedTo == null && x.CompanyProfileId == entity.CompanyProfileId) == true;
@@ -1035,6 +1296,10 @@ public sealed class ContractService(
         if (!string.IsNullOrWhiteSpace(request.SecondDriverLicenseClass) &&
             !AutomobileDrivingLicenseClasses.IsValid(request.SecondDriverLicenseClass))
             return new(false, entity.Id, "Hạng GPLX ô tô của Tài xế 2 không hợp lệ.");
+
+        // Collection của tài xế được coi là snapshot mới tại thời điểm bấm Lưu.
+        // Không cập nhật từng row cũ theo RowVersion vì Owner/Admin có thể vừa phát/cập nhật
+        // HĐ trước đó; việc merge row cũ là nguyên nhân gây conflict giả.
 
         Apply(entity, request);
         ApplyOperatingDriverEntitySnapshot(entity, request);
@@ -1070,23 +1335,21 @@ public sealed class ContractService(
         ApplyOperatingDriverSnapshot(updatedSnapshot, request);
         PreserveVehicleOwnerSignature(existingSnapshot, updatedSnapshot);
         entity.ContractDataJson = updatedSnapshot.ToJson();
-        db.ContractPassengers.RemoveRange(entity.Passengers);
-        db.ContractCargoHandlingEvents.RemoveRange(entity.CargoHandlingEvents);
-        if (entity.BusinessType == ContractBusinessType.Passenger)
-            AddPassengers(entity, request.Passengers, currentUserId);
-        else
-            AddCargoHandlingEvents(entity, request.CargoHandlingEvents ?? [], currentUserId);
+        await ReplaceVehicleOwnerEditableCollectionsAsync(
+            db, entity, request, currentUserId, ct);
 
-        // Cho phép Chủ xe sửa/lưu bất kỳ lúc nào trước khi HĐ bị Hủy/Hoàn thành.
+        // Cho phép Chủ xe sửa/lưu trong cửa sổ còn mở. Chữ ký không khóa HĐ;
+        // nếu nội dung thay đổi thì chữ ký Driver/Customer cũ sẽ bị vô hiệu và phải ký lại.
+        // Cửa sổ edit chỉ đóng khi VehicleOwner bấm Hoàn thành (Completed) hoặc HĐ bị hủy.
         // Nếu HĐ đã nhận thì giữ trạng thái Received; nếu chưa nhận thì giữ Assigned.
         entity.Status = NormalizeEditableStatus(originalStatus, entity.IsSelfCreated, originalReceivedAt);
         entity.ReceivedAt = originalReceivedAt;
 
         var now = DateTime.UtcNow;
         var invalidatedSignatureCount = InvalidateEditablePartySignatures(entity, currentUserId, now);
+        entity.LockedAt = null;
         entity.UpdatedAt = now;
         entity.UpdatedBy = currentUserId;
-        await RememberSavedDriversAsync(db, request, currentUserId, ct);
 
         entity.AuditLogs.Add(new ContractAuditLog
         {
@@ -1099,11 +1362,12 @@ public sealed class ContractService(
         });
 
         await db.SaveChangesAsync(ct);
+
         var vehicleOwnerMessage = entity.BusinessType == ContractBusinessType.Cargo
             ? "Đã lưu cập nhật nội dung hợp đồng và thông tin vận chuyển hàng hóa."
             : "Đã lưu cập nhật nội dung hợp đồng, thông tin chuyến đi và danh sách hành khách.";
         if (invalidatedSignatureCount > 0)
-            vehicleOwnerMessage += " Nội dung đã thay đổi nên chữ ký Tài xế/Khách hàng trước đó đã được vô hiệu; vui lòng ký lại trước khi hoàn thành.";
+            vehicleOwnerMessage += " Nội dung đã thay đổi nên chữ ký Tài xế trước đó đã được vô hiệu; vui lòng ký lại trước khi khách hàng ký.";
         return new(true, entity.Id, vehicleOwnerMessage);
     }
 
@@ -1904,6 +2168,281 @@ public sealed class ContractService(
         entity.VehicleOwnerCitizenIdSnapshot = vehicleOwner.CitizenId;
     }
 
+    private async Task TryRememberSavedDriversAsync(
+        SaveContractRequest request,
+        string currentUserId,
+        CancellationToken ct)
+    {
+        try
+        {
+            await using var savedDriverDb = await factory.CreateDbContextAsync(ct);
+            await RememberSavedDriversAsync(savedDriverDb, request, currentUserId, ct);
+            await savedDriverDb.SaveChangesAsync(ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Saved-driver suggestion update failed for user {UserId}. Contract save remains successful.",
+                currentUserId);
+        }
+    }
+
+    private static async Task ReplaceVehicleOwnerEditableCollectionsAsync(
+        ApplicationDbContext db,
+        Contract entity,
+        SaveContractRequest request,
+        string userId,
+        CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+
+        // ExecuteUpdate bypasses optimistic RowVersion of the old child rows on purpose.
+        // The Contract row itself is already protected by UPDLOCK/HOLDLOCK in the same
+        // transaction, so this is a serialized replace of the editable collection.
+        await db.ContractPassengers
+            .IgnoreQueryFilters()
+            .Where(x => x.ContractId == entity.Id && !x.IsDeleted)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.IsDeleted, true)
+                .SetProperty(x => x.DeletedAt, now)
+                .SetProperty(x => x.DeletedBy, userId)
+                .SetProperty(x => x.UpdatedAt, now)
+                .SetProperty(x => x.UpdatedBy, userId), ct);
+
+        await db.ContractCargoHandlingEvents
+            .IgnoreQueryFilters()
+            .Where(x => x.ContractId == entity.Id && !x.IsDeleted)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.IsDeleted, true)
+                .SetProperty(x => x.DeletedAt, now)
+                .SetProperty(x => x.DeletedBy, userId)
+                .SetProperty(x => x.UpdatedAt, now)
+                .SetProperty(x => x.UpdatedBy, userId), ct);
+
+        if (entity.BusinessType == ContractBusinessType.Passenger)
+        {
+            foreach (var item in request.Passengers
+                         .Where(x => !string.IsNullOrWhiteSpace(x.FullName))
+                         .Take(20)
+                         .Select((x, index) => (x, index)))
+            {
+                db.ContractPassengers.Add(new ContractPassenger
+                {
+                    ContractId = entity.Id,
+                    SortOrder = item.index + 1,
+                    FullName = item.x.FullName.Trim(),
+                    BirthYear = item.x.BirthYear,
+                    Note = N(item.x.Note),
+                    CreatedBy = userId
+                });
+            }
+        }
+        else
+        {
+            foreach (var type in new[] { CargoHandlingType.Loading, CargoHandlingType.Unloading })
+            {
+                foreach (var item in (request.CargoHandlingEvents ?? [])
+                             .Where(x => x.Type == type)
+                             .OrderBy(x => x.SortOrder)
+                             .Take(3)
+                             .Select((x, index) => (x, index)))
+                {
+                    db.ContractCargoHandlingEvents.Add(new ContractCargoHandlingEvent
+                    {
+                        ContractId = entity.Id,
+                        Type = type,
+                        SortOrder = item.index + 1,
+                        Location = N(item.x.Location),
+                        CargoWeight = N(item.x.CargoWeight),
+                        EventTime = item.x.EventTime,
+                        Confirmation = N(item.x.Confirmation),
+                        CreatedBy = userId
+                    });
+                }
+            }
+        }
+    }
+
+    private static async Task PrepareEditableCollectionsForResyncAsync(
+        ApplicationDbContext db,
+        Contract entity,
+        string userId,
+        CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var changed = false;
+
+        if (entity.BusinessType == ContractBusinessType.Passenger)
+        {
+            var rows = entity.Passengers
+                .Where(x => !x.IsDeleted)
+                .OrderBy(x => x.SortOrder)
+                .ToList();
+
+            if (rows.Count > 0)
+            {
+                var temporaryStart = rows.Max(x => x.SortOrder) + 1000;
+                for (var index = 0; index < rows.Count; index++)
+                {
+                    rows[index].SortOrder = temporaryStart + index;
+                    rows[index].UpdatedAt = now;
+                    rows[index].UpdatedBy = userId;
+                }
+                changed = true;
+            }
+        }
+        else
+        {
+            foreach (var type in new[] { CargoHandlingType.Loading, CargoHandlingType.Unloading })
+            {
+                var rows = entity.CargoHandlingEvents
+                    .Where(x => !x.IsDeleted && x.Type == type)
+                    .OrderBy(x => x.SortOrder)
+                    .ToList();
+
+                if (rows.Count == 0)
+                    continue;
+
+                var temporaryStart = rows.Max(x => x.SortOrder) + 1000;
+                for (var index = 0; index < rows.Count; index++)
+                {
+                    rows[index].SortOrder = temporaryStart + index;
+                    rows[index].UpdatedAt = now;
+                    rows[index].UpdatedBy = userId;
+                }
+                changed = true;
+            }
+        }
+
+        if (changed)
+            await db.SaveChangesAsync(ct);
+    }
+
+    private static void RemoveAllPassengers(
+        ApplicationDbContext db,
+        Contract entity)
+    {
+        if (entity.Passengers.Count == 0)
+            return;
+
+        db.ContractPassengers.RemoveRange(entity.Passengers.ToList());
+    }
+
+    private static void RemoveAllCargoHandlingEvents(
+        ApplicationDbContext db,
+        Contract entity)
+    {
+        if (entity.CargoHandlingEvents.Count == 0)
+            return;
+
+        db.ContractCargoHandlingEvents.RemoveRange(entity.CargoHandlingEvents.ToList());
+    }
+
+    // Đồng bộ theo vị trí thay vì xóa toàn bộ rồi chèn lại. Cách này tránh va chạm
+    // unique index (ContractId + SortOrder / Type + SortOrder) khi Chủ xe lưu cập nhật.
+    private static void SyncPassengers(
+        ApplicationDbContext db,
+        Contract entity,
+        IEnumerable<ContractPassengerDto> passengers,
+        string userId)
+    {
+        var desired = passengers
+            .Where(x => !string.IsNullOrWhiteSpace(x.FullName))
+            .Take(20)
+            .ToList();
+        var existing = entity.Passengers
+            .Where(x => !x.IsDeleted)
+            .OrderBy(x => x.SortOrder)
+            .ToList();
+        var now = DateTime.UtcNow;
+
+        for (var index = 0; index < desired.Count; index++)
+        {
+            var source = desired[index];
+            if (index < existing.Count)
+            {
+                var target = existing[index];
+                target.SortOrder = index + 1;
+                target.FullName = source.FullName.Trim();
+                target.BirthYear = source.BirthYear;
+                target.Note = N(source.Note);
+                target.UpdatedAt = now;
+                target.UpdatedBy = userId;
+            }
+            else
+            {
+                entity.Passengers.Add(new ContractPassenger
+                {
+                    SortOrder = index + 1,
+                    FullName = source.FullName.Trim(),
+                    BirthYear = source.BirthYear,
+                    Note = N(source.Note),
+                    CreatedBy = userId
+                });
+            }
+        }
+
+        if (existing.Count > desired.Count)
+            db.ContractPassengers.RemoveRange(existing.Skip(desired.Count).ToList());
+    }
+
+    private static void SyncCargoHandlingEvents(
+        ApplicationDbContext db,
+        Contract entity,
+        IEnumerable<ContractCargoHandlingEventDto> events,
+        string userId)
+    {
+        var now = DateTime.UtcNow;
+        foreach (var type in new[] { CargoHandlingType.Loading, CargoHandlingType.Unloading })
+        {
+            var desired = events
+                .Where(x => x.Type == type)
+                .OrderBy(x => x.SortOrder)
+                .Take(3)
+                .ToList();
+            var existing = entity.CargoHandlingEvents
+                .Where(x => !x.IsDeleted && x.Type == type)
+                .OrderBy(x => x.SortOrder)
+                .ToList();
+
+            for (var index = 0; index < desired.Count; index++)
+            {
+                var source = desired[index];
+                if (index < existing.Count)
+                {
+                    var target = existing[index];
+                    target.SortOrder = index + 1;
+                    target.Location = N(source.Location);
+                    target.CargoWeight = N(source.CargoWeight);
+                    target.EventTime = source.EventTime;
+                    target.Confirmation = N(source.Confirmation);
+                    target.UpdatedAt = now;
+                    target.UpdatedBy = userId;
+                }
+                else
+                {
+                    entity.CargoHandlingEvents.Add(new ContractCargoHandlingEvent
+                    {
+                        Type = type,
+                        SortOrder = index + 1,
+                        Location = N(source.Location),
+                        CargoWeight = N(source.CargoWeight),
+                        EventTime = source.EventTime,
+                        Confirmation = N(source.Confirmation),
+                        CreatedBy = userId
+                    });
+                }
+            }
+
+            if (existing.Count > desired.Count)
+                db.ContractCargoHandlingEvents.RemoveRange(existing.Skip(desired.Count).ToList());
+        }
+    }
+
     private static void AddPassengers(
         Contract entity,
         IEnumerable<ContractPassengerDto> passengers,
@@ -1957,10 +2496,20 @@ public sealed class ContractService(
            string.IsNullOrWhiteSpace(request.CustomerPhone) ||
            (request.CustomerIsCompany && string.IsNullOrWhiteSpace(request.CustomerRepresentativeName));
 
-    // Quy tắc chỉnh sửa HĐ: chỉ Hủy hoặc Hoàn thành mới khóa cập nhật.
-    // Expired/Invalidated được giữ tương thích dữ liệu cũ nhưng không còn dùng làm khóa edit.
+    // Chỉ trạng thái cuối mới khóa edit. Việc ký tên KHÔNG khóa HĐ.
+    // Owner/Admin/VehicleOwner vẫn có thể cập nhật trước khi VehicleOwner bấm Hoàn thành.
+    // Nếu sửa sau khi ký, InvalidateEditablePartySignatures sẽ vô hiệu chữ ký cũ
+    // để người liên quan ký lại trên đúng nội dung mới nhất.
     private static bool IsEditLocked(ContractStatus status)
         => status is ContractStatus.Completed or ContractStatus.Cancelled;
+
+    private static bool IsContentEditLocked(Contract entity)
+        => IsEditLocked(entity.Status);
+
+    private static string ContentEditLockedMessage(Contract entity)
+        => entity.Status == ContractStatus.Completed
+            ? "Hợp đồng đã được Chủ xe hoàn thành và khóa cố định nên không thể cập nhật."
+            : "Hợp đồng đã bị hủy nên không thể cập nhật.";
 
     private static ContractStatus NormalizeEditableStatus(
         ContractStatus status,

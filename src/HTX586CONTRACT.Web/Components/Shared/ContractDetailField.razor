@@ -1,0 +1,18 @@
+<div class="contract-detail-field @Class">
+    <div class="contract-detail-field-icon">
+        <MudIcon Icon="@Icon" Size="Size.Small" />
+    </div>
+    <div class="contract-detail-field-copy">
+        <div class="contract-detail-field-label">@Label</div>
+        <div class="contract-detail-field-value">@DisplayValue</div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = string.Empty;
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public string Icon { get; set; } = Icons.Material.Filled.Info;
+    [Parameter] public string? Class { get; set; }
+
+    private string DisplayValue => string.IsNullOrWhiteSpace(Value) ? "Chưa cập nhật" : Value;
+}

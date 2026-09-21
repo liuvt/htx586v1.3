@@ -1,0 +1,35 @@
+<div class="contract-driver-card @(IsEmpty ? "is-empty" : string.Empty)">
+    <div class="contract-driver-avatar">
+        <MudIcon Icon="@(Icons.Material.Filled.Person)" />
+    </div>
+    <div class="contract-driver-body">
+        <div class="contract-driver-role">@Title</div>
+        <div class="contract-driver-name">@(IsEmpty ? "Không có" : DisplayName)</div>
+        @if (!IsEmpty)
+        {
+            <div class="contract-driver-meta">
+                <span><MudIcon Icon="@Icons.Material.Filled.CreditCard" Size="Size.Small" /> GPLX: @DisplayLicenseNumber</span>
+                <span><MudIcon Icon="@Icons.Material.Filled.DriveEta" Size="Size.Small" /> Hạng @DisplayLicenseClass</span>
+                <span><MudIcon Icon="@Icons.Material.Filled.Phone" Size="Size.Small" /> @DisplayPhone</span>
+            </div>
+        }
+        else
+        {
+            <div class="contract-driver-empty-note">Chưa khai báo tài xế thứ hai</div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "Tài xế";
+    [Parameter] public string? Name { get; set; }
+    [Parameter] public string? LicenseNumber { get; set; }
+    [Parameter] public string? LicenseClass { get; set; }
+    [Parameter] public string? PhoneNumber { get; set; }
+
+    private bool IsEmpty => string.IsNullOrWhiteSpace(Name);
+    private string DisplayName => string.IsNullOrWhiteSpace(Name) ? "-" : Name;
+    private string DisplayLicenseNumber => string.IsNullOrWhiteSpace(LicenseNumber) ? "-" : LicenseNumber;
+    private string DisplayLicenseClass => string.IsNullOrWhiteSpace(LicenseClass) ? "-" : LicenseClass;
+    private string DisplayPhone => string.IsNullOrWhiteSpace(PhoneNumber) ? "-" : PhoneNumber;
+}

@@ -224,25 +224,30 @@ public static class AccountEndpoints
                 "/vehicle-owner/account?signatureRequired=1");
         }
 
-        if (IsLocalUrl(returnUrl))
+        // Khi người dùng mở route gốc "/" lúc chưa đăng nhập, middleware sẽ
+        // đưa họ tới trang login kèm ReturnUrl="/". Không trả về "/" sau khi
+        // đăng nhập vì như vậy Home.razor phải render rồi mới redirect tiếp,
+        // dễ làm xuất hiện cảnh báo/trạng thái trung gian trên UI.
+        //
+        // Với các returnUrl nội bộ cụ thể khác (ví dụ /admin/accounts/...),
+        // vẫn giữ nguyên hành vi quay lại đúng trang người dùng đang mở.
+        if (IsLocalUrl(returnUrl) && !IsRootUrl(returnUrl))
         {
             return Results.Redirect(returnUrl);
         }
 
-        if (roles.Contains(
-                "Owner",
-                StringComparer.OrdinalIgnoreCase))
-        {
-            return Results.Redirect(
-                "/owner/dashboard");
-        }
-
-        if (roles.Contains(
-                "Admin",
-                StringComparer.OrdinalIgnoreCase))
+        // Ưu tiên Admin trước Owner để tài khoản quản trị có nhiều role vẫn
+        // luôn đi thẳng tới dashboard quản trị ngay từ response đăng nhập.
+        if (isAdmin)
         {
             return Results.Redirect(
                 "/admin/dashboard");
+        }
+
+        if (isOwner)
+        {
+            return Results.Redirect(
+                "/owner/dashboard");
         }
 
         if (isVehicleOwner)
@@ -271,7 +276,7 @@ public static class AccountEndpoints
             httpContext.Request.Query["returnUrl"]
                 .ToString();
 
-        if (IsLocalUrl(returnUrl))
+        if (IsLocalUrl(returnUrl) && !IsRootUrl(returnUrl))
         {
             return Results.Redirect(returnUrl);
         }
@@ -288,7 +293,7 @@ public static class AccountEndpoints
             "/account/login?error=" +
             Uri.EscapeDataString(error);
 
-        if (IsLocalUrl(returnUrl))
+        if (IsLocalUrl(returnUrl) && !IsRootUrl(returnUrl))
         {
             url +=
                 "&returnUrl=" +
@@ -296,6 +301,16 @@ public static class AccountEndpoints
         }
 
         return Results.Redirect(url);
+    }
+
+    private static bool IsRootUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return false;
+
+        var normalized = url.Trim();
+        return string.Equals(normalized, "/", StringComparison.Ordinal) ||
+               string.Equals(normalized, "/#", StringComparison.Ordinal);
     }
 
     private static bool IsLocalUrl(string? url)

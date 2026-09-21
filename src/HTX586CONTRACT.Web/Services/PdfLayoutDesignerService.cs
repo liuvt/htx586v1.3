@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Components.Authorization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -10,7 +11,8 @@ namespace HTX586CONTRACT.Web.Services;
 public sealed class PdfLayoutDesignerService(
     IWebHostEnvironment environment,
     IConfiguration configuration,
-    ILogger<PdfLayoutDesignerService> logger)
+    ILogger<PdfLayoutDesignerService> logger,
+    AuthenticationStateProvider authenticationStateProvider)
 {
     private static readonly JsonSerializerOptions ReadJsonOptions = new()
     {
@@ -33,6 +35,8 @@ public sealed class PdfLayoutDesignerService(
         PdfLayoutDesignerContractType contractType = PdfLayoutDesignerContractType.Passenger,
         CancellationToken cancellationToken = default)
     {
+        await EnsureOwnerAccessAsync();
+
         var paths = ResolveDesignerPaths(contractType);
 
         if (!File.Exists(paths.TemplatePath))
@@ -44,6 +48,8 @@ public sealed class PdfLayoutDesignerService(
         var bundle = await ReadBundleAsync(paths.LayoutPath, cancellationToken);
         var layout = SelectLayout(bundle, contractType)
             ?? throw new InvalidOperationException($"JSON dùng chung chưa có layout cho {GetContractTypeName(contractType)}.");
+
+        ValidateLayout(layout, contractType);
 
         var pdfBytes = await File.ReadAllBytesAsync(paths.TemplatePath, cancellationToken);
 
@@ -63,9 +69,14 @@ public sealed class PdfLayoutDesignerService(
         PdfTemplateLayoutDto layout,
         CancellationToken cancellationToken = default)
     {
+        await EnsureOwnerAccessAsync();
+
         var paths = ResolveDesignerPaths(contractType);
         var layoutPath = paths.LayoutPath;
         var layoutDirectory = Path.GetDirectoryName(layoutPath)!;
+
+        NormalizeLayout(layout);
+        ValidateLayout(layout, contractType);
 
         Directory.CreateDirectory(layoutDirectory);
 
@@ -98,7 +109,13 @@ public sealed class PdfLayoutDesignerService(
                     backupPath);
             }
 
+            ValidateBundle(bundle);
+
             var json = JsonSerializer.Serialize(bundle, WriteJsonOptions);
+            var roundTripBundle = JsonSerializer.Deserialize<PdfTemplateLayoutBundleDto>(json, ReadJsonOptions)
+                ?? throw new InvalidOperationException("JSON layout sau khi serialize không thể đọc lại.");
+            ValidateBundle(roundTripBundle);
+
             var tempPath = Path.Combine(
                 layoutDirectory,
                 $".{Path.GetFileName(layoutPath)}.{Guid.NewGuid():N}.tmp");
@@ -106,6 +123,14 @@ public sealed class PdfLayoutDesignerService(
             try
             {
                 await File.WriteAllTextAsync(tempPath, json, cancellationToken);
+
+                // Đọc lại chính file tạm trước khi replace file đang chạy. Nhờ vậy một lỗi
+                // ghi dở/encoding sẽ không làm hỏng layout chính và khiến Designer không vào lại được.
+                var tempJson = await File.ReadAllTextAsync(tempPath, cancellationToken);
+                var tempBundle = JsonSerializer.Deserialize<PdfTemplateLayoutBundleDto>(tempJson, ReadJsonOptions)
+                    ?? throw new InvalidOperationException("File JSON tạm vừa ghi không thể đọc lại.");
+                ValidateBundle(tempBundle);
+
                 File.Move(tempPath, layoutPath, overwrite: true);
             }
             finally
@@ -132,6 +157,30 @@ public sealed class PdfLayoutDesignerService(
         }
     }
 
+
+    private async Task EnsureOwnerAccessAsync()
+    {
+        var auth = await authenticationStateProvider.GetAuthenticationStateAsync();
+        var user = auth.User;
+
+        if (user.Identity?.IsAuthenticated == true && user.IsInRole("Owner"))
+            return;
+
+        var role = user.IsInRole("Admin")
+            ? "Admin"
+            : user.IsInRole("VehicleOwner")
+                ? "VehicleOwner"
+                : "Unknown";
+
+        logger.LogWarning(
+            "Từ chối truy cập PDF Layout Designer. Role={Role}, User={User}",
+            role,
+            user.Identity?.Name ?? "anonymous");
+
+        throw new UnauthorizedAccessException(
+            "Chỉ tài khoản Owner mới có quyền sử dụng tính năng chỉnh sửa file PDF hợp đồng.");
+    }
+
     public static string GetContractTypeName(PdfLayoutDesignerContractType contractType)
         => contractType switch
         {
@@ -150,10 +199,183 @@ public sealed class PdfLayoutDesignerService(
         string layoutPath,
         CancellationToken cancellationToken)
     {
-        var layoutJson = await File.ReadAllTextAsync(layoutPath, cancellationToken);
-        return JsonSerializer.Deserialize<PdfTemplateLayoutBundleDto>(layoutJson, ReadJsonOptions)
-            ?? throw new InvalidOperationException("Không thể đọc layout JSON dùng chung.");
+        try
+        {
+            var bundle = await ReadAndValidateBundleFileAsync(layoutPath, cancellationToken);
+            return bundle;
+        }
+        catch (Exception mainError) when (mainError is JsonException or InvalidOperationException)
+        {
+            // Nếu lần lưu trước bị gián đoạn hoặc JSON bị chỉnh tay sai, thử bản backup mới nhất
+            // để trang Designer vẫn mở được thay vì làm hỏng toàn bộ circuit.
+            var directory = Path.GetDirectoryName(layoutPath);
+            var fileName = Path.GetFileName(layoutPath);
+            if (!string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory))
+            {
+                var backups = Directory
+                    .EnumerateFiles(directory, $"{fileName}.bak-*")
+                    .OrderByDescending(File.GetLastWriteTimeUtc)
+                    .ToList();
+
+                foreach (var backupPath in backups)
+                {
+                    try
+                    {
+                        var backupBundle = await ReadAndValidateBundleFileAsync(backupPath, cancellationToken);
+                        logger.LogWarning(
+                            mainError,
+                            "Layout JSON chính bị lỗi. Tạm đọc backup để Designer vẫn hoạt động. Layout={LayoutPath}, Backup={BackupPath}",
+                            layoutPath,
+                            backupPath);
+                        return backupBundle;
+                    }
+                    catch (Exception backupError) when (backupError is JsonException or InvalidOperationException)
+                    {
+                        logger.LogWarning(
+                            backupError,
+                            "Bỏ qua backup layout PDF không hợp lệ. Backup={BackupPath}",
+                            backupPath);
+                    }
+                }
+            }
+
+            throw new InvalidOperationException(
+                $"Không thể đọc layout JSON '{layoutPath}'. File chính không hợp lệ và không có backup hợp lệ để phục hồi. Chi tiết: {mainError.Message}",
+                mainError);
+        }
     }
+
+    private static async Task<PdfTemplateLayoutBundleDto> ReadAndValidateBundleFileAsync(
+        string path,
+        CancellationToken cancellationToken)
+    {
+        var json = await File.ReadAllTextAsync(path, cancellationToken);
+        var bundle = JsonSerializer.Deserialize<PdfTemplateLayoutBundleDto>(json, ReadJsonOptions)
+            ?? throw new InvalidOperationException("JSON layout rỗng hoặc không đúng cấu trúc bundle.");
+        ValidateBundle(bundle);
+        return bundle;
+    }
+
+    private static void ValidateBundle(PdfTemplateLayoutBundleDto bundle)
+    {
+        if (bundle.Passenger is null)
+            throw new InvalidOperationException("JSON dùng chung thiếu node 'passenger'.");
+        if (bundle.Cargo is null)
+            throw new InvalidOperationException("JSON dùng chung thiếu node 'cargo'.");
+
+        ValidateLayout(bundle.Passenger, PdfLayoutDesignerContractType.Passenger);
+        ValidateLayout(bundle.Cargo, PdfLayoutDesignerContractType.Cargo);
+    }
+
+    public static void ValidateLayout(
+        PdfTemplateLayoutDto layout,
+        PdfLayoutDesignerContractType contractType)
+    {
+        var contractTypeName = GetContractTypeName(contractType);
+
+        if (layout.Version < 1)
+            throw new InvalidOperationException($"Layout {contractTypeName} có version không hợp lệ: {layout.Version}.");
+        if (string.IsNullOrWhiteSpace(layout.TemplateFile))
+            throw new InvalidOperationException($"Layout {contractTypeName} thiếu templateFile.");
+        if (layout.TextFields is null || layout.ImageFields is null)
+            throw new InvalidOperationException($"Layout {contractTypeName} thiếu textFields/imageFields.");
+        if (layout.TextFields.Count == 0 && layout.ImageFields.Count == 0)
+            throw new InvalidOperationException($"Layout {contractTypeName} không có field nào; có thể node JSON đã bị mất hoặc sai cấu trúc.");
+
+        foreach (var field in layout.TextFields)
+        {
+            if (string.IsNullOrWhiteSpace(field.Key))
+                throw new InvalidOperationException($"Layout {contractTypeName} có text field thiếu key.");
+            if (field.Page < 1)
+                throw new InvalidOperationException($"Text field '{field.Key}' có page không hợp lệ: {field.Page}.");
+            if (!double.IsFinite(field.X) || !double.IsFinite(field.Y) ||
+                !double.IsFinite(field.Width) || !double.IsFinite(field.Height) ||
+                field.X < 0 || field.Y < 0 || field.Width <= 0 || field.Height <= 0)
+                throw new InvalidOperationException($"Text field '{field.Key}' có tọa độ/kích thước không hợp lệ.");
+            if (!float.IsFinite(field.FontSize) || !float.IsFinite(field.MinFontSize) ||
+                field.FontSize <= 0 || field.MinFontSize <= 0 || field.MinFontSize > field.FontSize)
+                throw new InvalidOperationException($"Text field '{field.Key}' có cỡ chữ không hợp lệ.");
+            if (field.MaxLines < 1)
+                throw new InvalidOperationException($"Text field '{field.Key}' có maxLines < 1.");
+        }
+
+        foreach (var field in layout.ImageFields)
+        {
+            if (string.IsNullOrWhiteSpace(field.Key))
+                throw new InvalidOperationException($"Layout {contractTypeName} có image field thiếu key.");
+            if (field.Page < 1)
+                throw new InvalidOperationException($"Image field '{field.Key}' có page không hợp lệ: {field.Page}.");
+            if (!double.IsFinite(field.X) || !double.IsFinite(field.Y) ||
+                !double.IsFinite(field.Width) || !double.IsFinite(field.Height) ||
+                field.X < 0 || field.Y < 0 || field.Width <= 0 || field.Height <= 0)
+                throw new InvalidOperationException($"Image field '{field.Key}' có tọa độ/kích thước không hợp lệ.");
+        }
+
+        var duplicateText = layout.TextFields
+            .GroupBy(x => $"{x.Page}:{x.Key.Trim()}", StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(x => x.Count() > 1);
+        if (duplicateText is not null)
+            throw new InvalidOperationException($"Layout {contractTypeName} bị trùng text field '{duplicateText.Key}'.");
+
+        var duplicateImage = layout.ImageFields
+            .GroupBy(x => $"{x.Page}:{x.Key.Trim()}", StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(x => x.Count() > 1);
+        if (duplicateImage is not null)
+            throw new InvalidOperationException($"Layout {contractTypeName} bị trùng image field '{duplicateImage.Key}'.");
+    }
+
+    public static void NormalizeLayout(PdfTemplateLayoutDto layout)
+    {
+        layout.FontFamily = string.IsNullOrWhiteSpace(layout.FontFamily) ? "Times New Roman" : layout.FontFamily.Trim();
+        layout.FallbackFontFamilies ??= [];
+        layout.TextFields ??= [];
+        layout.ImageFields ??= [];
+
+        foreach (var field in layout.TextFields)
+        {
+            field.Key = field.Key?.Trim() ?? string.Empty;
+            field.X = Math.Max(0, RoundValue(field.X));
+            field.Y = Math.Max(0, RoundValue(field.Y));
+            field.Width = Math.Max(2, RoundValue(field.Width));
+            field.Height = Math.Max(2, RoundValue(field.Height));
+            field.FontSize = Math.Max(1, field.FontSize);
+            field.MinFontSize = Math.Clamp(field.MinFontSize, 1, field.FontSize);
+            field.MaxLines = Math.Max(1, field.MaxLines);
+            field.Alignment = NormalizeHorizontalAlignment(field.Alignment);
+            field.VerticalAlignment = NormalizeVerticalAlignment(field.VerticalAlignment);
+        }
+
+        foreach (var field in layout.ImageFields)
+        {
+            field.Key = field.Key?.Trim() ?? string.Empty;
+            field.X = Math.Max(0, RoundValue(field.X));
+            field.Y = Math.Max(0, RoundValue(field.Y));
+            field.Width = Math.Max(2, RoundValue(field.Width));
+            field.Height = Math.Max(2, RoundValue(field.Height));
+            field.Fit = string.IsNullOrWhiteSpace(field.Fit) ? "Contain" : field.Fit.Trim();
+        }
+    }
+
+    private static string NormalizeHorizontalAlignment(string? value)
+        => value?.Trim().ToLowerInvariant() switch
+        {
+            "center" => "Center",
+            "right" => "Right",
+            _ => "Left"
+        };
+
+    private static string NormalizeVerticalAlignment(string? value)
+        => value?.Trim().ToLowerInvariant() switch
+        {
+            "top" => "Top",
+            "bottom" => "Bottom",
+            "middle" => "Center",
+            "center" => "Center",
+            _ => "Center"
+        };
+
+    private static double RoundValue(double value)
+        => Math.Round(value, 2, MidpointRounding.AwayFromZero);
 
     private DesignerPaths ResolveDesignerPaths(PdfLayoutDesignerContractType contractType)
     {

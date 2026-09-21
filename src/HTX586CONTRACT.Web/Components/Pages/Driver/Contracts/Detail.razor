@@ -8,266 +8,577 @@
 @inject ISnackbar Snackbar
 
 <PageTitle>Chi tiết hợp đồng</PageTitle>
-<PageHeader Title="Chi tiết hợp đồng"
-            Subtitle="Xem lại thông tin và lịch sử hợp đồng đã được giao hoặc đã hoàn thành.">
-    <MudButton Href="/vehicle-owner/contracts"
-               Variant="Variant.Outlined"
-               StartIcon="@Icons.Material.Filled.ArrowBack">
-        Quay lại
-    </MudButton>
-</PageHeader>
 
 @if (_loading)
 {
-    <MudProgressCircular Indeterminate="true" />
+    <MudPaper Class="pa-6" Outlined="true" Elevation="0">
+        <MudStack AlignItems="AlignItems.Center" Spacing="2">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Đang tải chi tiết hợp đồng...</MudText>
+        </MudStack>
+    </MudPaper>
 }
 else if (_detail is null)
 {
-    <MudAlert Severity="Severity.Error">Không tìm thấy hợp đồng hoặc bạn không có quyền xem.</MudAlert>
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+        Không tìm thấy hợp đồng hoặc bạn không có quyền xem.
+    </MudAlert>
 }
 else
 {
-    <MudStack Spacing="3">
+    <MudStack Spacing="3" Class="contract-detail-mud-page">
+        <!-- HEADER / ACTIONS -->
         <MudPaper Class="pa-4" Elevation="1">
-            <MudStack Row="true" AlignItems="AlignItems.Center">
-                <div>
-                    <MudText Typo="Typo.h5">@_detail.ContractNumber</MudText>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary">
-                        @_detail.CompanyName · @BusinessName(_detail.BusinessType)
-                    </MudText>
-                </div>
-                <MudSpacer />
-                <ContractStatusChip Status="_detail.Status" ChipSize="Size.Medium" />
+            <MudStack Spacing="3">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                    <MudButton Href="/vehicle-owner/contracts"
+                               Variant="Variant.Text"
+                               Color="Color.Default"
+                               StartIcon="@Icons.Material.Filled.ArrowBack">
+                        Quay lại
+                    </MudButton>
+
+                    <MudAvatar Size="Size.Large" Color="Color.Primary" Variant="Variant.Filled">
+                        <MudIcon Icon="@(_detail.BusinessType == ContractBusinessType.Cargo ? Icons.Material.Filled.LocalShipping : Icons.Material.Filled.DirectionsBus)" />
+                    </MudAvatar>
+
+                    <MudStack Spacing="0" Class="flex-grow-1">
+                        <MudText Typo="Typo.overline" Color="Color.Secondary">@BusinessName(_detail.BusinessType)</MudText>
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap">
+                            <MudText Typo="Typo.h5" Class="fw-700">@_detail.ContractNumber</MudText>
+                            <ContractStatusChip Status="_detail.Status" ChipSize="Size.Small" />
+                        </MudStack>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">@_detail.CompanyName</MudText>
+                    </MudStack>
+
+                    <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" Class="contract-detail-actions">
+                        @if (!IsHistoryStatus(_detail.Status) && _canEditCurrentContract)
+                        {
+                            <MudButton Href="@($"/vehicle-owner/contracts/{Id}")"
+                                       Color="Color.Primary"
+                                       Variant="Variant.Filled"
+                                       StartIcon="@Icons.Material.Filled.Edit">
+                                Chỉnh sửa / xử lý
+                            </MudButton>
+                        }
+                        @if (_detail.Status == ContractStatus.Completed)
+                        {
+                            <MudButton Color="Color.Success"
+                                       Variant="Variant.Outlined"
+                                       StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                                       OnClick="OpenPdfAsync">
+                                Mở PDF
+                            </MudButton>
+                        }
+                    </MudStack>
+                </MudStack>
+
+                <MudDivider />
+
+                <MudGrid Spacing="2">
+                    <MudItem xs="6" md="3">
+                        <MudPaper Class="pa-3 h-100" Outlined="true" Elevation="0">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" Color="Color.Primary" />
+                                <MudStack Spacing="0">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Ngày tạo</MudText>
+                                    <MudText Typo="Typo.body2" Class="fw-600">@FormatDateTime(_detail.CreatedAt)</MudText>
+                                </MudStack>
+                            </MudStack>
+                        </MudPaper>
+                    </MudItem>
+                    <MudItem xs="6" md="3">
+                        <MudPaper Class="pa-3 h-100" Outlined="true" Elevation="0">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                <MudIcon Icon="@Icons.Material.Filled.DirectionsCar" Color="Color.Primary" />
+                                <MudStack Spacing="0">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Biển số xe</MudText>
+                                    <MudText Typo="Typo.body2" Class="fw-600">@(_detail.VehiclePlate ?? "-")</MudText>
+                                </MudStack>
+                            </MudStack>
+                        </MudPaper>
+                    </MudItem>
+                    <MudItem xs="6" md="3">
+                        <MudPaper Class="pa-3 h-100" Outlined="true" Elevation="0">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Primary" />
+                                <MudStack Spacing="0">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Khách hàng</MudText>
+                                    <MudText Typo="Typo.body2" Class="fw-600 text-break">@CustomerDisplayName</MudText>
+                                </MudStack>
+                            </MudStack>
+                        </MudPaper>
+                    </MudItem>
+                    <MudItem xs="6" md="3">
+                        <MudPaper Class="pa-3 h-100" Outlined="true" Elevation="0">
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                <MudIcon Icon="@Icons.Material.Filled.Draw" Color="Color.Primary" />
+                                <MudStack Spacing="0">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Chữ ký</MudText>
+                                    <MudText Typo="Typo.body2" Class="fw-600">@_detail.Signatures.Count xác nhận</MudText>
+                                </MudStack>
+                            </MudStack>
+                        </MudPaper>
+                    </MudItem>
+                </MudGrid>
             </MudStack>
         </MudPaper>
 
-        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
-            <b>Người tạo:</b> @_detail.CreatedByName
-            lúc @VietnamTime(_detail.CreatedAt).ToString("dd/MM/yyyy HH:mm").
-            @if (!string.IsNullOrWhiteSpace(_detail.AssignedByName))
-            {
-                <span>
-                    <b> Người phát xuống:</b> @_detail.AssignedByName
-                    @if (_detail.AssignedAt.HasValue)
-                    {
-                        <span> lúc @VietnamTime(_detail.AssignedAt.Value).ToString("dd/MM/yyyy HH:mm")</span>
-                    }.
-                </span>
-            }
-            else
-            {
-                <span> Hợp đồng do tài xế tự tạo.</span>
-            }
-        </MudAlert>
-
+        <!-- PROCESS -->
         <MudPaper Class="pa-4" Elevation="1">
-            <MudText Typo="Typo.h6" Class="mb-3">1. Thông tin hợp đồng</MudText>
-            <MudGrid>
-                <MudItem xs="12" md="4"><InfoListItem Label="Số hợp đồng" Value="@_detail.ContractNumber" /></MudItem>
-                <MudItem xs="12" md="4"><InfoListItem Label="Loại hợp đồng" Value="@BusinessName(_detail.BusinessType)" /></MudItem>
-                <MudItem xs="12" md="4"><InfoListItem Label="Trạng thái" Value="@StatusName(_detail.Status)" /></MudItem>
-                <MudItem xs="12" md="4"><InfoListItem Label="Công ty/Văn phòng" Value="@_detail.CompanyName" /></MudItem>
-                <MudItem xs="12" md="4"><InfoListItem Label="Tài xế" Value="@_detail.DriverName" /></MudItem>
-                <MudItem xs="12" md="4"><InfoListItem Label="Khu vực" Value="@_detail.AreaCode" /></MudItem>
-                <MudItem xs="12" md="4"><InfoListItem Label="Ngày tạo HĐ" Value="@FormatDateTime(_detail.CreatedAt)" /></MudItem>
-            </MudGrid>
+            <MudStack Spacing="2">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudAvatar Color="Color.Info" Variant="Variant.Filled" Size="Size.Medium">
+                        <MudIcon Icon="@Icons.Material.Filled.History" />
+                    </MudAvatar>
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.h6">Tiến trình hợp đồng</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Thông tin tạo và phát hợp đồng.</MudText>
+                    </MudStack>
+                </MudStack>
+                <MudDivider />
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" sm="6">
+                        <MudAlert Severity="Severity.Info" Variant="Variant.Text" Dense="true">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Tạo hợp đồng</MudText>
+                            <MudText Typo="Typo.body2"><b>@_detail.CreatedByName</b> · @VietnamTime(_detail.CreatedAt).ToString("dd/MM/yyyy HH:mm")</MudText>
+                        </MudAlert>
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudAlert Severity="Severity.Success" Variant="Variant.Text" Dense="true">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@(string.IsNullOrWhiteSpace(_detail.AssignedByName) ? "Nguồn hợp đồng" : "Phát hợp đồng")</MudText>
+                            <MudText Typo="Typo.body2"><b>@(string.IsNullOrWhiteSpace(_detail.AssignedByName) ? "Chủ xe tự tạo" : _detail.AssignedByName)</b> · @(_detail.AssignedAt.HasValue ? VietnamTime(_detail.AssignedAt.Value).ToString("dd/MM/yyyy HH:mm") : "Đã lưu")</MudText>
+                        </MudAlert>
+                    </MudItem>
+                </MudGrid>
+            </MudStack>
         </MudPaper>
 
+        <!-- COMPANY / VEHICLE -->
         <MudPaper Class="pa-4" Elevation="1">
-            <MudText Typo="Typo.h6" Class="mb-3">@(_detail.BusinessType == ContractBusinessType.Cargo ? "2. Văn phòng/Công ty và Chủ phương tiện" : "2. Phương tiện")</MudText>
-            @if (_detail.BusinessType == ContractBusinessType.Cargo)
-            {
-                <MudGrid>
-                    <MudItem xs="12" md="6"><InfoListItem Label="Tên Văn phòng/Công ty" Value="@(_detail.CompanyOfficeName ?? _detail.CompanyName)" /></MudItem>
-                    <MudItem xs="12" md="3"><InfoListItem Label="Mã số thuế" Value="@(_detail.CompanyTaxCode ?? "-")" /></MudItem>
-                    <MudItem xs="12" md="3"><InfoListItem Label="GPKDVT" Value="@(_detail.CompanyBusinessLicenseNumber ?? "-")" /></MudItem>
-                    <MudItem xs="12" md="3"><InfoListItem Label="Nơi cấp Phép" Value="@(_detail.CompanyBusinessLicenseIssuedPlace ?? "-")" /></MudItem>
-                    <MudItem xs="12"><InfoListItem Label="Địa chỉ" Value="@(_detail.CompanyAddress ?? "-")" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="Số điện thoại" Value="@(_detail.CompanyPhoneNumber ?? "-")" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="Tên người đại diện" Value="@(_detail.CompanyRepresentativeName ?? "-")" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="CCCD người đại diện" Value="@(_detail.CompanyRepresentativeCitizenId ?? "-")" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="Ngày cấp CCCD đại diện" Value="@FormatDate(_detail.CompanyRepresentativeCitizenIdIssuedDate)" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="Tên chủ phương tiện" Value="@(_detail.OwnerName ?? "-")" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="CCCD chủ phương tiện" Value="@(_detail.OwnerCitizenId ?? "-")" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="Ngày cấp CCCD chủ phương tiện" Value="@FormatDate(_detail.OwnerCitizenIdIssuedDate)" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="Biển kiểm soát" Value="@(_detail.VehiclePlate ?? "-")" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="Tài xế 1" Value="@(_detail.OperatingDriverName ?? "-")" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="Số GPLX TX1" Value="@(_detail.OperatingDriverLicenseNumber ?? "-")" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="Hạng GPLX TX1" Value="@(_detail.OperatingDriverLicenseClass ?? "-")" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="Tài xế 2" Value="@(string.IsNullOrWhiteSpace(_detail.SecondDriverName) ? "Không có" : _detail.SecondDriverName)" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="Số GPLX TX2" Value="@(string.IsNullOrWhiteSpace(_detail.SecondDriverName) ? "N/A" : _detail.SecondDriverLicenseNumber ?? "-")" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="Hạng GPLX TX2" Value="@(string.IsNullOrWhiteSpace(_detail.SecondDriverName) ? "N/A" : _detail.SecondDriverLicenseClass ?? "-")" /></MudItem>
-                </MudGrid>
-            }
-            else
-            {
-                <MudGrid>
-                    <MudItem xs="12" md="4"><InfoListItem Label="Biển kiểm soát" Value="@(_detail.VehiclePlate ?? "-")" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="Hãng/Loại xe" Value="@(_detail.VehicleBrand ?? "-")" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="Số chỗ" Value="@FormatNumber(_detail.SeatCount)" /></MudItem>
-                    <MudItem xs="12" md="6"><InfoListItem Label="Chủ sở hữu" Value="@(_detail.OwnerName ?? "-")" /></MudItem>
-                    <MudItem xs="12" md="6"><InfoListItem Label="CCCD chủ sở hữu" Value="@(_detail.OwnerCitizenId ?? "-")" /></MudItem>
-                </MudGrid>
-            }
-        </MudPaper>
+            <MudStack Spacing="3">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudAvatar Color="Color.Primary" Variant="Variant.Filled" Size="Size.Medium">
+                        <MudIcon Icon="@(_detail.BusinessType == ContractBusinessType.Cargo ? Icons.Material.Filled.Business : Icons.Material.Filled.DirectionsCar)" />
+                    </MudAvatar>
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.h6">@(_detail.BusinessType == ContractBusinessType.Cargo ? "Đơn vị vận tải & phương tiện" : "Phương tiện & chủ sở hữu")</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Dữ liệu được lưu theo snapshot của hợp đồng.</MudText>
+                    </MudStack>
+                </MudStack>
+                <MudDivider />
 
-        <MudPaper Class="pa-4" Elevation="1">
-            <MudText Typo="Typo.h6" Class="mb-3">@(_detail.BusinessType == ContractBusinessType.Cargo ? "3. Khách hàng / Bên A" : "3. Khách hàng/người thuê")</MudText>
-            @if (_detail.BusinessType == ContractBusinessType.Cargo)
-            {
-                <MudGrid>
-                    <MudItem xs="12" md="6"><InfoListItem Label="@(_detail.CustomerIsCompany ? "Tên công ty" : "Khách hàng")" Value="@(_detail.CustomerIsCompany ? _detail.CustomerName : "Khách hàng cá nhân")" /></MudItem>
-                    <MudItem xs="12" md="3"><InfoListItem Label="Mã số thuế" Value="@(_detail.CustomerIsCompany ? _detail.CustomerTaxCode ?? "N/A" : "N/A")" /></MudItem>
-                    <MudItem xs="12" md="3"><InfoListItem Label="Số điện thoại" Value="@_detail.CustomerPhone" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="Người đại diện/Khách hàng" Value="@(_detail.CustomerIsCompany ? _detail.CustomerRepresentativeName ?? "-" : _detail.CustomerName)" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="CCCD" Value="@(_detail.CustomerCitizenId ?? "-")" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="Ngày cấp CCCD" Value="@FormatDate(_detail.CustomerCitizenIdIssuedDate)" /></MudItem>
-                    <MudItem xs="12"><InfoListItem Label="Địa chỉ" Value="@(_detail.CustomerAddress ?? "-")" /></MudItem>
-                </MudGrid>
-            }
-            else
-            {
-                <MudGrid>
-                    <MudItem xs="12" md="4"><InfoListItem Label="Khách hàng/người thuê" Value="@_detail.CustomerName" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="Số điện thoại" Value="@_detail.CustomerPhone" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="CCCD/MST" Value="@(_detail.CustomerCitizenId ?? "-")" /></MudItem>
-                    <MudItem xs="12"><InfoListItem Label="Địa chỉ" Value="@(_detail.CustomerAddress ?? "-")" /></MudItem>
-                </MudGrid>
-            }
-        </MudPaper>
-
-        <MudPaper Class="pa-4" Elevation="1">
-            <MudText Typo="Typo.h6" Class="mb-3">4. Nội dung hợp đồng</MudText>
-            <MudGrid>
-                <MudItem xs="12" md="3"><InfoListItem Label="Bắt đầu" Value="@FormatDateTime(_detail.StartTime)" /></MudItem>
-                <MudItem xs="12" md="3"><InfoListItem Label="Kết thúc" Value="@FormatDateTime(_detail.EndTime)" /></MudItem>
-                <MudItem xs="12" md="3"><InfoListItem Label="Tổng km" Value="@FormatDecimal(_detail.TotalKilometers)" /></MudItem>
-                <MudItem xs="12" md="3"><InfoListItem Label="@(_detail.BusinessType == ContractBusinessType.Cargo ? "Cước vận chuyển" : "Giá trị hợp đồng")" Value="@FormatMoney(_detail.ContractValue)" /></MudItem>
-                <MudItem xs="12" md="6"><InfoListItem Label="@(_detail.BusinessType == ContractBusinessType.Cargo ? "Nơi nhận hàng" : "Điểm đi")" Value="@(_detail.PickupLocation ?? "-")" /></MudItem>
-                <MudItem xs="12" md="6"><InfoListItem Label="@(_detail.BusinessType == ContractBusinessType.Cargo ? "Nơi trả hàng" : "Điểm đến")" Value="@(_detail.DropoffLocation ?? "-")" /></MudItem>
-                <MudItem xs="12"><InfoListItem Label="@(_detail.BusinessType == ContractBusinessType.Cargo ? "Hành trình xe chạy" : "Lộ trình chi tiết")" Value="@(_detail.RouteDescription ?? "-")" /></MudItem>
                 @if (_detail.BusinessType == ContractBusinessType.Cargo)
                 {
-                    <MudItem xs="12"><InfoListItem Label="Thanh toán" Value="@(_detail.PaymentMethod ?? "-")" /></MudItem>
+                    <MudText Typo="Typo.subtitle2" Color="Color.Primary">Văn phòng / Công ty</MudText>
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" md="6">
+                            <MudList T="string" Dense="true" Class="pa-0">
+                                <InfoListItem Label="Tên Văn phòng/Công ty" Value="@(_detail.CompanyOfficeName ?? _detail.CompanyName)" Icon="@Icons.Material.Filled.Business" />
+                                <InfoListItem Label="Mã số thuế" Value="@(_detail.CompanyTaxCode ?? "-")" Icon="@Icons.Material.Filled.ReceiptLong" />
+                                <InfoListItem Label="GPKDVT" Value="@(_detail.CompanyBusinessLicenseNumber ?? "-")" Icon="@Icons.Material.Filled.Badge" />
+                                <InfoListItem Label="Nơi cấp Phép" Value="@(_detail.CompanyBusinessLicenseIssuedPlace ?? "-")" Icon="@Icons.Material.Filled.AccountBalance" />
+                                <InfoListItem Label="Địa chỉ" Value="@(_detail.CompanyAddress ?? "-")" Icon="@Icons.Material.Filled.Place" />
+                            </MudList>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudList T="string" Dense="true" Class="pa-0">
+                                <InfoListItem Label="Số điện thoại" Value="@(_detail.CompanyPhoneNumber ?? "-")" Icon="@Icons.Material.Filled.Phone" />
+                                <InfoListItem Label="Người đại diện" Value="@(_detail.CompanyRepresentativeName ?? "-")" Icon="@Icons.Material.Filled.Person" />
+                                <InfoListItem Label="CCCD người đại diện" Value="@(_detail.CompanyRepresentativeCitizenId ?? "-")" Icon="@Icons.Material.Filled.CreditCard" />
+                                <InfoListItem Label="Ngày cấp CCCD" Value="@FormatDate(_detail.CompanyRepresentativeCitizenIdIssuedDate)" Icon="@Icons.Material.Filled.Event" />
+                            </MudList>
+                        </MudItem>
+                    </MudGrid>
+                    <MudDivider />
+                    <MudText Typo="Typo.subtitle2" Color="Color.Primary">Chủ phương tiện</MudText>
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" md="6">
+                            <MudList T="string" Dense="true" Class="pa-0">
+                                <InfoListItem Label="Biển kiểm soát" Value="@(_detail.VehiclePlate ?? "-")" Icon="@Icons.Material.Filled.DirectionsCar" />
+                                <InfoListItem Label="Chủ phương tiện" Value="@(_detail.OwnerName ?? "-")" Icon="@Icons.Material.Filled.Person" />
+                            </MudList>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudList T="string" Dense="true" Class="pa-0">
+                                <InfoListItem Label="CCCD chủ phương tiện" Value="@(_detail.OwnerCitizenId ?? "-")" Icon="@Icons.Material.Filled.CreditCard" />
+                                <InfoListItem Label="Ngày cấp CCCD" Value="@FormatDate(_detail.OwnerCitizenIdIssuedDate)" Icon="@Icons.Material.Filled.Event" />
+                            </MudList>
+                        </MudItem>
+                    </MudGrid>
                 }
                 else
                 {
-                    <MudItem xs="12" md="6"><InfoListItem Label="Hình thức thanh toán" Value="@(_detail.PaymentMethod ?? "-")" /></MudItem>
-                    <MudItem xs="12" md="6"><InfoListItem Label="Thời gian thanh toán" Value="@(_detail.PaymentTime ?? "-")" /></MudItem>
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" md="6">
+                            <MudList T="string" Dense="true" Class="pa-0">
+                                <InfoListItem Label="Biển kiểm soát" Value="@(_detail.VehiclePlate ?? "-")" Icon="@Icons.Material.Filled.DirectionsCar" />
+                                <InfoListItem Label="Hãng/Loại xe" Value="@(_detail.VehicleBrand ?? "-")" Icon="@Icons.Material.Filled.LocalTaxi" />
+                                <InfoListItem Label="Số chỗ" Value="@FormatNumber(_detail.SeatCount)" Icon="@Icons.Material.Filled.AirlineSeatReclineNormal" />
+                            </MudList>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudList T="string" Dense="true" Class="pa-0">
+                                <InfoListItem Label="Chủ sở hữu" Value="@(_detail.OwnerName ?? "-")" Icon="@Icons.Material.Filled.Person" />
+                                <InfoListItem Label="CCCD chủ sở hữu" Value="@(_detail.OwnerCitizenId ?? "-")" Icon="@Icons.Material.Filled.CreditCard" />
+                                <InfoListItem Label="Tài khoản Chủ xe" Value="@(_detail.DriverName ?? "-")" Icon="@Icons.Material.Filled.AccountCircle" />
+                            </MudList>
+                        </MudItem>
+                    </MudGrid>
                 }
-                <MudItem xs="12"><InfoListItem Label="Ghi chú" Value="@(_detail.Note ?? "-")" /></MudItem>
-            </MudGrid>
+            </MudStack>
+        </MudPaper>
+
+        <!-- DRIVERS -->
+        <MudPaper Class="pa-4" Elevation="1">
+            <MudStack Spacing="3">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudAvatar Color="Color.Secondary" Variant="Variant.Filled" Size="Size.Medium">
+                        <MudIcon Icon="@Icons.Material.Filled.Badge" />
+                    </MudAvatar>
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.h6">Tài xế vận hành</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Tài xế thực tế điều khiển phương tiện theo hợp đồng.</MudText>
+                    </MudStack>
+                </MudStack>
+                <MudDivider />
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" md="6">
+                        <MudPaper Class="pa-3 h-100" Outlined="true" Elevation="0">
+                            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Start">
+                                <MudAvatar Color="Color.Primary" Variant="Variant.Filled"><MudIcon Icon="@Icons.Material.Filled.Person" /></MudAvatar>
+                                <MudStack Spacing="1" Class="flex-grow-1">
+                                    <MudText Typo="Typo.overline" Color="Color.Primary">Tài xế 1</MudText>
+                                    <MudText Typo="Typo.subtitle1" Class="fw-700">@(string.IsNullOrWhiteSpace(_detail.OperatingDriverName) ? "Chưa cập nhật" : _detail.OperatingDriverName)</MudText>
+                                    <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
+                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.CreditCard">GPLX @(_detail.OperatingDriverLicenseNumber ?? "-")</MudChip>
+                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.DriveEta">Hạng @(_detail.OperatingDriverLicenseClass ?? "-")</MudChip>
+                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Phone">@(_detail.OperatingDriverPhoneNumber ?? "-")</MudChip>
+                                    </MudStack>
+                                </MudStack>
+                            </MudStack>
+                        </MudPaper>
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudPaper Class="pa-3 h-100" Outlined="true" Elevation="0">
+                            @if (string.IsNullOrWhiteSpace(_detail.SecondDriverName))
+                            {
+                                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                                    <MudAvatar Color="Color.Default" Variant="Variant.Outlined"><MudIcon Icon="@Icons.Material.Filled.PersonOff" /></MudAvatar>
+                                    <MudStack Spacing="0">
+                                        <MudText Typo="Typo.overline" Color="Color.Secondary">Tài xế 2</MudText>
+                                        <MudText Typo="Typo.subtitle1">Không có</MudText>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">Hợp đồng chỉ khai báo một tài xế.</MudText>
+                                    </MudStack>
+                                </MudStack>
+                            }
+                            else
+                            {
+                                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Start">
+                                    <MudAvatar Color="Color.Info" Variant="Variant.Filled"><MudIcon Icon="@Icons.Material.Filled.Person" /></MudAvatar>
+                                    <MudStack Spacing="1" Class="flex-grow-1">
+                                        <MudText Typo="Typo.overline" Color="Color.Info">Tài xế 2</MudText>
+                                        <MudText Typo="Typo.subtitle1" Class="fw-700">@_detail.SecondDriverName</MudText>
+                                        <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.CreditCard">GPLX @(_detail.SecondDriverLicenseNumber ?? "-")</MudChip>
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.DriveEta">Hạng @(_detail.SecondDriverLicenseClass ?? "-")</MudChip>
+                                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Phone">@(_detail.SecondDriverPhoneNumber ?? "-")</MudChip>
+                                        </MudStack>
+                                    </MudStack>
+                                </MudStack>
+                            }
+                        </MudPaper>
+                    </MudItem>
+                </MudGrid>
+            </MudStack>
+        </MudPaper>
+
+        <!-- CUSTOMER -->
+        <MudPaper Class="pa-4" Elevation="1">
+            <MudStack Spacing="3">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudAvatar Color="Color.Info" Variant="Variant.Filled" Size="Size.Medium"><MudIcon Icon="@Icons.Material.Filled.People" /></MudAvatar>
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.h6">@(_detail.BusinessType == ContractBusinessType.Cargo ? "Khách hàng / Bên A" : "Khách hàng / người thuê")</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@(_detail.CustomerIsCompany ? "Khách hàng doanh nghiệp (B2B)" : "Khách hàng cá nhân")</MudText>
+                    </MudStack>
+                    <MudSpacer />
+                    <MudChip T="string" Size="Size.Small" Color="@(_detail.CustomerIsCompany ? Color.Primary : Color.Default)" Variant="Variant.Outlined">
+                        @(_detail.CustomerIsCompany ? "B2B" : "Cá nhân")
+                    </MudChip>
+                </MudStack>
+                <MudDivider />
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" md="6">
+                        <MudList T="string" Dense="true" Class="pa-0">
+                            <InfoListItem Label="@(_detail.CustomerIsCompany ? "Tên công ty" : "Họ tên khách hàng")" Value="@_detail.CustomerName" Icon="@(_detail.CustomerIsCompany ? Icons.Material.Filled.BusinessCenter : Icons.Material.Filled.Person)" />
+                            @if (_detail.CustomerIsCompany)
+                            {
+                                <InfoListItem Label="Mã số thuế" Value="@(_detail.CustomerTaxCode ?? "N/A")" Icon="@Icons.Material.Filled.ReceiptLong" />
+                                <InfoListItem Label="Người đại diện" Value="@(_detail.CustomerRepresentativeName ?? "-")" Icon="@Icons.Material.Filled.Person" />
+                            }
+                            <InfoListItem Label="Số điện thoại" Value="@_detail.CustomerPhone" Icon="@Icons.Material.Filled.Phone" />
+                        </MudList>
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudList T="string" Dense="true" Class="pa-0">
+                            <InfoListItem Label="@(_detail.CustomerIsCompany ? "CCCD người đại diện" : "CCCD")" Value="@(_detail.CustomerCitizenId ?? "-")" Icon="@Icons.Material.Filled.CreditCard" />
+                            <InfoListItem Label="Ngày cấp CCCD" Value="@FormatDate(_detail.CustomerCitizenIdIssuedDate)" Icon="@Icons.Material.Filled.Event" />
+                            <InfoListItem Label="Địa chỉ" Value="@(_detail.CustomerAddress ?? "-")" Icon="@Icons.Material.Filled.Place" />
+                        </MudList>
+                    </MudItem>
+                </MudGrid>
+            </MudStack>
+        </MudPaper>
+
+        <!-- CONTENT -->
+        <MudPaper Class="pa-4" Elevation="1">
+            <MudStack Spacing="3">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudAvatar Color="Color.Warning" Variant="Variant.Filled" Size="Size.Medium"><MudIcon Icon="@Icons.Material.Filled.Route" /></MudAvatar>
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.h6">Nội dung hợp đồng</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Thời gian, hành trình và giá trị vận chuyển.</MudText>
+                    </MudStack>
+                </MudStack>
+                <MudDivider />
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" md="6">
+                        <MudList T="string" Dense="true" Class="pa-0">
+                            <InfoListItem Label="Bắt đầu" Value="@FormatDateTime(_detail.StartTime)" Icon="@Icons.Material.Filled.PlayCircle" />
+                            <InfoListItem Label="Kết thúc" Value="@FormatDateTime(_detail.EndTime)" Icon="@Icons.Material.Filled.StopCircle" />
+                            <InfoListItem Label="Tổng km" Value="@FormatDecimal(_detail.TotalKilometers)" Icon="@Icons.Material.Filled.Straighten" />
+                            <InfoListItem Label="@(_detail.BusinessType == ContractBusinessType.Cargo ? "Cước vận chuyển" : "Giá trị hợp đồng")" Value="@FormatMoney(_detail.ContractValue)" Icon="@Icons.Material.Filled.Payments" />
+                        </MudList>
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudList T="string" Dense="true" Class="pa-0">
+                            <InfoListItem Label="@(_detail.BusinessType == ContractBusinessType.Cargo ? "Nơi nhận hàng" : "Điểm đi")" Value="@(_detail.PickupLocation ?? "-")" Icon="@Icons.Material.Filled.TripOrigin" />
+                            <InfoListItem Label="@(_detail.BusinessType == ContractBusinessType.Cargo ? "Nơi trả hàng" : "Điểm đến")" Value="@(_detail.DropoffLocation ?? "-")" Icon="@Icons.Material.Filled.Flag" />
+                            <InfoListItem Label="Thanh toán" Value="@(_detail.PaymentMethod ?? "-")" Icon="@Icons.Material.Filled.AccountBalanceWallet" />
+                            @if (_detail.BusinessType == ContractBusinessType.Passenger)
+                            {
+                                <InfoListItem Label="Thời gian thanh toán" Value="@(_detail.PaymentTime ?? "-")" Icon="@Icons.Material.Filled.Schedule" />
+                            }
+                        </MudList>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudPaper Class="pa-3" Outlined="true" Elevation="0">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@(_detail.BusinessType == ContractBusinessType.Cargo ? "Hành trình xe chạy" : "Lộ trình chi tiết")</MudText>
+                            <MudText Typo="Typo.body1" Class="text-break">@(_detail.RouteDescription ?? "-")</MudText>
+                        </MudPaper>
+                    </MudItem>
+                    <MudItem xs="12">
+                        <MudPaper Class="pa-3" Outlined="true" Elevation="0">
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Ghi chú</MudText>
+                            <MudText Typo="Typo.body1" Class="text-break">@(_detail.Note ?? "-")</MudText>
+                        </MudPaper>
+                    </MudItem>
+                </MudGrid>
+            </MudStack>
         </MudPaper>
 
         @if (_detail.BusinessType == ContractBusinessType.Cargo)
         {
+            <!-- CARGO -->
             <MudPaper Class="pa-4" Elevation="1">
-                <MudText Typo="Typo.h6" Class="mb-3">5. Thông tin hàng hóa</MudText>
-                <MudGrid>
-                    <MudItem xs="12" md="6"><InfoListItem Label="Loại hàng" Value="@(_detail.CargoName ?? "-")" /></MudItem>
-                    <MudItem xs="12" md="6"><InfoListItem Label="Quy cách" Value="@(_detail.CargoSpecification ?? "-")" /></MudItem>
-                    <MudItem xs="12" md="4"><InfoListItem Label="Số lượng" Value="@(_detail.CargoQuantity ?? "-")" /></MudItem>
-                    <MudItem xs="12" md="6"><InfoListItem Label="Khối lượng" Value="@FormatDecimal(_detail.CargoWeight)" /></MudItem>
-                    <MudItem xs="12"><InfoListItem Label="Tên hàng hóa (Giấy vận tải)" Value="@(_detail.CargoTransportGoodsName ?? "N/A")" /></MudItem>
-                    <MudItem xs="12"><InfoListItem Label="Tuyến vận chuyển" Value="@(_detail.CargoTransportRoute ?? "N/A")" /></MudItem>
-                    <MudItem xs="12" md="6"><InfoListItem Label="Điểm xếp hàng" Value="@(_detail.CargoLoadingPoint ?? "N/A")" /></MudItem>
-                    <MudItem xs="12" md="6"><InfoListItem Label="Điểm giao hàng" Value="@(_detail.CargoDeliveryPoint ?? "N/A")" /></MudItem>
-                    <MudItem xs="12"><InfoListItem Label="Thông tin khác" Value="@(_detail.CargoOtherInformation ?? "N/A")" /></MudItem>
-                </MudGrid>
-                @if (_detail.CargoHandlingEvents.Count > 0)
-                {
-                    <MudTable T="ContractCargoHandlingEventDto" Items="@_detail.CargoHandlingEvents.OrderBy(x => x.Type).ThenBy(x => x.SortOrder)" Dense="true" Hover="true" Class="mt-3">
-                        <HeaderContent>
-                            <MudTh>Loại</MudTh><MudTh>Lần</MudTh><MudTh>Địa điểm</MudTh><MudTh>Khối lượng</MudTh><MudTh>Thời gian</MudTh><MudTh>Xác nhận</MudTh>
-                        </HeaderContent>
-                        <RowTemplate>
-                            <MudTd>@(context.Type == CargoHandlingType.Loading ? "Xếp" : "Dỡ")</MudTd>
-                            <MudTd>@context.SortOrder</MudTd>
-                            <MudTd>@(context.Location ?? "N/A")</MudTd>
-                            <MudTd>@(context.CargoWeight ?? "N/A")</MudTd>
-                            <MudTd>@(context.EventTime.HasValue ? FormatDateTime(context.EventTime) : "N/A")</MudTd>
-                            <MudTd>@(context.Confirmation ?? "N/A")</MudTd>
-                        </RowTemplate>
-                    </MudTable>
-                }
-            </MudPaper>
-        }
+                <MudStack Spacing="3">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudAvatar Color="Color.Success" Variant="Variant.Filled" Size="Size.Medium"><MudIcon Icon="@Icons.Material.Filled.Inventory2" /></MudAvatar>
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.h6">Thông tin hàng hóa & Giấy vận tải</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Chi tiết hàng hóa và các lần xếp/dỡ.</MudText>
+                        </MudStack>
+                        <MudSpacer />
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@_detail.CargoHandlingEvents.Count sự kiện</MudChip>
+                    </MudStack>
+                    <MudDivider />
+                    <MudGrid Spacing="2">
+                        <MudItem xs="12" md="6">
+                            <MudList T="string" Dense="true" Class="pa-0">
+                                <InfoListItem Label="Loại hàng" Value="@(_detail.CargoName ?? "-")" Icon="@Icons.Material.Filled.Inventory" />
+                                <InfoListItem Label="Quy cách" Value="@(_detail.CargoSpecification ?? "-")" Icon="@Icons.Material.Filled.Category" />
+                                <InfoListItem Label="Số lượng" Value="@(_detail.CargoQuantity ?? "-")" Icon="@Icons.Material.Filled.Numbers" />
+                                <InfoListItem Label="Khối lượng" Value="@FormatDecimal(_detail.CargoWeight)" Icon="@Icons.Material.Filled.Scale" />
+                                <InfoListItem Label="Tên hàng hóa (Giấy vận tải)" Value="@(_detail.CargoTransportGoodsName ?? "N/A")" Icon="@Icons.Material.Filled.LocalShipping" />
+                            </MudList>
+                        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudList T="string" Dense="true" Class="pa-0">
+                                <InfoListItem Label="Tuyến vận chuyển" Value="@(_detail.CargoTransportRoute ?? "N/A")" Icon="@Icons.Material.Filled.Route" />
+                                <InfoListItem Label="Điểm xếp hàng" Value="@(_detail.CargoLoadingPoint ?? "N/A")" Icon="@Icons.Material.Filled.Upload" />
+                                <InfoListItem Label="Điểm giao hàng" Value="@(_detail.CargoDeliveryPoint ?? "N/A")" Icon="@Icons.Material.Filled.Download" />
+                                <InfoListItem Label="Thông tin khác" Value="@(_detail.CargoOtherInformation ?? "N/A")" Icon="@Icons.Material.Filled.Info" />
+                            </MudList>
+                        </MudItem>
+                    </MudGrid>
 
-        @if (_detail.BusinessType == ContractBusinessType.Passenger)
-        {
-        <MudPaper Class="pa-4" Elevation="1">
-            <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
-                <MudText Typo="Typo.h6">5. Danh sách hành khách</MudText>
-                <MudSpacer />
-                <MudChip T="string" Variant="Variant.Outlined">Số lượng: @FormatNumber(_detail.ActualPassengerCount)</MudChip>
-            </MudStack>
-            <MudTable T="ContractPassengerDto" Items="PassengerRows" Dense="true" Hover="true">
-                <HeaderContent>
-                    <MudTh>STT</MudTh>
-                    <MudTh>Họ tên</MudTh>
-                    <MudTh>Năm sinh</MudTh>
-                    <MudTh>Ghi chú</MudTh>
-                </HeaderContent>
-                <RowTemplate>
-                    @if (IsCustomerTravelRow(context))
+                    @if (_detail.CargoHandlingEvents.Count == 0)
                     {
-                        <MudTd DataLabel="STT">1</MudTd>
-                        <MudTd DataLabel="Họ tên">@TravelCompanionDisplayName</MudTd>
-                        <MudTd DataLabel="Năm sinh">@(_detail.CustomerTravelBirthYear?.ToString() ?? "-")</MudTd>
-                        <MudTd DataLabel="Ghi chú">@(string.IsNullOrWhiteSpace(_detail.CustomerTravelNote) ? "-" : _detail.CustomerTravelNote)</MudTd>
+                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Chưa có thông tin xếp/dỡ hàng.</MudAlert>
                     }
                     else
                     {
-                        <MudTd DataLabel="STT">@(context.SortOrder + (_detail.CustomerTravelsWithGroup ? 1 : 0))</MudTd>
-                        <MudTd DataLabel="Họ tên">@context.FullName</MudTd>
-                        <MudTd DataLabel="Năm sinh">@(context.BirthYear?.ToString() ?? "-")</MudTd>
-                        <MudTd DataLabel="Ghi chú">@(string.IsNullOrWhiteSpace(context.Note) ? "-" : context.Note)</MudTd>
+                        <MudTable T="ContractCargoHandlingEventDto"
+                                  Items="@_detail.CargoHandlingEvents.OrderBy(x => x.Type).ThenBy(x => x.SortOrder)"
+                                  Dense="true"
+                                  Hover="true"
+                                  Striped="true"
+                                  Breakpoint="Breakpoint.Sm"
+                                  Elevation="0">
+                            <HeaderContent>
+                                <MudTh>Loại</MudTh>
+                                <MudTh>Lần</MudTh>
+                                <MudTh>Địa điểm</MudTh>
+                                <MudTh>Khối lượng</MudTh>
+                                <MudTh>Thời gian</MudTh>
+                                <MudTh>Xác nhận</MudTh>
+                            </HeaderContent>
+                            <RowTemplate>
+                                <MudTd DataLabel="Loại"><MudChip T="string" Size="Size.Small" Color="@(context.Type == CargoHandlingType.Loading ? Color.Info : Color.Warning)" Variant="Variant.Outlined">@(context.Type == CargoHandlingType.Loading ? "Xếp" : "Dỡ")</MudChip></MudTd>
+                                <MudTd DataLabel="Lần">@context.SortOrder</MudTd>
+                                <MudTd DataLabel="Địa điểm">@(context.Location ?? "N/A")</MudTd>
+                                <MudTd DataLabel="Khối lượng">@(context.CargoWeight ?? "N/A")</MudTd>
+                                <MudTd DataLabel="Thời gian">@(context.EventTime.HasValue ? FormatDateTime(context.EventTime) : "N/A")</MudTd>
+                                <MudTd DataLabel="Xác nhận">@(context.Confirmation ?? "N/A")</MudTd>
+                            </RowTemplate>
+                        </MudTable>
                     }
-                </RowTemplate>
-                <NoRecordsContent><MudText>Không có hành khách.</MudText></NoRecordsContent>
-            </MudTable>
-        </MudPaper>
+                </MudStack>
+            </MudPaper>
+        }
+        else
+        {
+            <!-- PASSENGERS -->
+            <MudPaper Class="pa-4" Elevation="1">
+                <MudStack Spacing="3">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                        <MudAvatar Color="Color.Success" Variant="Variant.Filled" Size="Size.Medium"><MudIcon Icon="@Icons.Material.Filled.Groups" /></MudAvatar>
+                        <MudStack Spacing="0">
+                            <MudText Typo="Typo.h6">Danh sách hành khách</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Danh sách người đi theo hợp đồng.</MudText>
+                        </MudStack>
+                        <MudSpacer />
+                        <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Filled">@FormatNumber(_detail.ActualPassengerCount) hành khách</MudChip>
+                    </MudStack>
+                    <MudDivider />
+                    <MudTable T="ContractPassengerDto" Items="PassengerRows" Dense="true" Hover="true" Striped="true" Breakpoint="Breakpoint.Sm" Elevation="0">
+                        <HeaderContent>
+                            <MudTh>STT</MudTh>
+                            <MudTh>Họ tên</MudTh>
+                            <MudTh>Năm sinh</MudTh>
+                            <MudTh>Ghi chú</MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            @if (IsCustomerTravelRow(context))
+                            {
+                                <MudTd DataLabel="STT">1</MudTd>
+                                <MudTd DataLabel="Họ tên">@TravelCompanionDisplayName</MudTd>
+                                <MudTd DataLabel="Năm sinh">@(_detail.CustomerTravelBirthYear?.ToString() ?? "-")</MudTd>
+                                <MudTd DataLabel="Ghi chú">@(string.IsNullOrWhiteSpace(_detail.CustomerTravelNote) ? "-" : _detail.CustomerTravelNote)</MudTd>
+                            }
+                            else
+                            {
+                                <MudTd DataLabel="STT">@(context.SortOrder + (_detail.CustomerTravelsWithGroup ? 1 : 0))</MudTd>
+                                <MudTd DataLabel="Họ tên">@context.FullName</MudTd>
+                                <MudTd DataLabel="Năm sinh">@(context.BirthYear?.ToString() ?? "-")</MudTd>
+                                <MudTd DataLabel="Ghi chú">@(string.IsNullOrWhiteSpace(context.Note) ? "-" : context.Note)</MudTd>
+                            }
+                        </RowTemplate>
+                        <NoRecordsContent><MudText Class="pa-3" Color="Color.Secondary">Không có hành khách.</MudText></NoRecordsContent>
+                    </MudTable>
+                </MudStack>
+            </MudPaper>
         }
 
+        <!-- SIGNATURES -->
         <MudPaper Class="pa-4" Elevation="1">
-            <MudText Typo="Typo.h6" Class="mb-3">Lịch sử chữ ký</MudText>
-            <MudTable T="ContractSignatureDto" Items="_detail.Signatures" Dense="true" Hover="true">
-                <HeaderContent>
-                    <MudTh>Bên ký</MudTh>
-                    <MudTh>Người ký</MudTh>
-                    <MudTh>Thời gian</MudTh>
-                </HeaderContent>
-                <RowTemplate>
-                    <MudTd DataLabel="Bên ký">@SignaturePartyName(context.Party, _detail.BusinessType)</MudTd>
-                    <MudTd DataLabel="Người ký">@context.SignerName</MudTd>
-                    <MudTd DataLabel="Thời gian">@VietnamTime(context.ServerSignedAt).ToString("dd/MM/yyyy HH:mm:ss")</MudTd>
-                </RowTemplate>
-                <NoRecordsContent><MudText>Chưa có chữ ký.</MudText></NoRecordsContent>
-            </MudTable>
+            <MudStack Spacing="3">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudAvatar Color="Color.Secondary" Variant="Variant.Filled" Size="Size.Medium"><MudIcon Icon="@Icons.Material.Filled.Draw" /></MudAvatar>
+                    <MudStack Spacing="0">
+                        <MudText Typo="Typo.h6">Lịch sử chữ ký</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Các bên đã ký xác nhận trên hợp đồng.</MudText>
+                    </MudStack>
+                    <MudSpacer />
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@_detail.Signatures.Count chữ ký</MudChip>
+                </MudStack>
+                <MudDivider />
+
+                @if (_detail.Signatures.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+                        Chưa có chữ ký. Các xác nhận sẽ hiển thị tại đây sau khi các bên ký hợp đồng.
+                    </MudAlert>
+                }
+                else
+                {
+                    <MudList T="string" Dense="true" Class="pa-0">
+                        @foreach (var signature in _detail.Signatures.OrderBy(x => x.ServerSignedAt))
+                        {
+                            <MudListItem T="string" Icon="@Icons.Material.Filled.Verified">
+                                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap">
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">@SignaturePartyName(signature.Party, _detail.BusinessType)</MudChip>
+                                    <MudText Typo="Typo.body2" Class="fw-600">@signature.SignerName</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@VietnamTime(signature.ServerSignedAt).ToString("dd/MM/yyyy HH:mm:ss")</MudText>
+                                </MudStack>
+                            </MudListItem>
+                        }
+                    </MudList>
+                }
+            </MudStack>
         </MudPaper>
 
-        <MudStack Row="true" Justify="Justify.FlexEnd">
-            @if (!IsHistoryStatus(_detail.Status) && _canEditCurrentContract)
-            {
-                <MudButton Href="@($"/vehicle-owner/contracts/{Id}")"
-                           Color="Color.Primary"
-                           Variant="Variant.Filled"
-                           StartIcon="@Icons.Material.Filled.Edit">
-                    Tiếp tục xử lý
-                </MudButton>
-            }
-            @if (_detail.Status == ContractStatus.Completed)
-            {
-                <MudButton Color="Color.Success"
-                           Variant="Variant.Filled"
-                           StartIcon="@Icons.Material.Filled.PictureAsPdf"
-                           OnClick="OpenPdfAsync">
-                    Mở PDF
-                </MudButton>
-            }
-        </MudStack>
+        <!-- BOTTOM ACTIONS -->
+        <MudPaper Class="pa-3" Elevation="1">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap">
+                <MudButton Href="/vehicle-owner/contracts" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack">Danh sách hợp đồng</MudButton>
+                <MudSpacer />
+                @if (!IsHistoryStatus(_detail.Status) && _canEditCurrentContract)
+                {
+                    <MudButton Href="@($"/vehicle-owner/contracts/{Id}")" Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Edit">Chỉnh sửa / xử lý</MudButton>
+                }
+                @if (_detail.Status == ContractStatus.Completed)
+                {
+                    <MudButton Color="Color.Success" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PictureAsPdf" OnClick="OpenPdfAsync">Mở PDF</MudButton>
+                }
+            </MudStack>
+        </MudPaper>
     </MudStack>
 }
+
+<style>
+    .contract-detail-mud-page {
+        width: 100%;
+        max-width: 1440px;
+        margin: 0 auto;
+        padding-bottom: 92px;
+    }
+
+    .contract-detail-actions {
+        margin-left: auto;
+    }
+
+    @@media (max-width: 600px) {
+        .contract-detail-mud-page {
+            gap: 12px !important;
+            padding-bottom: 112px;
+        }
+
+        .contract-detail-mud-page > .mud-paper {
+            border-radius: 12px;
+        }
+
+        .contract-detail-actions {
+            width: 100%;
+            margin-left: 0;
+        }
+
+        .contract-detail-actions .mud-button-root {
+            flex: 1 1 100%;
+        }
+    }
+</style>
 
 @code {
     [Parameter] public Guid Id { get; set; }
@@ -276,6 +587,7 @@ else
     private bool _canEditCurrentContract;
     private string _userId = string.Empty;
     private ContractDetailDto? _detail;
+    private string CustomerDisplayName => _detail is null || string.IsNullOrWhiteSpace(_detail.CustomerName) ? "-" : _detail.CustomerName;
     private readonly ContractPassengerDto _customerTravelRow = new() { SortOrder = 0 };
     private IEnumerable<ContractPassengerDto> PassengerRows =>
         _detail is not null && _detail.CustomerTravelsWithGroup && !string.IsNullOrWhiteSpace(TravelCompanionDisplayName)

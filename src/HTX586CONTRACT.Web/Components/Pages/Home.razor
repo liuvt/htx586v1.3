@@ -6,155 +6,46 @@
 
 <PageTitle>Đang chuyển hướng</PageTitle>
 
-<MudContainer MaxWidth="MaxWidth.Small"
-              Class="mt-8">
-
-    <MudPaper Outlined="true"
-              Class="pa-6">
-
-        <MudStack AlignItems="AlignItems.Center"
-                  Justify="Justify.Center"
-                  Spacing="3">
-
-            @if (_redirecting)
-            {
-                <MudProgressCircular Indeterminate="true"
-                                     Color="Color.Primary"
-                                     Size="Size.Large" />
-
-                <MudText Typo="Typo.h6"
-                         Align="Align.Center">
-                    Đang kiểm tra quyền truy cập...
-                </MudText>
-
-                <MudText Typo="Typo.body2"
-                         Color="Color.Secondary"
-                         Align="Align.Center">
-                    Vui lòng chờ trong giây lát.
-                </MudText>
-            }
-            else if (!string.IsNullOrWhiteSpace(_errorMessage))
-            {
-                <MudIcon Icon="@Icons.Material.Filled.ErrorOutline"
-                         Color="Color.Error"
-                         Size="Size.Large" />
-
-                <MudText Typo="Typo.h6"
-                         Color="Color.Error"
-                         Align="Align.Center">
-                    Không thể chuyển hướng
-                </MudText>
-
-                <MudText Typo="Typo.body2"
-                         Align="Align.Center">
-                    @_errorMessage
-                </MudText>
-
-                <MudButton Variant="Variant.Filled"
-                           Color="Color.Primary"
-                           OnClick="@GoToLogin">
-                    Đăng nhập lại
-                </MudButton>
-            }
-
-        </MudStack>
-
-    </MudPaper>
-
-</MudContainer>
-
 @code {
-    private bool _redirecting = true;
-    private bool _hasRedirected;
-    private string? _errorMessage;
-
-    protected override async Task OnAfterRenderAsync(
-        bool firstRender)
+    protected override async Task OnInitializedAsync()
     {
-        if (!firstRender || _hasRedirected)
-            return;
+        var authenticationState =
+            await AuthenticationStateProvider.GetAuthenticationStateAsync();
 
-        await RedirectByRoleAsync();
-    }
+        var user = authenticationState.User;
 
-    private async Task RedirectByRoleAsync()
-    {
-        try
+        // Route "/" chỉ đóng vai trò cổng điều hướng theo quyền.
+        // Ưu tiên Admin để tài khoản quản lý luôn vào đúng dashboard quản trị,
+        // kể cả khi tài khoản vô tình có nhiều role.
+        if (user.IsInRole("Admin"))
         {
-            var authenticationState =
-                await AuthenticationStateProvider
-                    .GetAuthenticationStateAsync();
-
-            var user = authenticationState.User;
-
-            if (user.Identity?.IsAuthenticated != true)
-            {
-                NavigateOnce(
-                    "/account/login",
-                    forceLoad: true);
-
-                return;
-            }
-
-            if (user.IsInRole("Owner"))
-            {
-                NavigateOnce(
-                    "/owner/dashboard");
-
-                return;
-            }
-
-            if (user.IsInRole("Admin"))
-            {
-                NavigateOnce(
-                    "/admin/dashboard");
-
-                return;
-            }
-
-            if (user.IsInRole("VehicleOwner"))
-            {
-                NavigateOnce(
-                    "/vehicle-owner/dashboard");
-
-                return;
-            }
-
-            _redirecting = false;
-            _errorMessage =
-                "Tài khoản chưa được cấp quyền Chủ hệ thống, Quản lý hoặc Chủ xe.";
-
-            StateHasChanged();
-        }
-        catch (Exception ex)
-        {
-            _redirecting = false;
-            _errorMessage =
-                $"Không thể kiểm tra quyền tài khoản: {ex.Message}";
-
-            StateHasChanged();
-        }
-    }
-
-    private void NavigateOnce(
-        string url,
-        bool forceLoad = false)
-    {
-        if (_hasRedirected)
+            Navigation.NavigateTo(
+                "/admin/dashboard",
+                replace: true);
             return;
+        }
 
-        _hasRedirected = true;
+        if (user.IsInRole("Owner"))
+        {
+            Navigation.NavigateTo(
+                "/owner/dashboard",
+                replace: true);
+            return;
+        }
 
-        Navigation.NavigateTo(
-            url,
-            forceLoad: forceLoad,
-            replace: true);
-    }
+        if (user.IsInRole("VehicleOwner"))
+        {
+            Navigation.NavigateTo(
+                "/vehicle-owner/dashboard",
+                replace: true);
+            return;
+        }
 
-    private void GoToLogin()
-    {
+        // Không hiển thị cảnh báo trung gian tại route gốc.
+        // Tài khoản không có role hợp lệ được đưa về trang đăng nhập.
         Navigation.NavigateTo(
             "/account/login",
-            forceLoad: true);
+            forceLoad: true,
+            replace: true);
     }
 }

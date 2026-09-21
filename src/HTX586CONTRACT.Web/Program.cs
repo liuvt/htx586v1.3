@@ -114,6 +114,7 @@ builder.Services.ConfigureApplicationCookie(o =>
     o.Cookie.SameSite = SameSiteMode.Lax;
     o.LoginPath = "/account/login";
     o.AccessDeniedPath = "/account/access-denied";
+
     o.ExpireTimeSpan = TimeSpan.FromHours(12);
     o.SlidingExpiration = true;
 });

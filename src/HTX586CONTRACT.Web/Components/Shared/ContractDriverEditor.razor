@@ -2,6 +2,7 @@
 @inject ISavedDriverService SavedDriverService
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject ISnackbar Snackbar
+@inject ILoggerFactory LoggerFactory
 
 <MudPaper Class="pa-3" Elevation="0" Outlined="true">
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3">
@@ -23,6 +24,13 @@
             </MudButton>
         }
     </MudStack>
+
+    @if (_isVehicleOwner && !_savedDriversAvailable && !Disabled)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Dense="true" Class="mb-3">
+            Không tải được danh sách tài xế gợi ý. Bạn vẫn có thể nhập và lưu thông tin tài xế trực tiếp trên hợp đồng.
+        </MudAlert>
+    }
 
     @if (_isVehicleOwner && _savedDrivers.Count > 0 && !Disabled)
     {
@@ -146,6 +154,7 @@
     private readonly List<SavedDriverDto> _savedDrivers = [];
     private bool _showSecondDriver;
     private bool _isVehicleOwner;
+    private bool _savedDriversAvailable = true;
     private string _currentUserId = string.Empty;
     private SavedDriverDto? _selectedFirstDriver;
     private SavedDriverDto? _selectedSecondDriver;
@@ -157,7 +166,18 @@
         _currentUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
         _isVehicleOwner = auth.User.IsInRole("VehicleOwner");
         if (_isVehicleOwner && !string.IsNullOrWhiteSpace(_currentUserId))
-            await ReloadSavedDriversAsync();
+        {
+            try
+            {
+                await ReloadSavedDriversAsync();
+            }
+            catch (Exception ex)
+            {
+                _savedDriversAvailable = false;
+                LoggerFactory.CreateLogger("ContractDriverEditor")
+                    .LogWarning(ex, "Không tải được danh sách tài xế đã lưu của {UserId}", _currentUserId);
+            }
+        }
     }
 
     protected override void OnParametersSet()
@@ -224,22 +244,36 @@
 
     private async Task SaveDriverAsync(string? fullName, string? licenseClass, string? licenseNumber, string? phone)
     {
-        var result = await SavedDriverService.SaveAsync(new SaveSavedDriverRequest
+        try
         {
-            FullName = fullName ?? string.Empty,
-            DriverLicenseClass = licenseClass ?? string.Empty,
-            DriverLicenseNumber = licenseNumber ?? string.Empty,
-            PhoneNumber = phone
-        }, _currentUserId);
-        Snackbar.Add(result.Message, result.Succeeded ? Severity.Success : Severity.Warning);
-        if (result.Succeeded)
-            await ReloadSavedDriversAsync();
+            var result = await SavedDriverService.SaveAsync(new SaveSavedDriverRequest
+            {
+                FullName = fullName ?? string.Empty,
+                DriverLicenseClass = licenseClass ?? string.Empty,
+                DriverLicenseNumber = licenseNumber ?? string.Empty,
+                PhoneNumber = phone
+            }, _currentUserId);
+            Snackbar.Add(result.Message, result.Succeeded ? Severity.Success : Severity.Warning);
+            if (result.Succeeded)
+                await ReloadSavedDriversAsync();
+        }
+        catch (Exception ex)
+        {
+            _savedDriversAvailable = false;
+            LoggerFactory.CreateLogger("ContractDriverEditor")
+                .LogWarning(ex, "Không lưu được tài xế gợi ý của {UserId}", _currentUserId);
+            Snackbar.Add(
+                "Không thể cập nhật danh sách tài xế gợi ý. Thông tin trên hợp đồng vẫn có thể lưu bình thường.",
+                Severity.Warning);
+        }
     }
 
     private async Task ReloadSavedDriversAsync()
     {
+        var rows = await SavedDriverService.GetMineAsync(_currentUserId);
         _savedDrivers.Clear();
-        _savedDrivers.AddRange(await SavedDriverService.GetMineAsync(_currentUserId));
+        _savedDrivers.AddRange(rows);
+        _savedDriversAvailable = true;
     }
 
     private void ShowSecondDriver() => _showSecondDriver = true;

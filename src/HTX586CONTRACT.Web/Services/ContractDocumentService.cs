@@ -264,18 +264,22 @@ public sealed class ContractDocumentService(
                         throw new InvalidOperationException("Không thể thêm bản ghi chữ ký vào SQL.");
 
                     // Chữ ký người lái thực tế và khách hàng được ghi nhận riêng theo từng hợp đồng.
-                    // Hợp đồng chỉ chuyển sang Completed khi đã đủ cả hai chữ ký và
-                    // VehicleOwner chủ động bấm nút "Hoàn thành hợp đồng".
-                    var updatedRows = await db.Contracts
+                    // Việc ký KHÔNG khóa nội dung. Owner/Admin/VehicleOwner vẫn được cập nhật
+                    // cho tới khi VehicleOwner bấm Hoàn thành. Nếu nội dung thay đổi sau khi ký,
+                    // ContractService sẽ vô hiệu chữ ký cũ và yêu cầu ký lại trước khi Complete.
+                    var contractUpdateQuery = db.Contracts
                         .Where(x => x.Id == contractId &&
                             (x.Status == ContractStatus.Created ||
                              x.Status == ContractStatus.Assigned ||
-                             x.Status == ContractStatus.Received))
-                        .ExecuteUpdateAsync(setters => setters
-                            .SetProperty(x => x.UpdatedAt, now)
-                            .SetProperty(x => x.UpdatedBy, currentUserId)
-                            .SetProperty(x => x.ContractDataJson, finalSnapshotJson),
-                            ct);
+                             x.Status == ContractStatus.Received));
+
+                    var updatedRows = await contractUpdateQuery.ExecuteUpdateAsync(setters => setters
+                        .SetProperty(x => x.UpdatedAt, now)
+                        .SetProperty(x => x.UpdatedBy, currentUserId)
+                        .SetProperty(x => x.ContractDataJson, finalSnapshotJson)
+                        // Dọn mốc LockedAt cũ từ phiên bản trước; chỉ Complete/Cancel mới được khóa.
+                        .SetProperty(x => x.LockedAt, (DateTime?)null),
+                        ct);
 
                     if (updatedRows != 1)
                         throw new InvalidOperationException(
@@ -435,10 +439,45 @@ public sealed class ContractDocumentService(
         if (contract.Status != ContractStatus.Completed)
             throw new InvalidOperationException("Chỉ hợp đồng đã hoàn tất mới được tạo PDF chính thức.");
 
-        // PDF đã sinh của hợp đồng hoàn tất là tài liệu bất biến. Không render lại
-        // từ template hoặc danh mục hiện tại nếu file chính thức vẫn còn tồn tại.
+        // PDF chính thức vẫn là tài liệu bất biến. Tuy nhiên layout JSON có thể được Owner
+        // chỉnh sau khi PDF chính thức đã tạo. Khi đó Mở PDF phải trả về bản đồng bộ
+        // mới nhất theo đúng JSON đang active, thay vì âm thầm trả file cũ.
         if (!string.IsNullOrWhiteSpace(contract.PdfFileUrl) && storage.FileExists(contract.PdfFileUrl))
+        {
+            var layoutInfo = pdfTemplateRenderer.GetLayoutRuntimeInfo();
+            var officialGeneratedAtUtc = contract.PdfGeneratedAt?.ToUniversalTime();
+
+            var syncedPdfs = await GetSyncedPdfsAsync(contractId, ct);
+            var currentSyncedPdf = syncedPdfs
+                .Where(x => x.GeneratedAtUtc >= layoutInfo.LastWriteTimeUtc)
+                .OrderByDescending(x => x.GeneratedAtUtc)
+                .FirstOrDefault();
+
+            if (currentSyncedPdf is not null)
+            {
+                logger.LogInformation(
+                    "Mở PDF đồng bộ phù hợp layout hiện tại. ContractId={ContractId}, LayoutSha256={LayoutSha256}, Pdf={PdfUrl}",
+                    contractId,
+                    layoutInfo.Sha256,
+                    currentSyncedPdf.FileUrl);
+                return currentSyncedPdf.FileUrl;
+            }
+
+            if (!officialGeneratedAtUtc.HasValue ||
+                layoutInfo.LastWriteTimeUtc > officialGeneratedAtUtc.Value.AddSeconds(1))
+            {
+                logger.LogInformation(
+                    "Layout JSON mới hơn PDF chính thức; tự tạo PDF đồng bộ theo layout hiện tại. ContractId={ContractId}, LayoutUpdatedAtUtc={LayoutUpdatedAtUtc}, PdfGeneratedAtUtc={PdfGeneratedAtUtc}, LayoutSha256={LayoutSha256}",
+                    contractId,
+                    layoutInfo.LastWriteTimeUtc,
+                    officialGeneratedAtUtc,
+                    layoutInfo.Sha256);
+
+                return await GenerateSyncedPdfAsync(contractId, ct);
+            }
+
             return contract.PdfFileUrl;
+        }
 
         var snapshot = ContractSnapshotData.FromJson(contract.ContractDataJson);
         if (snapshot is null)

@@ -1,0 +1,96 @@
+.contract-detail-field {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+    height: 100%;
+    padding: 11px 12px;
+    border: 1px solid color-mix(in srgb, var(--mud-palette-lines-default) 82%, transparent);
+    border-radius: 13px;
+    background: color-mix(in srgb, var(--mud-palette-surface) 97%, var(--mud-palette-primary) 3%);
+    transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+
+.contract-detail-field:hover {
+    border-color: color-mix(in srgb, var(--mud-palette-primary) 24%, var(--mud-palette-lines-default));
+    box-shadow: 0 5px 16px rgba(24, 48, 42, .045);
+    transform: translateY(-1px);
+}
+
+.contract-detail-field-icon {
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+    display: grid;
+    place-items: center;
+    border-radius: 9px;
+    color: var(--mud-palette-primary);
+    background: color-mix(in srgb, var(--mud-palette-primary) 9%, transparent);
+}
+
+.contract-detail-field-icon ::deep .mud-icon-root {
+    font-size: 16px !important;
+}
+
+.contract-detail-field-copy {
+    min-width: 0;
+    flex: 1;
+}
+
+.contract-detail-field-label {
+    margin-bottom: 3px;
+    color: var(--mud-palette-text-secondary);
+    font-size: .67rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.contract-detail-field-value {
+    color: var(--mud-palette-text-primary);
+    font-size: .86rem;
+    font-weight: 700;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    white-space: pre-line;
+}
+
+@media (max-width: 600px) {
+    .contract-detail-field {
+        gap: 8px;
+        min-height: 68px;
+        padding: 9px 9px 10px;
+        border-radius: 12px;
+        background: color-mix(in srgb, var(--mud-palette-surface) 96%, var(--mud-palette-primary) 4%);
+        box-shadow: none;
+    }
+
+    .contract-detail-field:hover {
+        transform: none;
+        box-shadow: none;
+    }
+
+    .contract-detail-field-icon {
+        width: 25px;
+        height: 25px;
+        flex-basis: 25px;
+        border-radius: 8px;
+    }
+
+    .contract-detail-field-icon ::deep .mud-icon-root {
+        font-size: 14px !important;
+    }
+
+    .contract-detail-field-label {
+        margin-bottom: 3px;
+        font-size: .61rem;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .contract-detail-field-value {
+        font-size: .74rem;
+        font-weight: 750;
+        line-height: 1.3;
+    }
+}

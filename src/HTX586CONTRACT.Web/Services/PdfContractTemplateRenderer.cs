@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text.Json;
 using HTX586CONTRACT.Domain.Companies;
 using HTX586CONTRACT.Domain.Contracts;
@@ -21,7 +22,9 @@ public sealed class PdfContractTemplateRenderer(
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        PropertyNameCaseInsensitive = true
+        PropertyNameCaseInsensitive = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true
     };
 
     public Task RenderPdfAsync(
@@ -50,14 +53,21 @@ public sealed class PdfContractTemplateRenderer(
             throw new FileNotFoundException(
                 $"Không tìm thấy file tọa độ PDF tại '{layoutPath}'.", layoutPath);
 
-        var layoutBundle = JsonSerializer.Deserialize<PdfTemplateLayoutBundle>(
-                File.ReadAllText(layoutPath), JsonOptions)
-            ?? throw new InvalidOperationException("Không thể đọc cấu hình tọa độ PDF dùng chung.");
+        var layoutInfo = GetLayoutRuntimeInfo();
+        var layoutBundle = ReadActiveLayoutBundle(layoutPath);
+
+        logger.LogInformation(
+            "Render PDF bằng layout JSON đang active. Layout={LayoutPath}, UpdatedAtUtc={UpdatedAtUtc}, Sha256={LayoutSha256}",
+            layoutInfo.Path,
+            layoutInfo.LastWriteTimeUtc,
+            layoutInfo.Sha256);
 
         var layout = isCargo ? layoutBundle.Cargo : layoutBundle.Passenger;
         if (layout is null)
             throw new InvalidOperationException(
                 $"File layout dùng chung chưa có cấu hình cho {(isCargo ? "hợp đồng hàng hóa" : "hợp đồng hành khách")}.");
+
+        ValidateRuntimeLayout(layout, isCargo ? "hợp đồng hàng hóa" : "hợp đồng hành khách");
 
         var textValues = BuildTextValues(contract);
         var imageValues = BuildImageValues(contract);
@@ -207,6 +217,24 @@ public sealed class PdfContractTemplateRenderer(
         info.Elements.SetDateTime("/ModDate", now);
     }
 
+    public PdfLayoutRuntimeInfo GetLayoutRuntimeInfo()
+    {
+        var layoutPath = ResolveContentPath(
+            configuration["DocumentGeneration:ContractLayoutsPath"],
+            Path.Combine("Templates", "Contracts", "HopDongVanChuyen.layout.json"));
+
+        if (!File.Exists(layoutPath))
+            throw new FileNotFoundException(
+                $"Không tìm thấy file layout PDF đang active tại '{layoutPath}'.",
+                layoutPath);
+
+        var bytes = File.ReadAllBytes(layoutPath);
+        return new PdfLayoutRuntimeInfo(
+            layoutPath,
+            File.GetLastWriteTimeUtc(layoutPath),
+            Convert.ToHexString(SHA256.HashData(bytes)));
+    }
+
     private string ResolveContentPath(string? configuredPath, string defaultRelativePath)
     {
         var path = string.IsNullOrWhiteSpace(configuredPath)
@@ -304,12 +332,10 @@ public sealed class PdfContractTemplateRenderer(
         var companyName = snapshot is not null
             ? First(snapshot.Company.Name, "...")
             : First(contract.CompanyNameSnapshot, company?.CompanyName, "...");
-        // Sau cụm "tại Văn phòng" chỉ in đúng một tên đơn vị/văn phòng.
-        // Không ghép CompanyName + BranchName vì dữ liệu thực tế có thể đã chứa
-        // tên chi nhánh trong CompanyName, gây lặp như "... CẦN THƠ - HTX VT 586 - CẦN THƠ".
-        var companyOfficeName = snapshot is not null
-            ? First(snapshot.Company.BranchName, snapshot.Company.Name, "...")
-            : First(company?.BranchName, company?.CompanyName, companyName, "...");
+        // FIX htx586-ltv: toàn bộ tên Công ty/Văn phòng trên PDF phải dùng
+        // CompanyName (company_name) chính thức. Tuyệt đối không lấy BranchName
+        // làm tên hiển thị/fallback vì BranchName có thể là tên chi nhánh/tên viết tắt.
+        var companyOfficeName = companyName;
         // Trường Liên hệ phản ánh mới được bổ sung sau khi mẫu PDF cũ đã chứa
         // sẵn dữ liệu Cần Thơ. Snapshot mới luôn ưu tiên dữ liệu đã chụp; snapshot
         // legacy không có trường này dùng đúng giá trị mẫu cũ để không làm mất dòng.
@@ -395,7 +421,7 @@ public sealed class PdfContractTemplateRenderer(
                 CompanyProfile.DefaultBusinessLicenseIssuedPlace),
             ["HEADER_COMPANY_OFFICE_NAME"] = companyOfficeName,
 
-            ["COMPANY_NAME"] = isCargo ? companyOfficeName : companyName,
+            ["COMPANY_NAME"] = companyName,
             ["COMPANY_OFFICE_NAME"] = companyOfficeName,
             ["COMPANY_TAX_CODE"] = FrozenText(snapshot?.Company.TaxCode, contract.CompanyTaxCodeSnapshot, company?.TaxCode, "..."),
             ["COMPANY_LICENSE"] = FrozenText(snapshot?.Company.BusinessLicenseNumber, company?.BusinessLicenseNumber, "..."),
@@ -753,6 +779,82 @@ public sealed class PdfContractTemplateRenderer(
     private static string ShortHash(string value)
         => value.Length <= 16 ? value : value[..16];
 
+    private PdfTemplateLayoutBundle ReadActiveLayoutBundle(string layoutPath)
+    {
+        try
+        {
+            return ReadAndValidateRuntimeBundle(layoutPath);
+        }
+        catch (Exception error) when (error is JsonException or InvalidOperationException)
+        {
+            logger.LogError(
+                error,
+                "Layout JSON đang active không hợp lệ. Không fallback sang backup để tránh xuất PDF sai layout. Layout={LayoutPath}",
+                layoutPath);
+
+            throw new InvalidOperationException(
+                $"Layout JSON đang active '{layoutPath}' không hợp lệ. Hệ thống không dùng backup cũ khi xuất PDF vì có thể làm file HĐ không đúng với JSON hiện tại. Chi tiết: {error.Message}",
+                error);
+        }
+    }
+
+    private static PdfTemplateLayoutBundle ReadAndValidateRuntimeBundle(string path)
+    {
+        var bundle = JsonSerializer.Deserialize<PdfTemplateLayoutBundle>(File.ReadAllText(path), JsonOptions)
+            ?? throw new InvalidOperationException("JSON layout rỗng hoặc không đúng cấu trúc bundle.");
+
+        if (bundle.Passenger is null)
+            throw new InvalidOperationException("JSON layout thiếu node 'passenger'.");
+        if (bundle.Cargo is null)
+            throw new InvalidOperationException("JSON layout thiếu node 'cargo'.");
+
+        ValidateRuntimeLayout(bundle.Passenger, "hợp đồng hành khách");
+        ValidateRuntimeLayout(bundle.Cargo, "hợp đồng hàng hóa");
+        return bundle;
+    }
+
+    private static void ValidateRuntimeLayout(PdfTemplateLayout layout, string layoutName)
+    {
+        foreach (var field in layout.TextFields)
+        {
+            if (string.IsNullOrWhiteSpace(field.Key) || field.Page < 1 ||
+                !double.IsFinite(field.X) || !double.IsFinite(field.Y) ||
+                !double.IsFinite(field.Width) || !double.IsFinite(field.Height) ||
+                field.X < 0 || field.Y < 0 || field.Width <= 0 || field.Height <= 0 ||
+                !float.IsFinite(field.FontSize) || !float.IsFinite(field.MinFontSize) ||
+                field.FontSize <= 0 || field.MinFontSize <= 0 || field.MinFontSize > field.FontSize ||
+                field.MaxLines < 1)
+            {
+                throw new InvalidOperationException(
+                    $"Layout {layoutName} có text field không hợp lệ: '{field.Key}'. Hãy mở PDF Layout Designer và phục hồi JSON backup trước khi xuất PDF.");
+            }
+        }
+
+        foreach (var field in layout.ImageFields)
+        {
+            if (string.IsNullOrWhiteSpace(field.Key) || field.Page < 1 ||
+                !double.IsFinite(field.X) || !double.IsFinite(field.Y) ||
+                !double.IsFinite(field.Width) || !double.IsFinite(field.Height) ||
+                field.X < 0 || field.Y < 0 || field.Width <= 0 || field.Height <= 0)
+            {
+                throw new InvalidOperationException(
+                    $"Layout {layoutName} có image field không hợp lệ: '{field.Key}'. Hãy mở PDF Layout Designer và phục hồi JSON backup trước khi xuất PDF.");
+            }
+        }
+
+        var duplicateText = layout.TextFields
+            .GroupBy(x => $"{x.Page}:{x.Key.Trim()}", StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(x => x.Count() > 1);
+        if (duplicateText is not null)
+            throw new InvalidOperationException($"Layout {layoutName} bị trùng text field '{duplicateText.Key}'.");
+
+        var duplicateImage = layout.ImageFields
+            .GroupBy(x => $"{x.Page}:{x.Key.Trim()}", StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(x => x.Count() > 1);
+        if (duplicateImage is not null)
+            throw new InvalidOperationException($"Layout {layoutName} bị trùng image field '{duplicateImage.Key}'.");
+    }
+
     private static void TryDeleteFile(string path)
     {
         try
@@ -765,6 +867,11 @@ public sealed class PdfContractTemplateRenderer(
             // Không che lỗi gốc.
         }
     }
+
+    public sealed record PdfLayoutRuntimeInfo(
+        string Path,
+        DateTime LastWriteTimeUtc,
+        string Sha256);
 
     private sealed class PdfTemplateLayoutBundle
     {

@@ -15,7 +15,20 @@
     </MudButton>
 </PageHeader>
 
-@if (_companyProfileIds.Count == 0)
+@if (_initializing)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (!string.IsNullOrWhiteSpace(_loadError))
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+        Không thể tải dữ liệu Dashboard. @_loadError
+    </MudAlert>
+    <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" OnClick="ReloadDashboardAsync">
+        Thử tải lại
+    </MudButton>
+}
+else if (_companyProfileIds.Count == 0)
 {
     <MudAlert Severity="Severity.Error" Variant="Variant.Filled">
         Tài khoản Quản lý chưa được phân quyền Công ty/Văn phòng nên chưa thể xem dashboard.
@@ -255,7 +268,9 @@ else
     private Guid? _selectedCompanyProfileId;
     private string _companyName = string.Empty;
     private DateTime? _month = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private bool _initializing = true;
     private bool _loading;
+    private string? _loadError;
     private DashboardStats _stats = new();
 
     private string _selectedMonthText => (_month ?? DateTime.Today).ToString("MM/yyyy");
@@ -266,24 +281,56 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        _currentUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+        await LoadDashboardAsync();
+    }
 
-        await using var db = await Factory.CreateDbContextAsync();
-        _companies = await db.AdminOffices.AsNoTracking()
-            .Where(x => x.AdminUserId == _currentUserId && x.IsActive && !x.IsDeleted &&
-                        x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
-            .OrderByDescending(x => x.IsPrimary)
-            .ThenBy(x => x.CompanyProfile.CompanyName)
-            .ThenBy(x => x.CompanyProfile.BranchName)
-            .Select(x => x.CompanyProfile)
-            .ToListAsync();
-        _companyProfileIds = _companies.Select(x => x.Id).ToHashSet();
-        _selectedCompanyProfileId = _companies.Count == 1 ? _companies[0].Id : null;
-        UpdateCompanyName();
+    private async Task ReloadDashboardAsync()
+    {
+        await LoadDashboardAsync();
+    }
 
-        if (_companyProfileIds.Count > 0)
-            await LoadStatsAsync();
+    private async Task LoadDashboardAsync()
+    {
+        _initializing = true;
+        _loadError = null;
+
+        try
+        {
+            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            _currentUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(_currentUserId))
+            {
+                _loadError = "Không xác định được tài khoản đăng nhập.";
+                return;
+            }
+
+            await using var db = await Factory.CreateDbContextAsync();
+            _companies = await db.AdminOffices.AsNoTracking()
+                .Where(x => x.AdminUserId == _currentUserId && x.IsActive && !x.IsDeleted &&
+                            x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
+                .OrderByDescending(x => x.IsPrimary)
+                .ThenBy(x => x.CompanyProfile.CompanyName)
+                .ThenBy(x => x.CompanyProfile.BranchName)
+                .Select(x => x.CompanyProfile)
+                .ToListAsync();
+
+            _companyProfileIds = _companies.Select(x => x.Id).ToHashSet();
+            _selectedCompanyProfileId = _companies.Count == 1 ? _companies[0].Id : null;
+            UpdateCompanyName();
+
+            if (_companyProfileIds.Count > 0)
+                await LoadStatsAsync();
+        }
+        catch (Exception ex)
+        {
+            // Không để exception khởi tạo làm sập circuit Blazor / chuyển sang trang 500.
+            _loadError = ex.Message;
+        }
+        finally
+        {
+            _initializing = false;
+        }
     }
 
     private async Task ChangeCompany(Guid? value)
