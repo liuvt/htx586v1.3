@@ -1,0 +1,55 @@
+@namespace HTX586CONTRACT.Web.Components.Pages.Owner.ContractRecords
+@page "/owner/contracts/{Id:guid}/pdf/latest"
+@attribute [Authorize(Roles = "Owner")]
+@inject IContractDocumentService DocumentService
+@inject NavigationManager Navigation
+
+<PageTitle>Đang mở PDF hợp đồng</PageTitle>
+
+<MudPaper Class="pa-6 mx-auto mt-8" Outlined="true" Style="max-width:640px">
+    @if (string.IsNullOrWhiteSpace(_error))
+    {
+        <MudStack AlignItems="AlignItems.Center" Spacing="3">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+            <MudText Typo="Typo.h6">Đang lấy PDF đồng bộ mới nhất...</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Hệ thống sẽ ưu tiên bản PDF đồng bộ mới nhất theo layout hiện tại và không ghi đè PDF chính thức.
+            </MudText>
+        </MudStack>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_error</MudAlert>
+        <MudButton Class="mt-4" Variant="Variant.Outlined" Href="/owner/contracts">Quay lại danh sách hợp đồng</MudButton>
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private bool _started;
+    private string? _error;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _started)
+            return;
+
+        _started = true;
+        await OpenLatestPdfAsync();
+    }
+
+    private async Task OpenLatestPdfAsync()
+    {
+        try
+        {
+            var url = await DocumentService.GeneratePdfAsync(Id);
+            Navigation.NavigateTo(url, forceLoad: true, replace: true);
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+}
