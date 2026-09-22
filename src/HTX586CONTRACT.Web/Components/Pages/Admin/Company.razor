@@ -5,61 +5,279 @@
 @inject IDbContextFactory<ApplicationDbContext> Factory
 
 <PageTitle>Công ty/Văn phòng</PageTitle>
-<PageHeader Title="Công ty/Văn phòng được phân quyền" Subtitle="Một tài khoản Quản lý có thể quản lý nhiều Công ty/Văn phòng; Chủ hệ thống chịu trách nhiệm cập nhật hồ sơ đơn vị." />
+<PageHeader Title="Công ty / Văn phòng"
+            Subtitle="Hồ sơ các đơn vị mà tài khoản Quản lý được Owner phân quyền sử dụng.">
+    <MudButton Href="/admin/dashboard"
+               Variant="Variant.Outlined"
+               Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Dashboard">
+        Tổng quan
+    </MudButton>
+    <MudButton Href="/admin/contracts"
+               Variant="Variant.Filled"
+               Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Description">
+        Hợp đồng
+    </MudButton>
+</PageHeader>
 
 @if (_loading)
 {
-    <MudProgressCircular Indeterminate="true" />
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
 }
 else if (_companies.Count == 0)
 {
-    <MudAlert Severity="Severity.Warning">Tài khoản chưa được phân quyền Công ty/Văn phòng.</MudAlert>
+    <section class="company-empty-state">
+        <div class="company-empty-icon">
+            <MudIcon Icon="@Icons.Material.Filled.Apartment" />
+        </div>
+        <div>
+            <h3>Chưa có Công ty/Văn phòng được phân quyền</h3>
+            <p>Tài khoản Quản lý hiện chưa được gán đơn vị. Vui lòng liên hệ Owner để cập nhật phạm vi quản lý.</p>
+        </div>
+    </section>
 }
 else
 {
-    <MudGrid>
-        @foreach (var company in _companies)
+    <section class="company-scope-banner">
+        <div class="company-scope-copy">
+            <div class="company-scope-kicker">
+                <MudIcon Icon="@Icons.Material.Filled.VerifiedUser" Size="Size.Small" />
+                PHẠM VI QUẢN LÝ
+            </div>
+            <h2>@_companies.Count đơn vị được phân quyền</h2>
+            <p>
+                Thông tin tại đây là hồ sơ dùng chung khi lập hợp đồng. Admin có quyền sử dụng dữ liệu của các đơn vị được gán nhưng không thay đổi hồ sơ pháp lý.
+            </p>
+        </div>
+        <div class="company-scope-metric">
+            <span>ĐANG XEM</span>
+            <strong>@SelectedCompanyName</strong>
+        </div>
+    </section>
+
+    <div class="company-workspace">
+        <aside class="company-office-panel">
+            <div class="company-panel-heading">
+                <div>
+                    <span>ĐƠN VỊ ĐƯỢC GÁN</span>
+                    <strong>Chọn Công ty/Văn phòng</strong>
+                </div>
+                <span class="company-count-badge">@_companies.Count</span>
+            </div>
+
+            <div class="company-office-list">
+                @foreach (var company in _companies)
+                {
+                    var selected = company.Id == _selectedCompanyId;
+                    <button type="button"
+                            @key="company.Id"
+                            class="@(selected ? "company-office-item is-active" : "company-office-item")"
+                            @onclick="() => SelectCompany(company.Id)">
+                        <span class="company-office-icon">
+                            <MudIcon Icon="@Icons.Material.Filled.Apartment" />
+                        </span>
+                        <span class="company-office-copy">
+                            <strong>@CompanyDisplay(company)</strong>
+                            <small>MST: @Display(company.TaxCode)</small>
+                        </span>
+                        <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Class="company-office-arrow" />
+                    </button>
+                }
+            </div>
+
+            <div class="company-panel-note">
+                <MudIcon Icon="@Icons.Material.Filled.InfoOutlined" Size="Size.Small" />
+                <span>Việc thêm, xóa hoặc chỉnh sửa hồ sơ đơn vị do tài khoản Owner thực hiện.</span>
+            </div>
+        </aside>
+
+        @if (SelectedCompany is { } company)
         {
-            <MudItem xs="12" lg="6">
-                <MudPaper Class="pa-4 h-100" Elevation="1">
-                    <MudText Typo="Typo.h6">@CompanyDisplay(company)</MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mb-3">@company.TaxCode</MudText>
-                    <MudGrid>
-                        <MudItem xs="12" md="6"><InfoListItem Label="GPKDVT" Value="@Display(company.BusinessLicenseNumber)" /></MudItem>
-                        <MudItem xs="12" md="6"><InfoListItem Label="Nơi cấp Phép" Value="@Display(company.BusinessLicenseIssuedPlace)" /></MudItem>
-                        <MudItem xs="12" md="6"><InfoListItem Label="Điện thoại" Value="@Display(company.PhoneNumber)" /></MudItem>
-                        <MudItem xs="12" md="6"><InfoListItem Label="Email" Value="@Display(company.Email)" /></MudItem>
-                        <MudItem xs="12"><InfoListItem Label="Địa chỉ" Value="@company.Address" /></MudItem>
-                        <MudItem xs="12"><InfoListItem Label="Liên hệ phản ánh" Value="@Display(company.ComplaintContact)" /></MudItem>
-                        <MudItem xs="12" md="6"><InfoListItem Label="Người đại diện" Value="@company.RepresentativeName" /></MudItem>
-                        <MudItem xs="12" md="6"><InfoListItem Label="Chức vụ" Value="@Display(company.RepresentativePosition)" /></MudItem>
-                        <MudItem xs="12" md="6"><InfoListItem Label="Tài khoản ngân hàng" Value="@Display(company.BankAccountNumber)" /></MudItem>
-                        <MudItem xs="12" md="6"><InfoListItem Label="Ngân hàng" Value="@Display(company.BankName)" /></MudItem>
-                    </MudGrid>
-                </MudPaper>
-            </MudItem>
+            <main class="company-profile-area">
+                <section class="company-profile-hero">
+                    <div class="company-profile-mark">
+                        <MudIcon Icon="@Icons.Material.Filled.Business" />
+                    </div>
+                    <div class="company-profile-title">
+                        <div class="company-profile-status-row">
+                            <span class="company-status-badge">
+                                <span class="company-status-dot"></span>
+                                @(company.IsActive ? "Đang hoạt động" : "Ngừng hoạt động")
+                            </span>
+                            <span class="company-readonly-badge">Chỉ xem</span>
+                        </div>
+                        <h2>@CompanyDisplay(company)</h2>
+                        <div class="company-profile-meta">
+                            <span><MudIcon Icon="@Icons.Material.Filled.Tag" Size="Size.Small" /> MST @Display(company.TaxCode)</span>
+                            <span><MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" /> @Display(company.Address)</span>
+                        </div>
+                    </div>
+                </section>
+
+                <div class="company-info-layout">
+                    <section class="company-info-card">
+                        <div class="company-info-card-header">
+                            <span class="company-section-icon legal"><MudIcon Icon="@Icons.Material.Filled.Gavel" /></span>
+                            <div>
+                                <h3>Thông tin pháp lý</h3>
+                                <p>Thông tin sử dụng trên hợp đồng và hồ sơ vận tải.</p>
+                            </div>
+                        </div>
+
+                        <div class="company-field-grid">
+                            <div class="company-field">
+                                <span class="company-field-label">Mã số thuế</span>
+                                <strong>@Display(company.TaxCode)</strong>
+                            </div>
+                            <div class="company-field">
+                                <span class="company-field-label">GPKDVT</span>
+                                <strong>@Display(company.BusinessLicenseNumber)</strong>
+                            </div>
+                            <div class="company-field full">
+                                <span class="company-field-label">Nơi cấp giấy phép</span>
+                                <strong>@Display(company.BusinessLicenseIssuedPlace)</strong>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="company-info-card">
+                        <div class="company-info-card-header">
+                            <span class="company-section-icon contact"><MudIcon Icon="@Icons.Material.Filled.ContactPhone" /></span>
+                            <div>
+                                <h3>Liên hệ & địa chỉ</h3>
+                                <p>Kênh liên hệ chính thức của đơn vị.</p>
+                            </div>
+                        </div>
+
+                        <div class="company-field-grid">
+                            <div class="company-field">
+                                <span class="company-field-label">Điện thoại</span>
+                                <strong>@Display(company.PhoneNumber)</strong>
+                            </div>
+                            <div class="company-field">
+                                <span class="company-field-label">Email</span>
+                                <strong>@Display(company.Email)</strong>
+                            </div>
+                            <div class="company-field full">
+                                <span class="company-field-label">Địa chỉ</span>
+                                <strong>@Display(company.Address)</strong>
+                            </div>
+                            <div class="company-field full emphasized">
+                                <span class="company-field-label">Liên hệ phản ánh</span>
+                                <strong>@Display(company.ComplaintContact)</strong>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="company-info-card">
+                        <div class="company-info-card-header">
+                            <span class="company-section-icon representative"><MudIcon Icon="@Icons.Material.Filled.Badge" /></span>
+                            <div>
+                                <h3>Người đại diện</h3>
+                                <p>Thông tin đại diện pháp lý của Công ty/Văn phòng.</p>
+                            </div>
+                        </div>
+
+                        <div class="company-field-grid">
+                            <div class="company-field">
+                                <span class="company-field-label">Họ và tên</span>
+                                <strong>@Display(company.RepresentativeName)</strong>
+                            </div>
+                            <div class="company-field">
+                                <span class="company-field-label">Chức vụ</span>
+                                <strong>@Display(company.RepresentativePosition)</strong>
+                            </div>
+                            <div class="company-field">
+                                <span class="company-field-label">CCCD</span>
+                                <strong>@Display(company.RepresentativeCitizenId)</strong>
+                            </div>
+                            <div class="company-field">
+                                <span class="company-field-label">Ngày cấp</span>
+                                <strong>@DateDisplay(company.RepresentativeCitizenIdIssuedDate)</strong>
+                            </div>
+                            <div class="company-field full">
+                                <span class="company-field-label">Nơi cấp CCCD</span>
+                                <strong>@Display(company.RepresentativeCitizenIdIssuedPlace)</strong>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="company-info-card">
+                        <div class="company-info-card-header">
+                            <span class="company-section-icon bank"><MudIcon Icon="@Icons.Material.Filled.AccountBalance" /></span>
+                            <div>
+                                <h3>Thông tin thanh toán</h3>
+                                <p>Tài khoản ngân hàng được khai báo cho đơn vị.</p>
+                            </div>
+                        </div>
+
+                        <div class="company-field-grid">
+                            <div class="company-field">
+                                <span class="company-field-label">Số tài khoản</span>
+                                <strong>@Display(company.BankAccountNumber)</strong>
+                            </div>
+                            <div class="company-field">
+                                <span class="company-field-label">Ngân hàng</span>
+                                <strong>@Display(company.BankName)</strong>
+                            </div>
+                        </div>
+
+                        <div class="company-update-note">
+                            <MudIcon Icon="@Icons.Material.Filled.History" Size="Size.Small" />
+                            <span>Cập nhật hồ sơ gần nhất: @LastUpdatedText(company)</span>
+                        </div>
+                    </section>
+                </div>
+            </main>
         }
-    </MudGrid>
+    </div>
 }
 
 @code {
     private List<CompanyProfile> _companies = [];
+    private Guid? _selectedCompanyId;
     private bool _loading = true;
+
+    private CompanyProfile? SelectedCompany
+        => _selectedCompanyId is null
+            ? null
+            : _companies.FirstOrDefault(x => x.Id == _selectedCompanyId.Value);
+
+    private string SelectedCompanyName
+        => SelectedCompany is null ? "—" : CompanyDisplay(SelectedCompany);
 
     protected override async Task OnInitializedAsync()
     {
-        var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
-        await using var db = await Factory.CreateDbContextAsync();
-        _companies = await db.AdminOffices.AsNoTracking()
-            .Where(x => x.AdminUserId == userId && x.IsActive && !x.IsDeleted &&
-                        x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
-            .OrderByDescending(x => x.IsPrimary)
-            .ThenBy(x => x.CompanyProfile.CompanyName)
-            .ThenBy(x => x.CompanyProfile.BranchName)
-            .Select(x => x.CompanyProfile)
-            .ToListAsync();
-        _loading = false;
+        try
+        {
+            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
+
+            await using var db = await Factory.CreateDbContextAsync();
+            _companies = await db.AdminOffices.AsNoTracking()
+                .Where(x => x.AdminUserId == userId && x.IsActive && !x.IsDeleted &&
+                            x.CompanyProfile.IsActive && !x.CompanyProfile.IsDeleted)
+                .OrderByDescending(x => x.IsPrimary)
+                .ThenBy(x => x.CompanyProfile.CompanyName)
+                .ThenBy(x => x.CompanyProfile.BranchName)
+                .Select(x => x.CompanyProfile)
+                .ToListAsync();
+
+            _selectedCompanyId = _companies.FirstOrDefault()?.Id;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void SelectCompany(Guid companyId)
+    {
+        if (_companies.Any(x => x.Id == companyId))
+        {
+            _selectedCompanyId = companyId;
+        }
     }
 
     private static string CompanyDisplay(CompanyProfile company)
@@ -67,5 +285,14 @@ else
             ? company.CompanyName
             : $"{company.CompanyName} - {company.BranchName}";
 
-    private static string Display(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+    private static string Display(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value.Trim();
+
+    private static string DateDisplay(DateTime? value)
+        => value.HasValue ? value.Value.ToString("dd/MM/yyyy") : "—";
+
+    private static string LastUpdatedText(CompanyProfile company)
+    {
+        var value = company.UpdatedAt ?? company.CreatedAt;
+        return value.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
+    }
 }
