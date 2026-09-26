@@ -1276,9 +1276,10 @@ public sealed class ContractService(
                 .Include(x => x.OfficeVehicles)
                 .FirstOrDefaultAsync(x => x.Id == entity.VehicleId && x.IsActive && !x.IsDeleted, ct);
             vehicleOwner = await db.Users.FirstOrDefaultAsync(x => x.Id == currentUserId, ct);
-            customer = await db.Customers.FirstOrDefaultAsync(x => x.Id == entity.CustomerId && !x.IsDeleted, ct);
-            if (customer is null)
+            var loadedCustomer = await db.Customers.FirstOrDefaultAsync(x => x.Id == entity.CustomerId && !x.IsDeleted, ct);
+            if (loadedCustomer is null)
                 return new(false, entity.Id, "Không tìm thấy hồ sơ khách hàng của hợp đồng. Vui lòng liên hệ quản trị viên kiểm tra dữ liệu khách hàng.");
+            customer = loadedCustomer;
 
             company = await db.CompanyProfiles.FirstOrDefaultAsync(x => x.Id == entity.CompanyProfileId && x.IsActive && !x.IsDeleted, ct);
             var vehicleStillAssignedToOffice = vehicle?.OfficeVehicles.Any(x => x.IsActive && !x.IsDeleted &&

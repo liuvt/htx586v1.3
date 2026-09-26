@@ -71,10 +71,10 @@
                 <MudIconButton Icon="@Icons.Material.Filled.Edit" Href="@($"/admin/contracts/{context.Id}")" />
                 <MudIconButton Icon="@Icons.Material.Filled.PictureAsPdf"
                                Color="Color.Error"
-                               Href="@context.PdfFileUrl"
+                               Href="@($"/admin/contracts/{context.Id}/pdf/latest")"
                                Target="_blank"
-                               Disabled="@string.IsNullOrWhiteSpace(context.PdfFileUrl)"
-                               title="@(string.IsNullOrWhiteSpace(context.PdfFileUrl) ? "Chưa có file PDF hợp đồng" : "Mở file PDF hợp đồng ở tab mới")" />
+                               Disabled="@(context.Status != ContractStatus.Completed)"
+                               title="@(context.Status == ContractStatus.Completed ? "Mở PDF đồng bộ mới nhất" : "PDF chỉ khả dụng khi hợp đồng hoàn tất")" />
             </MudTd>
         </RowTemplate>
         <NoRecordsContent><MudText>Chưa có hợp đồng.</MudText></NoRecordsContent>
