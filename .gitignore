@@ -27,6 +27,7 @@ src/HTX586CONTRACT.Application/obj/
 src/HTX586CONTRACT.Domain/bin/
 src/HTX586CONTRACT.Domain/obj/
 src/HTX586CONTRACT_Data/
+publish/
 
 *.user
 *.rsuser
