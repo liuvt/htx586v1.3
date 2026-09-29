@@ -1,13 +1,37 @@
 @page "/owner/companies/{Id:guid}"
 @attribute [Authorize(Roles = "Owner")]
+@implements IAsyncDisposable
 @inject ICompanyProfileService CompanyService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
 @inject MasterSignatureService MasterSignatureService
 @inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IJSRuntime JS
 
 <PageTitle>Chi tiết đơn vị</PageTitle>
-<PageHeader Title="Chi tiết công ty / văn phòng" Subtitle="Thiết kế lại theo từng vùng rõ ràng: tổng quan, thông tin đơn vị, người đại diện, tài chính và chữ ký." />
+<PageHeader Title="Chi tiết công ty / văn phòng" Subtitle="Quản lý thông tin chính và thông tin phụ của công ty / văn phòng.">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+        <MudChip T="string"
+                 Size="Size.Small"
+                 Color="@(_isEditing ? Color.Warning : Color.Default)"
+                 Variant="Variant.Outlined"
+                 Icon="@(_isEditing ? Icons.Material.Filled.Edit : Icons.Material.Filled.Lock)">
+            @(_isEditing ? "Đang chỉnh sửa" : "Chế độ xem")
+        </MudChip>
+
+        @if (!_isEditing && !_loading && _detail is not null)
+        {
+            <MudTooltip Text="Mở khóa để chỉnh sửa thông tin">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                               Color="Color.Primary"
+                               Size="Size.Medium"
+                               Disabled="@(_saving || _deleting)"
+                               OnClick="BeginEdit"
+                               title="Chỉnh sửa thông tin đơn vị" />
+            </MudTooltip>
+        }
+    </MudStack>
+</PageHeader>
 
 @if (_loading)
 {
@@ -63,91 +87,144 @@ else
             </MudPaper>
         </MudItem>
 
-        <MudItem xs="12" md="6">
-            <MudPaper Class="detail-section pa-4 fill-height" Elevation="1">
-                <MudText Typo="Typo.h6">Thông tin đơn vị</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Thông tin cơ bản của công ty / văn phòng đại diện.</MudText>
-                <MudDivider Class="mb-3" />
-                <MudGrid>
-                    <MudItem xs="12"><MudTextField @bind-Value="_model.CompanyName" Label="Tên đơn vị" Required="true" Variant="Variant.Outlined" /></MudItem>
-                    <MudItem xs="12"><MudTextField @bind-Value="_model.BranchName" Label="Tên chi nhánh / văn phòng" Variant="Variant.Outlined" /></MudItem>
-                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.TaxCode" Label="Mã số thuế" Required="true" Variant="Variant.Outlined" /></MudItem>
-                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.BusinessLicenseNumber" Label="Giấy phép kinh doanh" Variant="Variant.Outlined" /></MudItem>
-                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.BusinessLicenseIssuedPlace" Label="Nơi cấp Phép" Variant="Variant.Outlined" /></MudItem>
-                    <MudItem xs="12"><MudTextField @bind-Value="_model.Address" Label="Địa chỉ" Required="true" Variant="Variant.Outlined" /></MudItem>
-                </MudGrid>
-            </MudPaper>
-        </MudItem>
+        <MudItem xs="12">
+            <MudTabs Elevation="0" Class="company-tabs">
+                <MudTabPanel Text="Thông tin chính">
+                    <MudGrid Spacing="3" Class="pt-3">
+                        <MudItem xs="12" md="6">
+                            <MudPaper Class="detail-section pa-4 fill-height" Elevation="1">
+                                <MudText Typo="Typo.h6">Thông tin đơn vị</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Thông tin cơ bản của công ty / văn phòng đại diện.</MudText>
+                                <MudDivider Class="mb-3" />
+                                <MudGrid>
+                                    <MudItem xs="12"><MudTextField @bind-Value="_model.CompanyName" Label="Tên đơn vị" Required="true" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                                    <MudItem xs="12"><MudTextField @bind-Value="_model.BranchName" Label="Tên chi nhánh / văn phòng" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.TaxCode" Label="Mã số thuế" Required="true" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.BusinessLicenseNumber" Label="Giấy phép kinh doanh" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                                    <MudItem xs="12"><MudTextField @bind-Value="_model.Address" Label="Địa chỉ" Required="true" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                                </MudGrid>
+                            </MudPaper>
+                        </MudItem>
 
-        <MudItem xs="12" md="6">
-            <MudPaper Class="detail-section pa-4 fill-height" Elevation="1">
-                <MudText Typo="Typo.h6">Thông tin người đại diện</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Dữ liệu pháp lý dùng để in hợp đồng và hồ sơ liên quan.</MudText>
-                <MudDivider Class="mb-3" />
-                <MudGrid>
-                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.RepresentativeName" Label="Người đại diện" Required="true" Variant="Variant.Outlined" /></MudItem>
-                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.RepresentativePosition" Label="Chức vụ" Variant="Variant.Outlined" /></MudItem>
-                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.RepresentativeCitizenId" Label="CCCD người đại diện" Required="true" Variant="Variant.Outlined" /></MudItem>
-                    <MudItem xs="12" md="6">
-                        <MudDatePicker @bind-Date="_model.RepresentativeCitizenIdIssuedDate"
-                                       Label="Ngày cấp CCCD"
-                                       Variant="Variant.Outlined"
-                                       DateFormat="dd/MM/yyyy"
-                                       Editable="true"
-                                       ImmediateText="true"
-                                       Placeholder="dd/MM/yyyy"
-                                       Culture="@AppCulture.Vietnamese"
-                                       AutoClose="true" />
-                    </MudItem>
-                    <MudItem xs="12"><CitizenIdIssuedPlaceInput @bind-Value="_model.RepresentativeCitizenIdIssuedPlace" /></MudItem>
-                </MudGrid>
-            </MudPaper>
-        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudPaper Class="detail-section pa-4 fill-height" Elevation="1">
+                                <MudText Typo="Typo.h6">Thông tin người đại diện</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Dữ liệu pháp lý dùng để in hợp đồng và hồ sơ liên quan.</MudText>
+                                <MudDivider Class="mb-3" />
+                                <MudGrid>
+                                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.RepresentativeName" Label="Người đại diện" Required="true" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.RepresentativePosition" Label="Chức vụ" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.RepresentativeCitizenId" Label="CCCD người đại diện" Required="true" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                                    <MudItem xs="12" md="6">
+                                        <MudDatePicker @bind-Date="_model.RepresentativeCitizenIdIssuedDate"
+                                                       Label="Ngày cấp CCCD"
+                                                       Variant="Variant.Outlined"
+                                                       DateFormat="dd/MM/yyyy"
+                                                       Editable="true"
+                                                       ImmediateText="true"
+                                                       Placeholder="dd/MM/yyyy"
+                                                       Culture="@AppCulture.Vietnamese"
+                                                       AutoClose="true"
+                                                       Disabled="@IsFormLocked" />
+                                    </MudItem>
+                                    <MudItem xs="12"><CitizenIdIssuedPlaceInput @bind-Value="_model.RepresentativeCitizenIdIssuedPlace" Disabled="@IsFormLocked" /></MudItem>
+                                </MudGrid>
+                            </MudPaper>
+                        </MudItem>
 
-        <MudItem xs="12" md="6">
-            <MudPaper Class="detail-section pa-4 fill-height" Elevation="1">
-                <MudText Typo="Typo.h6">Liên hệ & tài chính</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Thông tin kết nối và tài khoản ngân hàng của đơn vị.</MudText>
-                <MudDivider Class="mb-3" />
-                <MudGrid>
-                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.PhoneNumber" Label="Điện thoại" Variant="Variant.Outlined" /></MudItem>
-                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.Email" Label="Email" Variant="Variant.Outlined" /></MudItem>
-                    <MudItem xs="12"><MudTextField @bind-Value="_model.ComplaintContact" Label="Liên hệ phản ánh" HelperText="Được chụp snapshot vào hợp đồng khi tạo/phát hợp đồng." Variant="Variant.Outlined" /></MudItem>
-                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.BankAccountNumber" Label="Số tài khoản" Variant="Variant.Outlined" /></MudItem>
-                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.BankName" Label="Ngân hàng" Variant="Variant.Outlined" /></MudItem>
-                    <MudItem xs="12">
-                        <MudPaper Class="soft-box pa-3" Elevation="0">
-                            <MudSwitch T="bool" @bind-Value="_model.IsActive" Color="Color.Success" Label="Đơn vị đang hoạt động" />
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">Tắt trạng thái nếu tạm ngưng khai thác hoặc dừng tiếp nhận hợp đồng mới.</MudText>
-                        </MudPaper>
-                    </MudItem>
-                </MudGrid>
-            </MudPaper>
-        </MudItem>
+                        <MudItem xs="12" md="6">
+                            <MudPaper Class="detail-section pa-4 fill-height" Elevation="1">
+                                <MudText Typo="Typo.h6">Liên hệ & tài chính</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Thông tin kết nối và tài khoản ngân hàng của đơn vị.</MudText>
+                                <MudDivider Class="mb-3" />
+                                <MudGrid>
+                                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.PhoneNumber" Label="Điện thoại" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.Email" Label="Email" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.BankAccountNumber" Label="Số tài khoản" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.BankName" Label="Ngân hàng" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                                    <MudItem xs="12">
+                                        <MudPaper Class="soft-box pa-3" Elevation="0">
+                                            <MudSwitch T="bool" @bind-Value="_model.IsActive" Color="Color.Success" Label="Đơn vị đang hoạt động" Disabled="@IsFormLocked" />
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">Tắt trạng thái nếu tạm ngưng khai thác hoặc dừng tiếp nhận hợp đồng mới.</MudText>
+                                        </MudPaper>
+                                    </MudItem>
+                                </MudGrid>
+                            </MudPaper>
+                        </MudItem>
 
-        <MudItem xs="12" md="6">
-            <MudPaper Class="detail-section pa-4 fill-height" Elevation="1">
-                <MudText Typo="Typo.h6">Chữ ký người đại diện</MudText>
-                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Hợp đồng sẽ tự động lấy chữ ký này khi xuất biểu mẫu.</MudText>
-                <MudDivider Class="mb-3" />
-                <SignaturePad ExistingSignatureUrl="@_detail.RepresentativeSignatureFileUrl"
-                              SignerName="@_detail.RepresentativeName"
-                              SignedAt="@_detail.RepresentativeSignedAt"
-                              OnSignatureSaved="SaveCompanySignatureAsync" />
+                        <MudItem xs="12" md="6">
+                            <MudPaper Class="detail-section pa-4 fill-height" Elevation="1">
+                                <MudText Typo="Typo.h6">Chữ ký người đại diện</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Hợp đồng sẽ tự động lấy chữ ký này khi xuất biểu mẫu.</MudText>
+                                <MudDivider Class="mb-3" />
+                                <SignaturePad ExistingSignatureUrl="@_detail.RepresentativeSignatureFileUrl"
+                                              SignerName="@_detail.RepresentativeName"
+                                              SignedAt="@_detail.RepresentativeSignedAt"
+                                              Disabled="@IsFormLocked"
+                                              OnSignatureSaved="SaveCompanySignatureAsync" />
 
-                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4">
-                    Đơn vị này hiện có @_detail.AdminCount tài khoản Quản lý, @_detail.DriverCount Chủ xe đang được cấp xe, @_detail.VehicleCount xe và @_detail.ContractCount hợp đồng.
-                </MudAlert>
-            </MudPaper>
+                                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4">
+                                    Đơn vị này hiện có @_detail.AdminCount tài khoản Quản lý, @_detail.DriverCount Chủ xe đang được cấp xe, @_detail.VehicleCount xe và @_detail.ContractCount hợp đồng.
+                                </MudAlert>
+                            </MudPaper>
+                        </MudItem>
+                    </MudGrid>
+                </MudTabPanel>
+
+                <MudTabPanel Text="Thông tin phụ">
+                    <MudPaper Class="detail-section pa-4 mt-3" Elevation="1">
+                        <MudText Typo="Typo.h6">Thông tin phụ</MudText>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Thông tin bổ sung của đơn vị dùng trên hợp đồng và hồ sơ liên quan.</MudText>
+                        <MudDivider Class="mb-3" />
+                        <MudGrid>
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_model.BusinessLicenseIssuedPlace"
+                                              Label="Nơi cấp phép"
+                                              Variant="Variant.Outlined"
+                                              Disabled="@IsFormLocked" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_model.ComplaintContact"
+                                              Label="Liên hệ phản ánh"
+                                              HelperText="Được chụp snapshot vào hợp đồng khi tạo/phát hợp đồng."
+                                              Variant="Variant.Outlined"
+                                              Disabled="@IsFormLocked" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudPaper>
+                </MudTabPanel>
+            </MudTabs>
         </MudItem>
 
         <MudItem xs="12">
             <MudPaper Class="pa-3" Elevation="1">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
                     <MudButton Variant="Variant.Outlined" OnClick="@(() => Navigation.NavigateTo("/owner/companies"))">Quay lại danh sách</MudButton>
-                    <MudButton Color="Color.Error" Variant="Variant.Outlined" Disabled="@(_saving || _deleting)" OnClick="DeleteAsync">Xóa mềm</MudButton>
+                    <MudButton Color="Color.Error"
+                               Variant="Variant.Outlined"
+                               Disabled="@(IsFormLocked || _saving || _deleting)"
+                               StartIcon="@Icons.Material.Filled.DeleteOutline"
+                               OnClick="DeleteAsync">
+                        Xóa mềm
+                    </MudButton>
                     <MudSpacer />
-                    <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_saving || _deleting)" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync">Lưu thay đổi</MudButton>
+                    @if (_isEditing)
+                    {
+                        <MudButton Color="Color.Default"
+                                   Variant="Variant.Outlined"
+                                   Disabled="@(_saving || _deleting)"
+                                   StartIcon="@Icons.Material.Filled.Close"
+                                   OnClick="CancelEdit">
+                            Hủy
+                        </MudButton>
+                    }
+                    <MudButton Color="Color.Primary"
+                               Variant="Variant.Filled"
+                               Disabled="@(IsFormLocked || _saving || _deleting)"
+                               StartIcon="@Icons.Material.Filled.Save"
+                               OnClick="SaveAsync">
+                        @(_saving ? "Đang lưu..." : "Lưu thay đổi")
+                    </MudButton>
                 </MudStack>
             </MudPaper>
         </MudItem>
@@ -196,6 +273,11 @@ else
     private bool _loading = true;
     private bool _saving;
     private bool _deleting;
+    private bool _isEditing;
+    private DotNetObjectReference<Detail>? _dotNetReference;
+    private string? _tabSyncToken;
+
+    private bool IsFormLocked => !_isEditing || _saving || _deleting;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -205,38 +287,94 @@ else
             _detail = await CompanyService.GetByIdAsync(Id);
             if (_detail is not null)
             {
-                _model = new UpdateCompanyProfileRequest
-                {
-                    CompanyName = _detail.CompanyName,
-                    BranchName = _detail.BranchName,
-                    TaxCode = _detail.TaxCode,
-                    BusinessLicenseNumber = _detail.BusinessLicenseNumber,
-                    BusinessLicenseIssuedPlace = _detail.BusinessLicenseIssuedPlace ?? CompanyProfile.DefaultBusinessLicenseIssuedPlace,
-                    Address = _detail.Address,
-                    PhoneNumber = _detail.PhoneNumber,
-                    Email = _detail.Email,
-                    ComplaintContact = _detail.ComplaintContact,
-                    RepresentativeName = _detail.RepresentativeName,
-                    RepresentativePosition = _detail.RepresentativePosition,
-                    RepresentativeCitizenId = _detail.RepresentativeCitizenId,
-                    RepresentativeCitizenIdIssuedDate = _detail.RepresentativeCitizenIdIssuedDate,
-                    RepresentativeCitizenIdIssuedPlace = _detail.RepresentativeCitizenIdIssuedPlace,
-                    BankAccountNumber = _detail.BankAccountNumber,
-                    BankName = _detail.BankName,
-                    IsActive = _detail.IsActive
-                };
+                ResetModelFromDetail();
+                _isEditing = false;
             }
         }
         finally { _loading = false; }
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        _dotNetReference = DotNetObjectReference.Create(this);
+
+        try
+        {
+            _tabSyncToken = await JS.InvokeAsync<string>(
+                "htx586CompanyTabSync.register",
+                _dotNetReference,
+                Id.ToString("D"));
+        }
+        catch (JSDisconnectedException)
+        {
+            // Circuit vừa đóng; không cần đăng ký đồng bộ tab.
+        }
+        catch (JSException)
+        {
+            // Không làm hỏng trang nếu browser chặn API đồng bộ tab.
+        }
+    }
+
+    [JSInvokable]
+    public async Task HandleCompanyChangedInAnotherTabAsync()
+    {
+        if (_loading || _saving || _deleting)
+            return;
+
+        try
+        {
+            _loading = true;
+            _isEditing = false;
+
+            _detail = await CompanyService.GetByIdAsync(Id);
+            if (_detail is not null)
+                ResetModelFromDetail();
+
+            Snackbar.Add(
+                "Dữ liệu đơn vị vừa thay đổi ở tab khác. Màn hình đã được đồng bộ và khóa chỉnh sửa.",
+                Severity.Info);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Không thể đồng bộ dữ liệu từ tab khác: {ex.Message}", Severity.Warning);
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task PublishCompanyChangedAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("htx586CompanyTabSync.publish", Id.ToString("D"));
+        }
+        catch (JSDisconnectedException)
+        {
+            // Browser đang rời trang hoặc circuit vừa mất kết nối.
+        }
+        catch (JSException)
+        {
+            // Đồng bộ tab là lớp bảo vệ bổ sung, không được làm thất bại thao tác lưu.
+        }
+    }
+
     private async Task SaveCompanySignatureAsync(string data)
     {
+        if (!_isEditing || _saving || _deleting)
+            return;
+
         try
         {
             await MasterSignatureService.SaveCompanyRepresentativeSignatureAsync(Id, data);
             Snackbar.Add("Đã lưu chữ ký cố định người đại diện.", Severity.Success);
             _detail = await CompanyService.GetByIdAsync(Id);
+            await PublishCompanyChangedAsync();
         }
         catch (Exception ex)
         {
@@ -246,7 +384,7 @@ else
 
     private async Task DeleteAsync()
     {
-        if (_deleting)
+        if (!_isEditing || _deleting || _saving)
             return;
 
         _deleting = true;
@@ -255,6 +393,7 @@ else
             var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
             var userId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
             await CompanyService.DeleteAsync(Id, userId);
+            await PublishCompanyChangedAsync();
             Snackbar.Add("Đã xóa mềm Công ty/Văn phòng. Dữ liệu hợp đồng lịch sử vẫn được giữ nguyên.", Severity.Success);
             Navigation.NavigateTo("/owner/companies");
         }
@@ -270,17 +409,96 @@ else
 
     private async Task SaveAsync()
     {
+        if (!_isEditing || _saving || _deleting)
+            return;
+
         _saving = true;
         try
         {
             var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
             _model.UpdatedByUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier);
             await CompanyService.UpdateAsync(Id, _model);
-            Snackbar.Add("Đã cập nhật đơn vị.", Severity.Success);
             _detail = await CompanyService.GetByIdAsync(Id);
+
+            if (_detail is not null)
+                ResetModelFromDetail();
+
+            _isEditing = false;
+            await PublishCompanyChangedAsync();
+            Snackbar.Add("Đã cập nhật đơn vị.", Severity.Success);
         }
-        catch (Exception ex) { Snackbar.Add(ex.Message, Severity.Error); }
-        finally { _saving = false; }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void BeginEdit()
+    {
+        if (_saving || _deleting)
+            return;
+
+        ResetModelFromDetail();
+        _isEditing = true;
+    }
+
+    private void CancelEdit()
+    {
+        if (_saving || _deleting)
+            return;
+
+        ResetModelFromDetail();
+        _isEditing = false;
+    }
+
+    private void ResetModelFromDetail()
+    {
+        if (_detail is null)
+            return;
+
+        _model = new UpdateCompanyProfileRequest
+        {
+            CompanyName = _detail.CompanyName,
+            BranchName = _detail.BranchName,
+            TaxCode = _detail.TaxCode,
+            BusinessLicenseNumber = _detail.BusinessLicenseNumber,
+            BusinessLicenseIssuedPlace = _detail.BusinessLicenseIssuedPlace ?? CompanyProfile.DefaultBusinessLicenseIssuedPlace,
+            Address = _detail.Address,
+            PhoneNumber = _detail.PhoneNumber,
+            Email = _detail.Email,
+            ComplaintContact = _detail.ComplaintContact,
+            RepresentativeName = _detail.RepresentativeName,
+            RepresentativePosition = _detail.RepresentativePosition,
+            RepresentativeCitizenId = _detail.RepresentativeCitizenId,
+            RepresentativeCitizenIdIssuedDate = _detail.RepresentativeCitizenIdIssuedDate,
+            RepresentativeCitizenIdIssuedPlace = _detail.RepresentativeCitizenIdIssuedPlace,
+            BankAccountNumber = _detail.BankAccountNumber,
+            BankName = _detail.BankName,
+            IsActive = _detail.IsActive
+        };
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(_tabSyncToken))
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("htx586CompanyTabSync.unregister", _tabSyncToken);
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+            catch (JSException)
+            {
+            }
+        }
+
+        _dotNetReference?.Dispose();
     }
 
     private static string Display(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;

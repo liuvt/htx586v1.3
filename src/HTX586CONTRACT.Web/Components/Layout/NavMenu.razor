@@ -46,23 +46,36 @@
 
             @* Ưu tiên nghiệp vụ Hợp đồng/Khách hàng ngay sau Tổng quan. *@
             <MudNavGroup Title="Hợp đồng & khách hàng" Icon="@Icons.Material.Filled.BusinessCenter" Expanded="true">
-                <MudNavLink Href="/admin/customers" Icon="@Icons.Material.Filled.Groups">
-                    Khách hàng
-                </MudNavLink>
                 <MudNavLink Href="/owner/contracts" Icon="@Icons.Material.Filled.Description">
                     Hợp đồng
                 </MudNavLink>
                 <MudNavLink Href="/owner/reports" Icon="@Icons.Material.Filled.QueryStats">
                     Báo cáo &amp; xuất Excel
                 </MudNavLink>
+
+                <MudNavLink Href="/admin/customers" Icon="@Icons.Material.Filled.Groups">
+                    Khách hàng
+                </MudNavLink>
             </MudNavGroup>
 
+            <MudNavGroup Title="Nguồn lực vận hành" Icon="@Icons.Material.Filled.Hub" Expanded="true">
+                <MudNavLink Href="/admin/accounts" Icon="@Icons.Material.Filled.ManageAccounts">
+                    Chủ xe
+                </MudNavLink>
+                <MudNavLink Href="/admin/vehicles" Icon="@Icons.Material.Filled.DirectionsCarFilled">
+                    Xe
+                </MudNavLink>
+            </MudNavGroup>
+
+            @* Chỉ Owner được phép nhìn thấy và sử dụng cấu hình PDF. *@
+            <MudNavGroup Title="Cấu hình nâng cao" Icon="@Icons.Material.Filled.Tune" Expanded="false">
+                <MudNavLink Href="/owner/pdf-layout-designer" Icon="@Icons.Material.Filled.DesignServices">
+                    Thiết kế mẫu PDF
+                </MudNavLink>
+            </MudNavGroup>
             <MudNavGroup Title="Tổ chức & nhân sự" Icon="@Icons.Material.Filled.CorporateFare" Expanded="true">
                 <MudNavLink Href="/owner/companies" Icon="@Icons.Material.Filled.Apartment">
                     Công ty / Văn phòng
-                </MudNavLink>
-                <MudNavLink Href="/admin/accounts" Icon="@Icons.Material.Filled.ManageAccounts">
-                    Tài khoản Quản lý / Chủ xe
                 </MudNavLink>
                 <MudNavLink Href="/admin/account-registrations" Icon="@Icons.Material.Filled.PersonAddAlt1">
                     <span class="nav-link-content">
@@ -75,22 +88,10 @@
                 </MudNavLink>
             </MudNavGroup>
 
-            <MudNavGroup Title="Nguồn lực vận hành" Icon="@Icons.Material.Filled.Hub" Expanded="true">
-                <MudNavLink Href="/admin/vehicles" Icon="@Icons.Material.Filled.DirectionsCarFilled">
-                    Xe
-                </MudNavLink>
-            </MudNavGroup>
-
-            <MudNavLink Href="/owner/account" Icon="@Icons.Material.Filled.AccountCircle">
-                Tài khoản Owner
+            @* Tài khoản Owner đặt cuối menu, ngay trên footer bảo mật. *@
+            <MudNavLink Href="/owner/account" Icon="@Icons.Material.Filled.AccountCircle" Class="owner-account-bottom">
+                Tài khoản
             </MudNavLink>
-
-            @* Chỉ Owner được phép nhìn thấy và sử dụng cấu hình PDF. *@
-            <MudNavGroup Title="Cấu hình nâng cao" Icon="@Icons.Material.Filled.Tune" Expanded="false">
-                <MudNavLink Href="/owner/pdf-layout-designer" Icon="@Icons.Material.Filled.DesignServices">
-                    Thiết kế mẫu PDF
-                </MudNavLink>
-            </MudNavGroup>
         </Authorized>
     </AuthorizeView>
 
@@ -103,30 +104,29 @@
 
             @* Ưu tiên nghiệp vụ Hợp đồng/Khách hàng ngay sau Tổng quan. *@
             <MudNavGroup Title="Hợp đồng & khách hàng" Icon="@Icons.Material.Filled.BusinessCenter" Expanded="true">
-                <MudNavLink Href="/admin/customers" Icon="@Icons.Material.Filled.Groups">
-                    Khách hàng
-                </MudNavLink>
                 <MudNavLink Href="/admin/contracts" Icon="@Icons.Material.Filled.Description">
                     Hợp đồng
                 </MudNavLink>
                 <MudNavLink Href="/admin/reports" Icon="@Icons.Material.Filled.QueryStats">
                     Báo cáo &amp; xuất Excel
                 </MudNavLink>
-            </MudNavGroup>
 
-            <MudNavLink Href="/admin/account" Icon="@Icons.Material.Filled.AccountCircle">
-                Tài khoản cá nhân
-            </MudNavLink>
-            <MudNavLink Href="/admin/company" Icon="@Icons.Material.Filled.Apartment">
-                Công ty/Văn phòng được gán
-            </MudNavLink>
+                <MudNavLink Href="/admin/customers" Icon="@Icons.Material.Filled.Groups">
+                    Khách hàng
+                </MudNavLink>
+            </MudNavGroup>
 
             <MudNavGroup Title="Nguồn lực vận hành" Icon="@Icons.Material.Filled.Hub" Expanded="true">
                 <MudNavLink Href="/admin/accounts" Icon="@Icons.Material.Filled.ManageAccounts">
-                    Tài khoản Chủ xe
+                    Chủ xe
                 </MudNavLink>
                 <MudNavLink Href="/admin/vehicles" Icon="@Icons.Material.Filled.DirectionsCarFilled">
                     Xe
+                </MudNavLink>
+            </MudNavGroup>
+            <MudNavGroup Title="Tổ chức & nhân sự" Icon="@Icons.Material.Filled.CorporateFare" Expanded="true">
+                <MudNavLink Href="/admin/company" Icon="@Icons.Material.Filled.Apartment">
+                    Công ty / Văn phòng
                 </MudNavLink>
                 <MudNavLink Href="/admin/account-registrations" Icon="@Icons.Material.Filled.PersonAddAlt1">
                     <span class="nav-link-content">
@@ -141,6 +141,11 @@
 
             @* KHÔNG hiển thị Cấu hình/Thiết kế mẫu PDF cho Admin.
                Quyền server-side vẫn được PdfLayoutDesignerService chặn chỉ Owner. *@
+
+            @* Tài khoản Owner đặt cuối menu, ngay trên footer bảo mật. *@
+            <MudNavLink Href="/admin/account" Icon="@Icons.Material.Filled.AccountCircle" Class="owner-account-bottom">
+                Tài khoản
+            </MudNavLink>
         </Authorized>
     </AuthorizeView>
 </MudNavMenu>

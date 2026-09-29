@@ -742,9 +742,6 @@ public sealed class ContractDocumentService(
     private static string FormatDateTime(DateTime? value)
         => value is null ? "..." : VietnamTime(value.Value).ToString("dd/MM/yyyy HH:mm");
 
-    private static string FormatKilometers(decimal? value)
-        => value is null ? "... km" : $"{value.Value:N1} km";
-
     private static string FormatMoney(decimal? value)
         => value is null
             ? "... đồng"
@@ -853,12 +850,6 @@ public sealed class ContractDocumentService(
 
     private static string ShortHash(string value)
         => value.Length <= 16 ? value : value[..16];
-
-    private byte[]? ReadSignature(string? relativeUrl)
-    {
-        var path = storage.ToPhysicalPath(relativeUrl);
-        return path is not null && File.Exists(path) ? File.ReadAllBytes(path) : null;
-    }
 
     private static void TryDeleteFile(string path)
     {
@@ -1016,11 +1007,6 @@ public sealed class ContractDocumentService(
     };
 
     // Lấy tiêu đề hợp đồng theo loại kinh doanh.
-    private static string BusinessTitle(ContractBusinessType type) => type switch
-    {
-        ContractBusinessType.Cargo => "HỢP ĐỒNG VẬN CHUYỂN HÀNG HÓA BẰNG XE Ô TÔ",
-        _ => "HỢP ĐỒNG VẬN CHUYỂN HÀNH KHÁCH"
-    };
 
     private static string FormatDate(DateTime? value) => value?.ToString("dd/MM/yyyy HH:mm") ?? "—";
 }

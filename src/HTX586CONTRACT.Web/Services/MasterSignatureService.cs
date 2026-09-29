@@ -92,16 +92,6 @@ public sealed class MasterSignatureService(
         return stored.RelativeUrl;
     }
 
-    public async Task<string> SaveDriverInitialSignatureAsync(string userId, string dataUrl, CancellationToken ct = default)
-    {
-        await using (var checkDb = await factory.CreateDbContextAsync(ct))
-        {
-            var alreadySigned = await checkDb.Users.AsNoTracking().AnyAsync(x => x.Id == userId && !x.IsDeleted && x.DriverSignedAt != null, ct);
-            if (alreadySigned) throw new InvalidOperationException("Tài xế đã tạo chữ ký lần đầu. Không thể ký lại.");
-        }
-        return await SaveDriverSignatureAsync(userId, dataUrl, ct);
-    }
-
     public async Task<string> SaveDriverSignatureAsync(
         string userId,
         string dataUrl,

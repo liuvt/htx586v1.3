@@ -1,0 +1,39 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v9.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v9.0": {
+      "HTX586CONTRACT.Application/1.0.0": {
+        "dependencies": {
+          "HTX586CONTRACT.Domain": "1.0.0"
+        },
+        "runtime": {
+          "HTX586CONTRACT.Application.dll": {}
+        }
+      },
+      "HTX586CONTRACT.Domain/1.0.0": {
+        "runtime": {
+          "HTX586CONTRACT.Domain.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "HTX586CONTRACT.Application/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "HTX586CONTRACT.Domain/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

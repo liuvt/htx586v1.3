@@ -1991,18 +1991,6 @@ public sealed class ContractService(
         return null;
     }
 
-    private static void ClearOperatingDriver(Contract entity)
-    {
-        entity.OperatingDriverName = null;
-        entity.OperatingDriverPhoneNumber = null;
-        entity.OperatingDriverLicenseNumber = null;
-        entity.OperatingDriverLicenseClass = null;
-        entity.SecondDriverName = null;
-        entity.SecondDriverPhoneNumber = null;
-        entity.SecondDriverLicenseNumber = null;
-        entity.SecondDriverLicenseClass = null;
-    }
-
     private static void ApplyOperatingDriverEntitySnapshot(Contract entity, SaveContractRequest request)
     {
         entity.DriverNameSnapshot = N(request.OperatingDriverName) ?? string.Empty;
@@ -2268,61 +2256,6 @@ public sealed class ContractService(
         }
     }
 
-    private static async Task PrepareEditableCollectionsForResyncAsync(
-        ApplicationDbContext db,
-        Contract entity,
-        string userId,
-        CancellationToken ct)
-    {
-        var now = DateTime.UtcNow;
-        var changed = false;
-
-        if (entity.BusinessType == ContractBusinessType.Passenger)
-        {
-            var rows = entity.Passengers
-                .Where(x => !x.IsDeleted)
-                .OrderBy(x => x.SortOrder)
-                .ToList();
-
-            if (rows.Count > 0)
-            {
-                var temporaryStart = rows.Max(x => x.SortOrder) + 1000;
-                for (var index = 0; index < rows.Count; index++)
-                {
-                    rows[index].SortOrder = temporaryStart + index;
-                    rows[index].UpdatedAt = now;
-                    rows[index].UpdatedBy = userId;
-                }
-                changed = true;
-            }
-        }
-        else
-        {
-            foreach (var type in new[] { CargoHandlingType.Loading, CargoHandlingType.Unloading })
-            {
-                var rows = entity.CargoHandlingEvents
-                    .Where(x => !x.IsDeleted && x.Type == type)
-                    .OrderBy(x => x.SortOrder)
-                    .ToList();
-
-                if (rows.Count == 0)
-                    continue;
-
-                var temporaryStart = rows.Max(x => x.SortOrder) + 1000;
-                for (var index = 0; index < rows.Count; index++)
-                {
-                    rows[index].SortOrder = temporaryStart + index;
-                    rows[index].UpdatedAt = now;
-                    rows[index].UpdatedBy = userId;
-                }
-                changed = true;
-            }
-        }
-
-        if (changed)
-            await db.SaveChangesAsync(ct);
-    }
-
     private static void RemoveAllPassengers(
         ApplicationDbContext db,
         Contract entity)
@@ -2559,9 +2492,6 @@ public sealed class ContractService(
 
     private static bool IsFinal(ContractStatus status)
         => status is ContractStatus.Completed or ContractStatus.Cancelled or ContractStatus.Expired or ContractStatus.Invalidated;
-
-    private static bool Same(string? left, string? right)
-        => string.Equals(N(left), N(right), StringComparison.Ordinal);
 
     private static async Task<string> BuildFinalContractNumberAsync(
         ApplicationDbContext db,
