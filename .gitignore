@@ -1,0 +1,157 @@
+# HTX586 - .gitignore
+# ASP.NET Core / Blazor / Visual Studio / Rider / VS Code
+
+# Build outputs
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]uild/
+[Dd]ist/
+out/
+artifacts/
+
+# Visual Studio
+.vs/
+src/HTX586CONTRACT.Web/bin/
+src/HTX586CONTRACT.Web/obj/
+src/HTX586CONTRACT.Infrastructure/bin/
+src/HTX586CONTRACT.Infrastructure/obj/
+src/HTX586CONTRACT.Application/bin/
+src/HTX586CONTRACT.Application/obj/
+src/HTX586CONTRACT.Domain/bin/
+src/HTX586CONTRACT.Domain/obj/
+src/HTX586CONTRACT_Data/
+
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+*.VC.db
+*.VC.VC.opendb
+*.opendb
+*.sdf
+*.opensdf
+ipch/
+*.aps
+*.ncb
+*.sbr
+*.tlb
+*.tlh
+
+# Rider / ReSharper
+.idea/
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# VS Code
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+
+# NuGet / .NET
+*.nupkg
+*.snupkg
+.nuget/
+project.lock.json
+project.fragment.lock.json
+BenchmarkDotNet.Artifacts/
+
+# Tests / coverage
+[Tt]est[Rr]esult*/
+coverage/
+coverage.*
+*.coverage
+*.coveragexml
+*.trx
+*.testlog
+
+# Logs
+[Ll]ogs/
+logs/
+log/
+*.log
+*.log.*
+
+# Temporary / OS
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*.old
+*.orig
+*.pid
+*.seed
+*.pid.lock
+~$*
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Blazor generated assets
+**/wwwroot/_framework/
+**/wwwroot/service-worker-assets.js
+**/wwwroot/service-worker-assets.js.br
+**/wwwroot/service-worker-assets.js.gz
+
+# Local settings / secrets
+.env
+.env.*
+!.env.example
+appsettings.Local.json
+appsettings.*.Local.json
+secrets.json
+**/secrets.json
+
+# Local databases
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.mdf
+*.ldf
+
+# Publish
+publish/
+PublishProfiles/
+*.pubxml.user
+
+# Certificates / private keys
+*.pfx
+*.p12
+*.pem
+*.key
+*.cer
+*.crt
+
+# Node / frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.npm/
+.yarn/
+.pnpm-store/
+
+# Local tool state
+.history/
+.cache/
+.temp/
+tmp/
+
+# Runtime generated content (enable if applicable)
+# **/wwwroot/uploads/
+# **/wwwroot/generated/
+# **/wwwroot/contracts/
+# **/wwwroot/pdf/
+# **/wwwroot/exports/

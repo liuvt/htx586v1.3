@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("HTX586CONTRACT.Application")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+60898e8eae2c95fe62accc88bc6cd3531958a845")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+571b93a51ae502f23f905bc97a16b8d29adc707f")]
 [assembly: System.Reflection.AssemblyProductAttribute("HTX586CONTRACT.Application")]
 [assembly: System.Reflection.AssemblyTitleAttribute("HTX586CONTRACT.Application")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

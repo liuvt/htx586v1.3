@@ -237,6 +237,7 @@ D:\HTX 586\htx586v1.3\src\HTX586CONTRACT.Web\bin\Debug\net9.0\appsettings.Develo
 D:\HTX 586\htx586v1.3\src\HTX586CONTRACT.Web\bin\Debug\net9.0\appsettings.json
 D:\HTX 586\htx586v1.3\src\HTX586CONTRACT.Web\bin\Debug\net9.0\appsettings.Production.example.json
 D:\HTX 586\htx586v1.3\src\HTX586CONTRACT.Web\bin\Debug\net9.0\Templates\Contracts\HopDongVanChuyen.layout.json
+D:\HTX 586\htx586v1.3\src\HTX586CONTRACT.Web\bin\Debug\net9.0\HTX586CONTRACT.Web.staticwebassets.runtime.json
 D:\HTX 586\htx586v1.3\src\HTX586CONTRACT.Web\bin\Debug\net9.0\HTX586CONTRACT.Web.staticwebassets.endpoints.json
 D:\HTX 586\htx586v1.3\src\HTX586CONTRACT.Web\bin\Debug\net9.0\Templates\Contracts\HopDongVanChuyenHangHoa.template.pdf
 D:\HTX 586\htx586v1.3\src\HTX586CONTRACT.Web\bin\Debug\net9.0\Templates\Contracts\HopDongVanChuyenHanhKhach.template.pdf
@@ -246,7 +247,6 @@ D:\HTX 586\htx586v1.3\src\HTX586CONTRACT.Web\bin\Debug\net9.0\Templates\Fonts\ti
 D:\HTX 586\htx586v1.3\src\HTX586CONTRACT.Web\bin\Debug\net9.0\Templates\Fonts\timesbi.ttf
 D:\HTX 586\htx586v1.3\src\HTX586CONTRACT.Web\bin\Debug\net9.0\Templates\Fonts\timesi.ttf
 D:\HTX 586\htx586v1.3\src\HTX586CONTRACT.Web\bin\Debug\net9.0\Templates\Reports\MauBaoCaoExcel_HTX586.xlsx
-D:\HTX 586\htx586v1.3\src\HTX586CONTRACT.Web\bin\Debug\net9.0\HTX586CONTRACT.Web.staticwebassets.runtime.json
 D:\HTX 586\htx586v1.3\src\HTX586CONTRACT.Web\bin\Debug\net9.0\HTX586CONTRACT.Web.exe
 D:\HTX 586\htx586v1.3\src\HTX586CONTRACT.Web\bin\Debug\net9.0\HTX586CONTRACT.Web.deps.json
 D:\HTX 586\htx586v1.3\src\HTX586CONTRACT.Web\bin\Debug\net9.0\HTX586CONTRACT.Web.runtimeconfig.json

@@ -49,10 +49,12 @@ else
                         </MudAlert>
                     </MudItem>
                     <MudItem xs="12">
-                        <MudText Typo="Typo.subtitle1">Chân ký Chủ xe</MudText>
+                        <MudText Typo="Typo.subtitle1">Chữ ký</MudText>
+                        @*
                         <MudText Typo="Typo.caption" Color="Color.Secondary">
                             Có thể ký trực tiếp hoặc upload PNG/JPG. Khi lưu chữ ký mới, hệ thống sẽ ghi đè chân ký hiện hành của tài khoản; hợp đồng đã snapshot trước đó vẫn giữ nguyên chữ ký lịch sử.
                         </MudText>
+                        *@
                         <SignaturePad ExistingSignatureUrl="@SignatureUrl"
                                       SignerName="@_model.FullName"
                                       StrokeColor="#0066CC"
