@@ -18,14 +18,6 @@ artifacts/
 
 # Visual Studio
 .vs/
-src/HTX586CONTRACT.Web/bin/
-src/HTX586CONTRACT.Web/obj/
-src/HTX586CONTRACT.Infrastructure/bin/
-src/HTX586CONTRACT.Infrastructure/obj/
-src/HTX586CONTRACT.Application/bin/
-src/HTX586CONTRACT.Application/obj/
-src/HTX586CONTRACT.Domain/bin/
-src/HTX586CONTRACT.Domain/obj/
 src/HTX586CONTRACT_Data/
 publish/
 
