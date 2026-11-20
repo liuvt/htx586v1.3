@@ -6,6 +6,7 @@
 @inject IDbContextFactory<ApplicationDbContext> Factory
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 @inject ISnackbar Snackbar
 @inject IDialogService Dialog
 @inject ILoggerFactory LoggerFactory
@@ -661,9 +662,15 @@ else
                 </MudAlert>
             }
 
-            <MudStack Row="true" Class="mt-4">
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mt-4">
                 <MudButton Variant="Variant.Outlined" Href="/vehicle-owner/contracts">Quay lại danh sách</MudButton>
                 <MudSpacer />
+                <MudButton Color="Color.Secondary"
+                           Variant="Variant.Filled"
+                           StartIcon="@Icons.Material.Filled.Description"
+                           OnClick="GenerateSubContractPdfAsync">
+                    Hợp đồng phụ (PDF)
+                </MudButton>
                 @if (CanComplete)
                 {
                     <MudButton Color="Color.Success"
@@ -680,7 +687,7 @@ else
                                Variant="Variant.Filled"
                                StartIcon="@Icons.Material.Filled.PictureAsPdf"
                                OnClick="GeneratePdfAsync">
-                        Mở PDF hợp đồng
+                        Mở PDF HĐ chính
                     </MudButton>
                 }
             </MudStack>
@@ -1411,7 +1418,21 @@ else
         try
         {
             var url = await DocumentService.GeneratePdfAsync(Id.Value);
-            Navigation.NavigateTo(url, true);
+            await JS.InvokeVoidAsync("open", url, "_blank");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task GenerateSubContractPdfAsync()
+    {
+        if (!Id.HasValue) return;
+        try
+        {
+            var url = await DocumentService.GenerateSubContractPdfAsync(Id.Value);
+            await JS.InvokeVoidAsync("open", url, "_blank");
         }
         catch (Exception ex)
         {

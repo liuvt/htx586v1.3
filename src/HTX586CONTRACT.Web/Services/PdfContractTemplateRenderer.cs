@@ -1,10 +1,12 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
+using HTX586CONTRACT.Application.Contracts;
 using HTX586CONTRACT.Domain.Companies;
 using HTX586CONTRACT.Domain.Contracts;
 using HTX586CONTRACT.Domain.Enums;
 using PdfSharp.Drawing;
+using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
 using SkiaSharp;
 
@@ -165,6 +167,412 @@ public sealed class PdfContractTemplateRenderer(
             logger.LogInformation(
                 "Đã xuất PDF từ PDF nền. ContractId={ContractId}, Output={Output}",
                 contract.Id,
+                outputPdfPath);
+
+            return Task.CompletedTask;
+        }
+        catch
+        {
+            TryDeleteFile(tempOutputPath);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Tạo file PDF chuẩn 2 trang cho Hợp đồng phụ (HỢP ĐỒNG DỊCH VỤ VẬN TẢI)
+    /// tự động ánh xạ thông tin và điều khoản theo đúng Đơn vị (Bên A) và Chủ phương tiện/Xe (Bên B).
+    /// </summary>
+    public Task RenderSubContractPdfAsync(
+        Contract contract,
+        string outputPdfPath,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var fixedFontFiles = ResolveFixedFontFiles();
+        var fallbackFonts = new[] { "Liberation Serif", "Tinos", "DejaVu Serif", "Noto Serif", "Arial", "sans-serif" };
+        var tempOutputPath = outputPdfPath + $".{Guid.NewGuid():N}.tmp";
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPdfPath)!);
+
+        var snapshot = ContractSnapshotData.FromJson(contract.ContractDataJson);
+        var company = contract.CompanyProfile;
+        var vehicle = contract.Vehicle;
+        var driver = contract.Driver;
+
+        var companyName = snapshot is not null
+            ? First(snapshot.Company.Name, contract.CompanyNameSnapshot, company?.CompanyName, "...")
+            : First(contract.CompanyNameSnapshot, company?.CompanyName, "...");
+        var companyTaxCode = snapshot is not null
+            ? First(snapshot.Company.TaxCode, contract.CompanyTaxCodeSnapshot, company?.TaxCode, "...")
+            : First(contract.CompanyTaxCodeSnapshot, company?.TaxCode, "...");
+        var companyAddress = snapshot is not null
+            ? First(snapshot.Company.Address, contract.CompanyAddressSnapshot, company?.Address, "...")
+            : First(contract.CompanyAddressSnapshot, company?.Address, "...");
+        var companyPhone = snapshot is not null
+            ? First(snapshot.Company.PhoneNumber, company?.PhoneNumber, "...")
+            : First(company?.PhoneNumber, "...");
+        var companyLicense = snapshot is not null
+            ? First(snapshot.Company.BusinessLicenseNumber, company?.BusinessLicenseNumber, "...")
+            : First(company?.BusinessLicenseNumber, "...");
+        var companyLicenseIssuedPlace = snapshot is not null
+            ? First(snapshot.Company.BusinessLicenseIssuedPlace, company?.BusinessLicenseIssuedPlace, "Sở Xây dựng Thành phố Cần Thơ")
+            : First(company?.BusinessLicenseIssuedPlace, "Sở Xây dựng Thành phố Cần Thơ");
+        var companyRepName = snapshot is not null
+            ? First(snapshot.Company.RepresentativeName, contract.CompanyRepresentativeSnapshot, company?.RepresentativeName, "...")
+            : First(contract.CompanyRepresentativeSnapshot, company?.RepresentativeName, "...");
+        var companyRepPosition = snapshot is not null
+            ? First(snapshot.Company.RepresentativePosition, contract.CompanyRepresentativePositionSnapshot, company?.RepresentativePosition, "Giám đốc")
+            : First(contract.CompanyRepresentativePositionSnapshot, company?.RepresentativePosition, "Giám đốc");
+        var companyRepCitizenId = snapshot is not null
+            ? First(snapshot.Company.RepresentativeCitizenId, company?.RepresentativeCitizenId, "...")
+            : First(company?.RepresentativeCitizenId, "...");
+        var companyRepIssuedDate = FormatDateOnly(snapshot is not null
+            ? snapshot.Company.RepresentativeCitizenIdIssuedDate ?? company?.RepresentativeCitizenIdIssuedDate
+            : company?.RepresentativeCitizenIdIssuedDate);
+        var companyRepIssuedPlace = snapshot is not null
+            ? First(snapshot.Company.RepresentativeCitizenIdIssuedPlace, company?.RepresentativeCitizenIdIssuedPlace, "Cục Cảnh Sát QLHC về TTXH")
+            : First(company?.RepresentativeCitizenIdIssuedPlace, "Cục Cảnh Sát QLHC về TTXH");
+
+        var ownerName = snapshot is not null
+            ? First(snapshot.Vehicle.OwnerName, contract.VehicleOwnerNameSnapshot, vehicle?.OwnerName, driver?.FullName, "...")
+            : First(contract.VehicleOwnerNameSnapshot, vehicle?.OwnerName, driver?.FullName, "...");
+        var ownerCitizenId = snapshot is not null
+            ? First(snapshot.Vehicle.OwnerCitizenId, contract.VehicleOwnerCitizenIdSnapshot, vehicle?.OwnerCitizenId, driver?.CitizenId, "...")
+            : First(contract.VehicleOwnerCitizenIdSnapshot, vehicle?.OwnerCitizenId, driver?.CitizenId, "...");
+        var ownerIssuedDate = FormatDateOnly(snapshot is not null
+            ? snapshot.Vehicle.OwnerCitizenIdIssuedDate ?? vehicle?.OwnerCitizenIdIssuedDate ?? driver?.CitizenIdIssuedDate
+            : vehicle?.OwnerCitizenIdIssuedDate ?? driver?.CitizenIdIssuedDate);
+        var ownerIssuedPlace = snapshot is not null
+            ? First(snapshot.Vehicle.OwnerCitizenIdIssuedPlace, vehicle?.OwnerCitizenIdIssuedPlace, driver?.CitizenIdIssuedPlace, "Cục Cảnh Sát QLHC về TTXH")
+            : First(vehicle?.OwnerCitizenIdIssuedPlace, driver?.CitizenIdIssuedPlace, "Cục Cảnh Sát QLHC về TTXH");
+        var ownerAddress = snapshot is not null
+            ? First(snapshot.Vehicle.OwnerAddress, vehicle?.OwnerAddress, driver?.Address, "...")
+            : First(vehicle?.OwnerAddress, driver?.Address, "...");
+
+        var plateNumber = snapshot is not null
+            ? First(snapshot.Vehicle.PlateNumber, contract.VehiclePlateSnapshot, vehicle?.PlateNumber, "...")
+            : First(contract.VehiclePlateSnapshot, vehicle?.PlateNumber, "...");
+        var brand = snapshot is not null
+            ? First(snapshot.Vehicle.Brand, contract.VehicleBrandSnapshot, vehicle?.Brand, "...")
+            : First(contract.VehicleBrandSnapshot, vehicle?.Brand, "...");
+        var seatCount = (snapshot is not null
+            ? snapshot.Vehicle.SeatCount ?? vehicle?.SeatCount
+            : vehicle?.SeatCount)?.ToString(CultureInfo.InvariantCulture) ?? "...";
+        var chassisNumber = snapshot is not null
+            ? First(snapshot.Vehicle.ChassisNumber, vehicle?.ChassisNumber, "...")
+            : First(vehicle?.ChassisNumber, "...");
+        var engineNumber = snapshot is not null
+            ? First(snapshot.Vehicle.EngineNumber, vehicle?.EngineNumber, "...")
+            : First(vehicle?.EngineNumber, "...");
+        var vehicleTypeDisplay = contract.BusinessType == ContractBusinessType.Cargo ? "XE TẢI" : "XE HỢP ĐỒNG";
+
+        var subContractNumber = SubContractHelper.BuildSubContractNumber(
+            contract.ContractNumber,
+            contract.CreatedAt,
+            companyName,
+            companyTaxCode);
+        var (effectiveFrom, effectiveTo) = SubContractHelper.GetEffectivePeriod(contract.CreatedAt);
+        var isCaoSon = SubContractHelper.IsCaoSonUnit(companyName, companyTaxCode);
+        var contractDate = VietnamTime(contract.CreatedAt);
+
+        const double pageWidth = 595.5;
+        const double pageHeight = 841.5;
+        const double marginX = 46.0;
+        const double contentWidth = pageWidth - (marginX * 2.0);
+        const double bottomLimitY = 785.0;
+
+        try
+        {
+            using var document = new PdfDocument();
+            var page = document.AddPage();
+            page.Width = XUnit.FromPoint(pageWidth);
+            page.Height = XUnit.FromPoint(pageHeight);
+            var graphics = XGraphics.FromPdfPage(page);
+            var currentY = 40.0;
+
+            void DrawBoxedText(
+                string text,
+                double x,
+                double y,
+                double width,
+                double height,
+                float fontSize,
+                bool bold = false,
+                bool italic = false,
+                string alignment = "Left",
+                int maxLines = 10)
+            {
+                if (string.IsNullOrWhiteSpace(text))
+                    return;
+
+                var field = new PdfTextFieldLayout
+                {
+                    Key = "SUB_BLOCK",
+                    Page = 1,
+                    X = x,
+                    Y = y,
+                    Width = width,
+                    Height = height,
+                    FontSize = fontSize,
+                    MinFontSize = Math.Max(8.5f, fontSize - 1.5f),
+                    MaxLines = maxLines,
+                    Alignment = alignment,
+                    VerticalAlignment = "Top",
+                    Bold = bold,
+                    Italic = italic
+                };
+
+                var rendered = TextPngRenderer.Render(
+                    text,
+                    field,
+                    "Times New Roman",
+                    fallbackFonts,
+                    fixedFontFiles);
+
+                using var stream = new MemoryStream(
+                    rendered.PngBytes,
+                    0,
+                    rendered.PngBytes.Length,
+                    writable: false,
+                    publiclyVisible: true);
+                using var image = XImage.FromStream(stream);
+
+                var drawX = alignment.Equals("Center", StringComparison.OrdinalIgnoreCase)
+                    ? x + Math.Max(0d, (width - rendered.WidthPoints) / 2d)
+                    : alignment.Equals("Right", StringComparison.OrdinalIgnoreCase)
+                        ? x + Math.Max(0d, width - rendered.WidthPoints)
+                        : x;
+
+                graphics.DrawImage(image, drawX, y, rendered.WidthPoints, rendered.HeightPoints);
+            }
+
+            void DrawParagraph(
+                string text,
+                float fontSize = 10.5f,
+                bool bold = false,
+                bool italic = false,
+                string alignment = "Left",
+                double indent = 0.0,
+                double spacingAfter = 3.5)
+            {
+                if (string.IsNullOrWhiteSpace(text))
+                    return;
+
+                var width = contentWidth - indent;
+                var field = new PdfTextFieldLayout
+                {
+                    Key = "SUB_PARA",
+                    Page = 1,
+                    X = marginX + indent,
+                    Y = currentY,
+                    Width = width,
+                    Height = 360.0,
+                    FontSize = fontSize,
+                    MinFontSize = fontSize,
+                    MaxLines = 25,
+                    Alignment = alignment,
+                    VerticalAlignment = "Top",
+                    Bold = bold,
+                    Italic = italic
+                };
+
+                var rendered = TextPngRenderer.Render(
+                    text,
+                    field,
+                    "Times New Roman",
+                    fallbackFonts,
+                    fixedFontFiles);
+
+                if (currentY + rendered.HeightPoints > bottomLimitY)
+                {
+                    graphics.Dispose();
+                    page = document.AddPage();
+                    page.Width = XUnit.FromPoint(pageWidth);
+                    page.Height = XUnit.FromPoint(pageHeight);
+                    graphics = XGraphics.FromPdfPage(page);
+                    currentY = 44.0;
+                }
+
+                using var stream = new MemoryStream(
+                    rendered.PngBytes,
+                    0,
+                    rendered.PngBytes.Length,
+                    writable: false,
+                    publiclyVisible: true);
+                using var image = XImage.FromStream(stream);
+
+                var drawX = alignment.Equals("Center", StringComparison.OrdinalIgnoreCase)
+                    ? marginX + indent + Math.Max(0d, (width - rendered.WidthPoints) / 2d)
+                    : alignment.Equals("Right", StringComparison.OrdinalIgnoreCase)
+                        ? marginX + indent + Math.Max(0d, width - rendered.WidthPoints)
+                        : marginX + indent;
+
+                graphics.DrawImage(image, drawX, currentY, rendered.WidthPoints, rendered.HeightPoints);
+                currentY += rendered.HeightPoints + spacingAfter;
+            }
+
+            // Quốc hiệu & Tiêu đề Đơn vị (2 cột)
+            var unitTitleUpper = companyName.ToUpper(CultureInfo.GetCultureInfo("vi-VN"));
+            DrawBoxedText(unitTitleUpper, 38, currentY, 248, 34, 9.5f, bold: true, alignment: "Center", maxLines: 2);
+            DrawBoxedText("-----------------------", 38, currentY + 28, 248, 14, 9.5f, alignment: "Center", maxLines: 1);
+            DrawBoxedText($"Số:{subContractNumber}", 38, currentY + 41, 248, 16, 10.5f, alignment: "Center", maxLines: 1);
+
+            DrawBoxedText("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", 290, currentY, 265, 16, 10.5f, bold: true, alignment: "Center", maxLines: 1);
+            DrawBoxedText("Độc lập - Tự do - Hạnh phúc", 290, currentY + 15, 265, 16, 11.0f, bold: true, alignment: "Center", maxLines: 1);
+            DrawBoxedText("--------------------", 290, currentY + 29, 265, 14, 9.5f, alignment: "Center", maxLines: 1);
+
+            currentY += 64.0;
+
+            // Tiêu đề Hợp đồng
+            DrawParagraph("HỢP ĐỒNG DỊCH VỤ VẬN TẢI", fontSize: 14.0f, bold: true, alignment: "Center", spacingAfter: 8.0);
+
+            // Căn cứ pháp lý
+            DrawParagraph("Căn cứ Nghị định số 158/2024/NĐ-CP ngày 18 tháng 12 năm 2024 của Chính phủ Quy định về hoạt động vận tải đường bộ;", fontSize: 10.0f, italic: true, spacingAfter: 2.5);
+            DrawParagraph("Căn cứ Nghị định số 218/2026/NĐ-CP ngày 19 tháng 06 năm 2026 của Chính phủ về sửa đổi, bổ sung một số điều của Nghị định 158/2024/NĐ-CP ngày 18 tháng 12 năm 2024 của Chính phủ Quy định về hoạt động vận tải đường bộ;", fontSize: 10.0f, italic: true, spacingAfter: 2.5);
+            DrawParagraph("Căn cứ Thông tư 36/2024/TT-BGTVT ngày 15 tháng 11 năm 2024 của Bộ Giao thông vận tải Quy định về tổ chức, quản lý hoạt động vận tải bằng xe ô tô và hoạt động của bến xe, bãi đỗ xe, trạm dừng nghỉ, điểm dừng xe trên đường bộ; quy định trình tự, thủ tục đưa bến xe, trạm dừng nghỉ vào khai thác;", fontSize: 10.0f, italic: true, spacingAfter: 2.5);
+            DrawParagraph("Căn cứ Thông tư số 72/2025/TT-BXD ngày 31 tháng 12 năm 2025 của Bộ trưởng Bộ xây dựng về sửa bổ sung một số điều của Thông tư số 36/2024/TT-BGTVT ngày 15 tháng 11 năm 2024;", fontSize: 10.0f, italic: true, spacingAfter: 5.0);
+
+            DrawParagraph($"Hôm nay, ngày {contractDate:dd} tháng {contractDate:MM} năm {contractDate:yyyy}", fontSize: 10.5f, italic: true, spacingAfter: 2.5);
+            DrawParagraph($"Tại văn phòng {companyName} chúng tôi gồm:", fontSize: 10.5f, spacingAfter: 5.0);
+
+            // Bên A
+            DrawParagraph("Bên A : ( Bên cung ứng dịch vụ vận tải)", fontSize: 10.8f, bold: true, spacingAfter: 2.5);
+            DrawParagraph(unitTitleUpper, fontSize: 10.8f, bold: true, spacingAfter: 2.5);
+            DrawParagraph($"Địa chỉ trụ sở: {companyAddress}   -   Số điện thoại (Fax): {companyPhone}", fontSize: 10.5f, spacingAfter: 2.5);
+            var licenseLabel = isCaoSon
+                ? $"Giấy chứng nhận đăng ký kinh doanh số : {companyLicense}"
+                : $"Giấy phép kinh doanh vận tải số : {companyLicense}";
+            DrawParagraph($"{licenseLabel}   -   Nơi cấp: {companyLicenseIssuedPlace}   -   Mã số thuế : {companyTaxCode}", fontSize: 10.5f, spacingAfter: 2.5);
+            DrawParagraph($"Đại diện: {companyRepName}   -   Chức Vụ: {companyRepPosition}", fontSize: 10.5f, bold: true, spacingAfter: 2.5);
+            DrawParagraph($"CCCD số: {companyRepCitizenId}   -   Ngày cấp: {companyRepIssuedDate}   -   Nơi cấp: {companyRepIssuedPlace}", fontSize: 10.5f, spacingAfter: 5.0);
+
+            // Bên B
+            DrawParagraph($"Bên B : ( Bên sử dụng dịch vụ vận tải ) {ownerName.ToUpper(CultureInfo.GetCultureInfo("vi-VN"))}", fontSize: 10.8f, bold: true, spacingAfter: 2.5);
+            DrawParagraph($"CCCD số: {ownerCitizenId}   -   Ngày cấp: {ownerIssuedDate}   -   Nơi cấp: {ownerIssuedPlace}", fontSize: 10.5f, spacingAfter: 2.5);
+            DrawParagraph($"Địa chỉ : {ownerAddress}", fontSize: 10.5f, spacingAfter: 2.5);
+            DrawParagraph($"Chủ phương tiện biển số: {plateNumber}   -   Nhãn hiệu: {brand}   -   Số chỗ: {seatCount}", fontSize: 10.5f, bold: true, spacingAfter: 2.5);
+            DrawParagraph($"Số Khung: {chassisNumber}   -   Số Máy: {engineNumber}", fontSize: 10.5f, spacingAfter: 2.5);
+            DrawParagraph($"Nơi sản xuất : VIỆT NAM   -   Tải trọng (kg): /   -   Loại phương tiện: {vehicleTypeDisplay}", fontSize: 10.5f, spacingAfter: 5.0);
+
+            DrawParagraph("Sau khi trao đổi, bàn bạc về yêu cầu sử dụng dịch vụ vận tải của bên B và khả năng cung ứng dịch vụ vận tải của bên A. Hai bên thống nhất ký hợp đồng với những điều khoản sau đây:", fontSize: 10.5f, spacingAfter: 5.0);
+
+            // Điều 1
+            DrawParagraph("Điều 1: Nội dung sản phẩm dịch vụ", fontSize: 10.8f, bold: true, spacingAfter: 2.5);
+            DrawParagraph("Bên A đồng ý cung ứng cho bên B các sản phẩm dịch vụ vận tải sau:", fontSize: 10.5f, spacingAfter: 2.0);
+            DrawParagraph("- Dịch vụ vận tải về hành chính: Dịch vụ hỗ trợ các thủ tục về hành chính do ngành Giao Thông vận tải quy định.", fontSize: 10.5f, indent: 10, spacingAfter: 2.0);
+            DrawParagraph("- Dịch vụ vận chuyển hành khách theo Hợp Đồng, vận chuyển hành khách Du Lịch; dịch vụ về nguồn hàng hóa, nguồn hành khách.", fontSize: 10.5f, indent: 10, spacingAfter: 2.0);
+            DrawParagraph("- Dịch vụ hỗ trợ thành viên mua xe, thay đổi phương tiện vận chuyển; mua bảo hiểm bắt buộc, bảo hiểm vật chất tự nguyện; sửa chữa phương tiện vận tải và các dịch vụ khác theo yêu cầu của thành viên HTX.", fontSize: 10.5f, indent: 10, spacingAfter: 4.5);
+
+            // Điều 2
+            DrawParagraph("Điều 2: Phí dịch vụ và phương thức thanh toán khi thành viên nhận dịch vụ hợp tác xã phải trả cho Hợp Tác Xã một khoản chi phí:", fontSize: 10.8f, bold: true, spacingAfter: 2.5);
+            DrawParagraph("- Chi phí phải trả cho từng sản phẩm dịch vụ vận tải cụ thể từng năm.", fontSize: 10.5f, indent: 10, spacingAfter: 2.0);
+            DrawParagraph("- Phương thức thanh toán: Thanh toán 100% bằng tiền mặt hoặc chuyển khoản.", fontSize: 10.5f, indent: 10, spacingAfter: 4.5);
+
+            // Điều 3
+            DrawParagraph("Điều 3: Trách nhiệm và quyền hạn của các bên:", fontSize: 10.8f, bold: true, spacingAfter: 2.5);
+            DrawParagraph("1. Trách nhiệm và quyền hạn của bên A:", fontSize: 10.5f, bold: true, spacingAfter: 2.0);
+            DrawParagraph("Trách nhiệm:", fontSize: 10.5f, italic: true, indent: 8, spacingAfter: 2.0);
+            DrawParagraph("- Bên A có trách nhiệm hỗ trợ cung ứng nguồn khách, nguồn hàng… cho thành viên ( nếu có ).", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
+            DrawParagraph("- Thông báo kịp thời cho Bên B về nguồn khách, nguồn hàng… nếu có sự thay đổi về thời gian, lộ trình, giá cả và các yêu cầu khác ( nếu có ).", fontSize: 10.5f, indent: 14, spacingAfter: 2.5);
+
+            DrawParagraph("Quyền hạn:", fontSize: 10.5f, italic: true, indent: 8, spacingAfter: 2.0);
+            DrawParagraph("- Hợp Tác Xã được quyền, trách nhiệm và nghĩa vụ quản lý, sử dụng và điều hành phương tiện theo hợp đồng này ( bao gồm chi phí nhiên liệu, sửa chữa, BOT, ... ) khi phương tiện có phát sinh doanh thu tại HTX.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
+            DrawParagraph("- Yêu cầu thành viên cung cấp thông tin và những điều kiện cần thiết khác để thực hiện tốt công việc cung cấp sản phẩm, dịch vụ vận tải của Hợp Tác Xã.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
+            if (isCaoSon)
+            {
+                DrawParagraph("- Yêu cầu thành viên thanh toán các loại thuế ( nếu có ) và phí dịch vụ cho HTX đúng hạn.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
+                DrawParagraph("- Đối với các xã viên không có phát sinh doanh thu tại app Grab và app Xanh Plasform thì phí duy trì HTX: 500.000 VND/năm. Phần phí này sẽ được thu cùng lúc cho các năm của phù hiệu được cấp trên 1 xe khi làm hợp đồng thanh lý.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
+            }
+            DrawParagraph("- Từ chối cung cấp sản phẩm, dịch vụ về pháp lý khi thành viên vi phạm thỏa thuận hợp đồng, vi phạm nội quy của HTX và các điều khoản quy định của ngành vận tải, hoặc vi phạm pháp luật.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
+            DrawParagraph("- HTX có quyền đề nghị cấp thời hạn có hiệu lực của phù hiệu, biển hiệu nhưng không quá thời hạn có hiệu lực của Giấy phép kinh doanh vận tải và không quá niên hạn sử dụng của phương tiện.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
+            DrawParagraph("- Các loại phù hiệu, biển hiệu do HTX cấp cho thành viên là tài sản của HTX. Bên A có quyền ngưng cấp \"LỆNH VẬN CHUYỂN\"; thu hồi Phù hiệu \"XE HỢP ĐỒNG\"; \"XE TẢI\"… của bên B trong trường hợp xe cố tình vi phạm luật GTĐB, vi phạm pháp luật hoặc không đóng các khoản phí cho HTX đúng hạn.", fontSize: 10.5f, indent: 14, spacingAfter: 3.5);
+
+            DrawParagraph("2. Trách nhiệm và quyền hạn của bên B:", fontSize: 10.5f, bold: true, spacingAfter: 2.0);
+            DrawParagraph("Trách nhiệm:", fontSize: 10.5f, italic: true, indent: 8, spacingAfter: 2.0);
+            DrawParagraph("- Cam kết cung cấp thông tin trung thực, cần thiết để HTX cung ứng sản phẩm, dịch vụ VT thuận lợi; tuân thủ theo Luật pháp của Việt Nam và điều lệ, quy chế của HTX.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
+            DrawParagraph("- Không được chở hành khách quá quy định và hàng hoá trái phép; thanh toán các khoản thuế của thành viên HTX phải đóng khi cơ quan thuế yêu cầu; thanh toán phí sử dụng sản phẩm dịch vụ vận tải đúng hạn.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
+            DrawParagraph("- Thông báo cho bên A ngay khi có thay đổi; luôn kiểm tra kỹ thuật xe và lái xe an toàn.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
+            DrawParagraph("- Lái xe phải nghiêm chỉnh chấp hành Luật Giao thông đường bộ Việt Nam khi tham gia giao thông. Trong trường hợp lái xe bị xử phạt về hành vi vi phạm An toàn giao thông đường bộ Việt Nam thì lái xe phải hoàn toàn chịu trách nhiệm xử phạt trước Pháp luật về các hành vi trên và Bên A sẽ không phải chịu trách nhiệm liên đới.", fontSize: 10.5f, indent: 14, spacingAfter: 2.5);
+
+            DrawParagraph("Quyền hạn:", fontSize: 10.5f, italic: true, indent: 8, spacingAfter: 2.0);
+            DrawParagraph("- Yêu cầu bên cung ứng sản phẩm dịch vụ vận tải HTX thực hiện công việc theo đúng chất lượng, số lượng, thời gian, địa điểm và các thỏa thuận khác.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
+            DrawParagraph("- Được đàm phán khi có sự thay đổi về các sản phẩm, dịch vụ vận tải được cung ứng làm ảnh hưởng đến sản xuất kinh doanh của thành viên.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
+            DrawParagraph("- Trong trường hợp bên A cung ứng dịch vụ vận tải vi phạm nghiêm trọng nghĩa vụ thì bên B có quyền đơn phương chấm dứt thực hiện hợp đồng và yêu cầu bồi thường thiệt hại; ngưng sử dụng sản phẩm dịch vụ vận tải khi các yêu cầu không được HTX giải quyết, khắc phục.", fontSize: 10.5f, indent: 14, spacingAfter: 4.5);
+
+            // Điều 4
+            DrawParagraph("Điều 4: Các thỏa thuận khác", fontSize: 10.8f, bold: true, spacingAfter: 2.5);
+            DrawParagraph("- Thành viên không sử dụng sản phẩm dịch vụ trong thời gian liên tục 6 tháng thì sẽ bị chấm dứt tư cách thành viên và tự chịu mọi trách nhiệm.", fontSize: 10.5f, indent: 10, spacingAfter: 2.0);
+            DrawParagraph("- Trong 45 ngày kể từ ngày có phù hiệu nếu xã viên không cung cấp đủ hồ sơ thì sẽ thu hồi phù hiệu do thiếu hồ sơ lưu trữ.", fontSize: 10.5f, indent: 10, spacingAfter: 2.0);
+            DrawParagraph("- Các trường hợp lái xe không hoạt động tại khu vực Cần Thơ sẽ áp dụng mức phí quản lý là 300.000 VNĐ/tháng. Các chi phí quản lý có thể thay đổi theo tình hình và điều kiện kinh doanh.", fontSize: 10.5f, indent: 10, spacingAfter: 2.0);
+            DrawParagraph("- Ngoài các chi phí cố định nêu trên, các chi phí quản lý và vận hành khác có thể được điều chỉnh, phát sinh hoặc thay đổi tùy theo tình hình thực tế, nhu cầu hoạt động và điều kiện kinh doanh của công ty tại từng thời điểm nhằm đảm bảo hiệu quả quản lý và vận hành và đúng pháp luật.", fontSize: 10.5f, indent: 10, spacingAfter: 2.0);
+            DrawParagraph("- Tài xế/chủ xe có trách nhiệm cung cấp đầy đủ và chính xác các thông tin theo đúng nội dung hợp đồng, đồng thời đảm bảo cung cấp thông tin và dữ liệu định vị của chuyến đi khi có yêu cầu của HTX. Về thực hiện việc xuất hóa đơn Tài xế/chủ xe cam kết không được xuất hóa đơn khống, mua bán hóa đơn.", fontSize: 10.5f, indent: 10, spacingAfter: 4.5);
+
+            // Điều 5
+            DrawParagraph("Điều 5: Thời hạn hiệu lực hợp đồng", fontSize: 10.8f, bold: true, spacingAfter: 2.5);
+            DrawParagraph($"- Hợp đồng có hiệu lực 4 năm kể từ ngày ký: {effectiveFrom:dd / MM / yyyy} đến {effectiveTo:dd / MM / yyyy} hoặc đến khi hai bên ký thanh lý hợp đồng.", fontSize: 10.5f, indent: 10, spacingAfter: 2.0);
+            DrawParagraph("- Khi bên B thanh lý trước thời hạn, phí rời HTX: 2.000.000 VNĐ, thời gian thanh lý trong 15 ngày (tính các ngày làm việc), kể từ khi bên B yêu cầu thanh lý và hoàn trả phù hiệu cho HTX.", fontSize: 10.5f, indent: 10, spacingAfter: 2.0);
+            DrawParagraph("- Các nảy sinh tranh chấp được giải quyết trên cơ sở hòa giải trên tinh thần hợp tác, tương trợ lẫn nhau; trường hợp không đạt được thỏa thuận thì trình Đại hội thành viên xem xét giải quyết. Trường hợp không giải quyết được thì một trong hai bên có quyền yêu cầu cơ quan nhà nước có thẩm quyền xử lý theo quy định của pháp luật.", fontSize: 10.5f, indent: 10, spacingAfter: 2.0);
+            DrawParagraph("- Hợp đồng này được làm thành 03 bản có giá trị như nhau. Bên A giữ 01 bản, bên B giữ 01 bản và 01 bản nộp Sở Xây Dựng.", fontSize: 10.5f, indent: 10, spacingAfter: 12.0);
+
+            // Khu vực Chữ ký ĐẠI DIỆN BÊN A & ĐẠI DIỆN BÊN B
+            if (currentY + 135.0 > bottomLimitY)
+            {
+                graphics.Dispose();
+                page = document.AddPage();
+                page.Width = XUnit.FromPoint(pageWidth);
+                page.Height = XUnit.FromPoint(pageHeight);
+                graphics = XGraphics.FromPdfPage(page);
+                currentY = 48.0;
+            }
+
+            DrawBoxedText("ĐẠI DIỆN BÊN A", 55, currentY, 220, 18, 11.0f, bold: true, alignment: "Center", maxLines: 1);
+            DrawBoxedText("ĐẠI DIỆN BÊN B", 320, currentY, 220, 18, 11.0f, bold: true, alignment: "Center", maxLines: 1);
+
+            var officeSignaturePath = StoredSignaturePath(snapshot is not null
+                ? snapshot.Company.RepresentativeSignatureFileUrl
+                : company?.RepresentativeSignatureFileUrl);
+            if (!string.IsNullOrWhiteSpace(officeSignaturePath) && File.Exists(officeSignaturePath))
+            {
+                using var officeImg = XImage.FromFile(officeSignaturePath);
+                DrawContainedImage(graphics, officeImg, new PdfImageFieldLayout
+                {
+                    X = 75,
+                    Y = currentY + 18,
+                    Width = 180,
+                    Height = 68
+                });
+            }
+
+            var ownerSignaturePath = StoredSignaturePath(snapshot is not null
+                ? snapshot.Vehicle.OwnerSignatureFileUrl
+                : driver?.VehicleOwnerSignatureFileUrl);
+            if (!string.IsNullOrWhiteSpace(ownerSignaturePath) && File.Exists(ownerSignaturePath))
+            {
+                using var ownerImg = XImage.FromFile(ownerSignaturePath);
+                DrawContainedImage(graphics, ownerImg, new PdfImageFieldLayout
+                {
+                    X = 340,
+                    Y = currentY + 18,
+                    Width = 180,
+                    Height = 68
+                });
+            }
+
+            DrawBoxedText(companyRepName.ToUpper(CultureInfo.GetCultureInfo("vi-VN")), 45, currentY + 92, 240, 20, 10.8f, bold: true, alignment: "Center", maxLines: 1);
+            DrawBoxedText(ownerName.ToUpper(CultureInfo.GetCultureInfo("vi-VN")), 310, currentY + 92, 240, 20, 10.8f, bold: true, alignment: "Center", maxLines: 1);
+
+            graphics.Dispose();
+
+            NormalizeDocumentMetadata(document, contract);
+            document.Info.Elements.SetString("/Title", $"HỢP ĐỒNG DỊCH VỤ VẬN TẢI {subContractNumber}");
+            document.Save(tempOutputPath);
+
+            File.Move(tempOutputPath, outputPdfPath, overwrite: true);
+
+            logger.LogInformation(
+                "Đã xuất PDF Hợp đồng phụ (Hợp đồng dịch vụ vận tải). ContractId={ContractId}, SubContractNumber={SubContractNumber}, Output={Output}",
+                contract.Id,
+                subContractNumber,
                 outputPdfPath);
 
             return Task.CompletedTask;

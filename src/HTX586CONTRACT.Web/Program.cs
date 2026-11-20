@@ -36,7 +36,7 @@ builder.Services.AddMudServices();
 builder.Services.Configure<FileStorageOptions>(
     builder.Configuration.GetSection(FileStorageOptions.SectionName));
 
-var connectionString = builder.Configuration.GetConnectionString("Vps");
+var connectionString = builder.Configuration.GetConnectionString("Default");
 
 // Tương thích ngược với cấu hình cũ nếu server vẫn dùng key Vps.
 // Bản deploy mới nên cấu hình ConnectionStrings:Default.
@@ -91,9 +91,10 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(o =>
 })
     .AddEntityFrameworkStores<ApplicationDbContext>().AddDefaultTokenProviders();
 
-// Tài khoản đã bị ẩn/khóa sẽ mất hiệu lực cookie nhanh chóng sau khi SecurityStamp thay đổi.
+// Tài khoản đã bị ẩn/khóa sẽ được ActiveAccountGuard kiểm tra định kỳ trong circuit.
+// Giữ ValidationInterval 5 phút để không chặn các HTTP request tĩnh/điều hướng mỗi phút.
 builder.Services.Configure<SecurityStampValidatorOptions>(options =>
-    options.ValidationInterval = TimeSpan.FromMinutes(1));
+    options.ValidationInterval = TimeSpan.FromMinutes(5));
 
 #region Cấu hình cookie authentication 
 // Cho phép Production hoạt động cả HTTP trực tiếp lẫn HTTPS.

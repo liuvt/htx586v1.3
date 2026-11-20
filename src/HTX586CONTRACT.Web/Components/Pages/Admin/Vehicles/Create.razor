@@ -148,6 +148,8 @@
             _model.PermitNumber = _model.PermitNumber.Trim();
             if (await db.Vehicles.IgnoreQueryFilters().AnyAsync(x => !x.IsDeleted && x.PlateNumber == _model.PlateNumber))
                 throw new InvalidOperationException("Biển số xe đã tồn tại.");
+            if (await db.Vehicles.IgnoreQueryFilters().AnyAsync(x => !x.IsDeleted && x.PermitNumber == _model.PermitNumber))
+                throw new InvalidOperationException("Số phù hiệu xe đã tồn tại trên một xe khác.");
 
             if (validOwner is not null)
                 ApplyOwnerSnapshot(_model, validOwner);

@@ -8,12 +8,24 @@
 @inject IDbContextFactory<ApplicationDbContext> Factory
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 @inject ISnackbar Snackbar
 
 <PageTitle>@(Id.HasValue ? "Cập nhật hợp đồng" : "Tạo hợp đồng")</PageTitle>
 <PageHeader Title="@(Id.HasValue ? "Cập nhật hợp đồng" : "Tạo hợp đồng")"
             Subtitle="Tài khoản Quản lý lập hợp đồng cho Công ty/Văn phòng được phân quyền và phát xuống Chủ xe; Chủ xe tiếp tục cập nhật nội dung hợp đồng, danh sách hành khách và thực hiện bước ký với khách hàng." />
 
+@if (_loading)
+{
+    <MudPaper Class="pa-6" Outlined="true" Elevation="0">
+        <MudStack AlignItems="AlignItems.Center" Spacing="2">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Đang tải thông tin hợp đồng...</MudText>
+        </MudStack>
+    </MudPaper>
+}
+else
+{
 @if (Id.HasValue)
 {
     <MudPaper Class="pa-3 mb-4 d-flex align-center" Outlined="true">
@@ -550,17 +562,25 @@ else
                 }
             </MudItem>
         </MudGrid>
-        <MudButton Class="mt-4"
-                   Color="Color.Error"
-                   Variant="Variant.Filled"
-                   StartIcon="@Icons.Material.Filled.PictureAsPdf"
-                   Disabled="@(_model.Status != ContractStatus.Completed)"
-                   OnClick="GeneratePdfAsync">
-            Tạo và mở PDF
-        </MudButton>
+        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mt-4">
+            <MudButton Color="Color.Secondary"
+                       Variant="Variant.Filled"
+                       StartIcon="@Icons.Material.Filled.Description"
+                       OnClick="GenerateSubContractPdfAsync">
+                Hợp đồng phụ (PDF)
+            </MudButton>
+            <MudButton Color="Color.Error"
+                       Variant="Variant.Filled"
+                       StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                       Disabled="@(_model.Status != ContractStatus.Completed)"
+                       OnClick="GeneratePdfAsync">
+                Tạo và mở PDF HĐ chính
+            </MudButton>
+        </MudStack>
     </MudPaper>
 }
 
+}
 }
 
 @code {
@@ -576,6 +596,7 @@ else
 
     private MudForm? _form;
     private ContractDetailDto? _detail;
+    private bool _loading = true;
     private bool _valid;
     private bool _saving;
     private string _currentUserId = string.Empty;
@@ -610,6 +631,19 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
+        _loading = true;
+        try
+        {
+            await LoadParametersDataAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadParametersDataAsync()
+    {
         var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
         _currentUserId = auth.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? string.Empty;
         await using var db = await Factory.CreateDbContextAsync();
@@ -624,6 +658,32 @@ else
             Snackbar.Add("Tài khoản Quản lý chưa được phân quyền Công ty/Văn phòng.", Severity.Error);
             Navigation.NavigateTo("/admin/contracts");
             return;
+        }
+
+        if (Id.HasValue)
+        {
+            var fastDetail = await ContractService.GetByIdAsync(Id.Value);
+            if (fastDetail is null)
+            {
+                Snackbar.Add("Không tìm thấy hợp đồng.", Severity.Error);
+                Navigation.NavigateTo("/admin/contracts");
+                return;
+            }
+
+            if (!_managedCompanyProfileIds.Contains(fastDetail.CompanyProfileId))
+            {
+                Snackbar.Add("Tài khoản Quản lý chỉ được truy cập hợp đồng thuộc Công ty/Văn phòng được gán.", Severity.Error);
+                Navigation.NavigateTo("/admin/contracts");
+                return;
+            }
+
+            if (fastDetail.Status is ContractStatus.Completed or ContractStatus.Cancelled)
+            {
+                _detail = fastDetail;
+                _model.Status = fastDetail.Status;
+                _signatures = fastDetail.Signatures;
+                return;
+            }
         }
 
         _companies = await db.CompanyProfiles.AsNoTracking()
@@ -1325,7 +1385,23 @@ else
         try
         {
             var url = await DocumentService.GeneratePdfAsync(Id.Value);
-            Navigation.NavigateTo(url, true);
+            await JS.InvokeVoidAsync("open", url, "_blank");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task GenerateSubContractPdfAsync()
+    {
+        if (!Id.HasValue)
+            return;
+
+        try
+        {
+            var url = await DocumentService.GenerateSubContractPdfAsync(Id.Value);
+            await JS.InvokeVoidAsync("open", url, "_blank");
         }
         catch (Exception ex)
         {

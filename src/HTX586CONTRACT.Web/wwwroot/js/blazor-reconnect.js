@@ -1,5 +1,5 @@
 (() => {
-    const STALE_TAB_RELOAD_MS = 5 * 60 * 1000;
+    const STALE_TAB_RELOAD_MS = 30 * 60 * 1000;
     const HARD_RELOAD_GUARD_MS = 15 * 1000;
     const reconnectModalId = 'components-reconnect-modal';
 
@@ -60,13 +60,9 @@
         }
 
         if (state === 'hide') {
-            // Sau khi circuit từng mất kết nối, tải mới trang để loại bỏ mọi trạng thái
-            // UI có thể đã treo (_saving/_editing/dialog...) và lấy dữ liệu mới từ server.
-            if (hadConnectionLoss) {
-                requestReload('reconnected-after-disconnect');
-                return;
-            }
-
+            // Circuit đã kết nối lại thành công. Giữ nguyên phiên làm việc trên màn hình,
+            // không gọi location.reload() để tránh giật trang hoặc mất dữ liệu đang nhập.
+            hadConnectionLoss = false;
             reconnectState = 'connected';
             return;
         }
@@ -93,9 +89,9 @@
         const hiddenDuration = hiddenAt ? now - hiddenAt : 0;
         hiddenAt = null;
 
-        // Nếu tab đã ngủ/treo quá lâu, luôn khởi tạo circuit mới. Đây là cách an toàn
-        // nhất để tránh giữ trạng thái form cũ sau khi trình duyệt throttle tab nền.
-        if (hiddenDuration >= STALE_TAB_RELOAD_MS) {
+        // Chỉ tải lại tab nếu tab đã ẩn quá lâu VÀ kết nối circuit đã đứt/lỗi.
+        // Khi người dùng mở tab mới xem PDF rồi quay lại mà circuit vẫn connected thì tuyệt đối không reload.
+        if (hiddenDuration >= STALE_TAB_RELOAD_MS && (reconnectState === 'failed' || reconnectState === 'rejected')) {
             if (navigator.onLine)
                 requestReload('stale-background-tab');
             return;

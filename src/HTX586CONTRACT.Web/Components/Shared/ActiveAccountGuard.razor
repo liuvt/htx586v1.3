@@ -5,9 +5,12 @@
 
 @code {
     private readonly CancellationTokenSource _disposeCts = new();
+    private readonly SemaphoreSlim _validationGate = new(1, 1);
     private Task? _watchTask;
     private bool _redirecting;
     private bool _locationHooked;
+    private DateTime _lastValidatedAtUtc = DateTime.MinValue;
+    private bool _lastKnownRequiresOnboarding;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -22,7 +25,7 @@
 
         // Chỉ điều hướng sau khi component đã interactive để tránh NavigationException
         // trong giai đoạn static prerender của Blazor Server.
-        await ValidateCurrentAccountAsync(_disposeCts.Token);
+        await ValidateCurrentAccountAsync(_disposeCts.Token, forceRefresh: true);
 
         if (!_redirecting)
             _watchTask = WatchAccountAsync(_disposeCts.Token);
@@ -36,7 +39,7 @@
 
         try
         {
-            await InvokeAsync(() => ValidateCurrentAccountAsync(_disposeCts.Token));
+            await InvokeAsync(() => ValidateCurrentAccountAsync(_disposeCts.Token, forceRefresh: false));
         }
         catch (OperationCanceledException) when (_disposeCts.IsCancellationRequested)
         {
@@ -49,7 +52,7 @@
 
     private async Task WatchAccountAsync(CancellationToken cancellationToken)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(15));
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(60));
 
         try
         {
@@ -57,7 +60,7 @@
             {
                 try
                 {
-                    await ValidateCurrentAccountAsync(cancellationToken);
+                    await ValidateCurrentAccountAsync(cancellationToken, forceRefresh: true);
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
@@ -76,86 +79,113 @@
         }
     }
 
-    private async Task ValidateCurrentAccountAsync(CancellationToken cancellationToken)
+    private async Task ValidateCurrentAccountAsync(CancellationToken cancellationToken, bool forceRefresh = false)
     {
         if (_redirecting)
             return;
 
-        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        var principal = state.User;
-
-        if (principal.Identity?.IsAuthenticated != true)
-            return;
-
-        var userId = principal.FindFirstValue(ClaimTypes.NameIdentifier);
-        if (string.IsNullOrWhiteSpace(userId))
+        if (!forceRefresh &&
+            !_lastKnownRequiresOnboarding &&
+            (DateTime.UtcNow - _lastValidatedAtUtc) < TimeSpan.FromSeconds(15))
         {
-            await InvokeAsync(RedirectToInactiveLogin);
             return;
         }
 
-        await using var db = await Factory.CreateDbContextAsync(cancellationToken);
+        if (!await _validationGate.WaitAsync(0, cancellationToken))
+            return;
 
-        var userState = await db.Users.AsNoTracking()
-            .Where(x => x.Id == userId)
-            .Select(x => new
+        try
+        {
+            if (_redirecting)
+                return;
+
+            var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            var principal = state.User;
+
+            if (principal.Identity?.IsAuthenticated != true)
+                return;
+
+            var userId = principal.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrWhiteSpace(userId))
             {
-                x.IsActive,
-                x.IsDeleted,
-                x.RegistrationStatus,
-                x.VehicleOwnerSignatureFileUrl,
-                HasActiveCompany = db.AdminOffices.Any(a => a.AdminUserId == x.Id &&
-                    a.IsActive && !a.IsDeleted && a.CompanyProfile.IsActive && !a.CompanyProfile.IsDeleted),
-                HasAssignedVehicleWithoutPermit = db.Vehicles.Any(v =>
-                    v.AssignedDriverId == x.Id &&
-                    v.IsActive &&
-                    !v.IsDeleted &&
-                    (v.PermitNumber == null || v.PermitNumber.Trim() == string.Empty))
-            })
-            .FirstOrDefaultAsync(cancellationToken);
-
-        var isOwner = principal.IsInRole("Owner");
-        var isAdmin = principal.IsInRole("Admin");
-        var isVehicleOwner = principal.IsInRole("VehicleOwner");
-
-        var hasSupportedRole = isOwner || isAdmin || isVehicleOwner;
-        var isValid = userState is not null &&
-                      userState.IsActive &&
-                      !userState.IsDeleted &&
-                      hasSupportedRole &&
-                      (!isAdmin || isOwner || userState.HasActiveCompany) &&
-                      (!isVehicleOwner || string.Equals(
-                          userState.RegistrationStatus,
-                          "Approved",
-                          StringComparison.OrdinalIgnoreCase));
-
-        if (!isValid)
-        {
-            await InvokeAsync(RedirectToInactiveLogin);
-            return;
-        }
-
-        if (isVehicleOwner && string.IsNullOrWhiteSpace(userState!.VehicleOwnerSignatureFileUrl))
-        {
-            var path = new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/');
-            if (!string.Equals(path, "/vehicle-owner/account", StringComparison.OrdinalIgnoreCase))
-                await InvokeAsync(() => Navigation.NavigateTo("/vehicle-owner/account?signatureRequired=1"));
-            return;
-        }
-
-        // Xe được phép tạo/import/gán khi chưa có Số phù hiệu. Sau khi tài khoản
-        // VehicleOwner nhận xe, bắt buộc nhập Số phù hiệu đúng một lần trước khi
-        // tiếp tục sử dụng các chức năng khác. Xe đã có PermitNumber sẽ không hỏi lại.
-        if (isVehicleOwner && userState!.HasAssignedVehicleWithoutPermit)
-        {
-            var path = new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/');
-            if (!string.Equals(path, "/vehicle-owner/vehicles", StringComparison.OrdinalIgnoreCase))
-            {
-                var returnUrl = GetCurrentLocalUrl();
-                await InvokeAsync(() => Navigation.NavigateTo(
-                    "/vehicle-owner/vehicles?permitRequired=1&returnUrl=" +
-                    Uri.EscapeDataString(returnUrl)));
+                await InvokeAsync(RedirectToInactiveLogin);
+                return;
             }
+
+            await using var db = await Factory.CreateDbContextAsync(cancellationToken);
+
+            var userState = await db.Users.AsNoTracking()
+                .Where(x => x.Id == userId)
+                .Select(x => new
+                {
+                    x.IsActive,
+                    x.IsDeleted,
+                    x.RegistrationStatus,
+                    x.VehicleOwnerSignatureFileUrl,
+                    HasActiveCompany = db.AdminOffices.Any(a => a.AdminUserId == x.Id &&
+                        a.IsActive && !a.IsDeleted && a.CompanyProfile.IsActive && !a.CompanyProfile.IsDeleted),
+                    HasAssignedVehicleWithoutPermit = db.Vehicles.Any(v =>
+                        v.AssignedDriverId == x.Id &&
+                        v.IsActive &&
+                        !v.IsDeleted &&
+                        (v.PermitNumber == null || v.PermitNumber.Trim() == string.Empty))
+                })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            var isOwner = principal.IsInRole("Owner");
+            var isAdmin = principal.IsInRole("Admin");
+            var isVehicleOwner = principal.IsInRole("VehicleOwner");
+
+            var hasSupportedRole = isOwner || isAdmin || isVehicleOwner;
+            var isValid = userState is not null &&
+                          userState.IsActive &&
+                          !userState.IsDeleted &&
+                          hasSupportedRole &&
+                          (!isAdmin || isOwner || userState.HasActiveCompany) &&
+                          (!isVehicleOwner || string.Equals(
+                              userState.RegistrationStatus,
+                              "Approved",
+                              StringComparison.OrdinalIgnoreCase));
+
+            if (!isValid)
+            {
+                await InvokeAsync(RedirectToInactiveLogin);
+                return;
+            }
+
+            _lastValidatedAtUtc = DateTime.UtcNow;
+
+            if (isVehicleOwner && string.IsNullOrWhiteSpace(userState!.VehicleOwnerSignatureFileUrl))
+            {
+                _lastKnownRequiresOnboarding = true;
+                var path = new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/');
+                if (!string.Equals(path, "/vehicle-owner/account", StringComparison.OrdinalIgnoreCase))
+                    await InvokeAsync(() => Navigation.NavigateTo("/vehicle-owner/account?signatureRequired=1"));
+                return;
+            }
+
+            // Xe được phép tạo/import/gán khi chưa có Số phù hiệu. Sau khi tài khoản
+            // VehicleOwner nhận xe, bắt buộc nhập Số phù hiệu đúng một lần trước khi
+            // tiếp tục sử dụng các chức năng khác. Xe đã có PermitNumber sẽ không hỏi lại.
+            if (isVehicleOwner && userState!.HasAssignedVehicleWithoutPermit)
+            {
+                _lastKnownRequiresOnboarding = true;
+                var path = new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/');
+                if (!string.Equals(path, "/vehicle-owner/vehicles", StringComparison.OrdinalIgnoreCase))
+                {
+                    var returnUrl = GetCurrentLocalUrl();
+                    await InvokeAsync(() => Navigation.NavigateTo(
+                        "/vehicle-owner/vehicles?permitRequired=1&returnUrl=" +
+                        Uri.EscapeDataString(returnUrl)));
+                }
+                return;
+            }
+
+            _lastKnownRequiresOnboarding = false;
+        }
+        finally
+        {
+            _validationGate.Release();
         }
     }
 

@@ -490,11 +490,9 @@ else
             {
                 await JS.InvokeVoidAsync("htx586CompanyTabSync.unregister", _tabSyncToken);
             }
-            catch (JSDisconnectedException)
+            catch
             {
-            }
-            catch (JSException)
-            {
+                // Bỏ qua khi đang static prerender hoặc circuit đã đóng.
             }
         }
 

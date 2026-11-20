@@ -226,6 +226,12 @@ else
                 return;
             }
 
+            if (await db.Vehicles.IgnoreQueryFilters().AnyAsync(x => !x.IsDeleted && x.Id != vehicleId && x.PermitNumber == permitNumber))
+            {
+                Snackbar.Add("Số phù hiệu này đã được gán cho một xe khác.", Severity.Warning);
+                return;
+            }
+
             vehicle.PermitNumber = permitNumber;
             vehicle.UpdatedAt = DateTime.UtcNow;
             vehicle.UpdatedBy = _userId;

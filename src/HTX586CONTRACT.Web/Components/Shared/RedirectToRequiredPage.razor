@@ -13,7 +13,13 @@
         if (!firstRender || _redirected)
             return;
 
-        _redirected = true;
+        await TryRedirectAsync(isPrerenderOrInit: false);
+    }
+
+    private async Task TryRedirectAsync(bool isPrerenderOrInit)
+    {
+        if (_redirected)
+            return;
 
         var authenticationState =
             await AuthenticationStateProvider.GetAuthenticationStateAsync();
@@ -27,7 +33,8 @@
                 ? "/account/login"
                 : "/account/login?returnUrl=" + Uri.EscapeDataString(currentUrl);
 
-            NavigateIfDifferent(loginUrl, forceLoad: true);
+            _redirected = true;
+            NavigateIfDifferent(loginUrl, forceLoad: !isPrerenderOrInit);
             return;
         }
 
@@ -46,11 +53,13 @@
             // Tuyệt đối không NavigateTo chính URL hiện tại.
             // Điều này tránh vòng lặp khi AuthorizeRouteView phát sinh NotAuthorized
             // trong lúc circuit Blazor đang khởi tạo/khôi phục.
+            _redirected = true;
             NavigateIfDifferent(targetUrl);
             return;
         }
 
-        NavigateIfDifferent("/account/login", forceLoad: true);
+        _redirected = true;
+        NavigateIfDifferent("/account/login", forceLoad: !isPrerenderOrInit);
     }
 
     private void NavigateIfDifferent(string targetUrl, bool forceLoad = false)

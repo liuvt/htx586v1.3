@@ -202,6 +202,10 @@ else
             var plate = _model.PlateNumber.Trim().ToUpperInvariant();
             if (await db.Vehicles.IgnoreQueryFilters().AnyAsync(x => !x.IsDeleted && x.Id != Id && x.PlateNumber == plate))
                 throw new InvalidOperationException("Biển số xe đã tồn tại.");
+            var permit = N(_model.PermitNumber);
+            if (!string.IsNullOrWhiteSpace(permit) &&
+                await db.Vehicles.IgnoreQueryFilters().AnyAsync(x => !x.IsDeleted && x.Id != Id && x.PermitNumber == permit))
+                throw new InvalidOperationException("Số phù hiệu xe đã tồn tại trên một xe khác.");
 
             var ownerChanged = !string.Equals(_originalVehicleOwnerId, validOwner?.Id, StringComparison.Ordinal);
             entity.PlateNumber = plate;

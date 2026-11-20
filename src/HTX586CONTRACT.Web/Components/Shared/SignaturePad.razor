@@ -404,15 +404,16 @@
 
     public async ValueTask DisposeAsync()
     {
+        if (!_padInitialized)
+            return;
+
         try
         {
             await JSRuntime.InvokeVoidAsync("signaturePad.destroy", CanvasId);
         }
-        catch (JSDisconnectedException)
+        catch
         {
-        }
-        catch (JSException)
-        {
+            // Bỏ qua khi đang static prerender hoặc circuit đã đóng.
         }
     }
 

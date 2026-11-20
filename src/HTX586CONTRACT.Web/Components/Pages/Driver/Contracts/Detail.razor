@@ -5,6 +5,7 @@
 @inject IDbContextFactory<ApplicationDbContext> Factory
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 @inject ISnackbar Snackbar
 
 <PageTitle>Chi tiết hợp đồng</PageTitle>
@@ -61,13 +62,19 @@ else
                                 Chỉnh sửa / xử lý
                             </MudButton>
                         }
+                        <MudButton Color="Color.Secondary"
+                                   Variant="Variant.Filled"
+                                   StartIcon="@Icons.Material.Filled.Description"
+                                   OnClick="OpenSubContractPdfAsync">
+                            Hợp đồng phụ (PDF)
+                        </MudButton>
                         @if (_detail.Status == ContractStatus.Completed)
                         {
                             <MudButton Color="Color.Success"
                                        Variant="Variant.Outlined"
                                        StartIcon="@Icons.Material.Filled.PictureAsPdf"
                                        OnClick="OpenPdfAsync">
-                                Mở PDF
+                                Mở PDF HĐ chính
                             </MudButton>
                         }
                     </MudStack>
@@ -529,6 +536,50 @@ else
             </MudStack>
         </MudPaper>
 
+        <!-- SUB CONTRACT -->
+        <MudPaper Class="pa-4" Elevation="1">
+            <MudStack Spacing="3">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                    <MudAvatar Color="Color.Secondary" Variant="Variant.Filled" Size="Size.Medium">
+                        <MudIcon Icon="@Icons.Material.Filled.Description" />
+                    </MudAvatar>
+                    <MudStack Spacing="0" Class="flex-grow-1">
+                        <MudText Typo="Typo.h6">Hợp đồng phụ kèm theo — HỢP ĐỒNG DỊCH VỤ VẬN TẢI</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Tự động ánh xạ theo Đơn vị (@_detail.CompanyName) và Chủ phương tiện/Xe.</MudText>
+                    </MudStack>
+                    <MudButton Color="Color.Secondary"
+                               Variant="Variant.Filled"
+                               StartIcon="@Icons.Material.Filled.Description"
+                               OnClick="OpenSubContractPdfAsync">
+                        Hợp đồng phụ (PDF)
+                    </MudButton>
+                </MudStack>
+                <MudDivider />
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" md="6">
+                        <MudList T="string" Dense="true" Class="pa-0">
+                            <InfoListItem Label="Số Hợp đồng phụ" Value="@_detail.SubContractNumber" Icon="@Icons.Material.Filled.Tag" />
+                            <InfoListItem Label="Thời hạn hiệu lực (4 năm)" Value="@($"{FormatDate(_detail.SubContractEffectiveFrom)} → {FormatDate(_detail.SubContractEffectiveTo)}")" Icon="@Icons.Material.Filled.DateRange" />
+                            <InfoListItem Label="Bên A (Đơn vị cung ứng DVVT)" Value="@_detail.CompanyName" Icon="@Icons.Material.Filled.Business" />
+                            <InfoListItem Label="Mã số thuế Bên A" Value="@(_detail.CompanyTaxCode ?? "-")" Icon="@Icons.Material.Filled.ReceiptLong" />
+                            <InfoListItem Label="Số GPKDVT / ĐKKD" Value="@(_detail.CompanyBusinessLicenseNumber ?? "-")" Icon="@Icons.Material.Filled.Badge" />
+                            <InfoListItem Label="Đại diện Bên A" Value="@($"{_detail.CompanyRepresentativeName ?? "-"} ({_detail.CompanyRepresentativePosition ?? "Giám đốc"})")" Icon="@Icons.Material.Filled.Person" />
+                        </MudList>
+                    </MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudList T="string" Dense="true" Class="pa-0">
+                            <InfoListItem Label="Bên B (Chủ phương tiện)" Value="@(_detail.OwnerName ?? "-")" Icon="@Icons.Material.Filled.Person" />
+                            <InfoListItem Label="CCCD Bên B" Value="@($"{_detail.OwnerCitizenId ?? "-"} (cấp {FormatDate(_detail.OwnerCitizenIdIssuedDate)})")" Icon="@Icons.Material.Filled.CreditCard" />
+                            <InfoListItem Label="Địa chỉ Bên B" Value="@(_detail.OwnerAddress ?? "-")" Icon="@Icons.Material.Filled.Place" />
+                            <InfoListItem Label="Phương tiện / Nhãn hiệu" Value="@($"{_detail.VehiclePlate ?? "-"} · {_detail.VehicleBrand ?? "-"} ({FormatNumber(_detail.SeatCount)} chỗ)")" Icon="@Icons.Material.Filled.DirectionsCar" />
+                            <InfoListItem Label="Số khung / Số máy" Value="@($"{_detail.VehicleChassisNumber ?? "-"} / {_detail.VehicleEngineNumber ?? "-"}")" Icon="@Icons.Material.Filled.Build" />
+                            <InfoListItem Label="Loại phương tiện" Value="@(_detail.BusinessType == ContractBusinessType.Cargo ? "XE TẢI" : "XE HỢP ĐỒNG")" Icon="@Icons.Material.Filled.LocalShipping" />
+                        </MudList>
+                    </MudItem>
+                </MudGrid>
+            </MudStack>
+        </MudPaper>
+
         <!-- BOTTOM ACTIONS -->
         <MudPaper Class="pa-3" Elevation="1">
             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap">
@@ -538,9 +589,10 @@ else
                 {
                     <MudButton Href="@($"/vehicle-owner/contracts/{Id}")" Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Edit">Chỉnh sửa / xử lý</MudButton>
                 }
+                <MudButton Color="Color.Secondary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Description" OnClick="OpenSubContractPdfAsync">Hợp đồng phụ (PDF)</MudButton>
                 @if (_detail.Status == ContractStatus.Completed)
                 {
-                    <MudButton Color="Color.Success" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PictureAsPdf" OnClick="OpenPdfAsync">Mở PDF</MudButton>
+                    <MudButton Color="Color.Success" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PictureAsPdf" OnClick="OpenPdfAsync">Mở PDF HĐ chính</MudButton>
                 }
             </MudStack>
         </MudPaper>
@@ -649,7 +701,20 @@ else
         try
         {
             var url = await DocumentService.GeneratePdfAsync(Id);
-            Navigation.NavigateTo(url, true);
+            await JS.InvokeVoidAsync("open", url, "_blank");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task OpenSubContractPdfAsync()
+    {
+        try
+        {
+            var url = await DocumentService.GenerateSubContractPdfAsync(Id);
+            await JS.InvokeVoidAsync("open", url, "_blank");
         }
         catch (Exception ex)
         {

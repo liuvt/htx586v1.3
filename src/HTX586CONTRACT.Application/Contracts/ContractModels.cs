@@ -70,8 +70,10 @@ public sealed class ContractDetailDto
     public string? CompanyPhoneNumber { get; set; }
     public string? CompanyComplaintContact { get; set; }
     public string? CompanyRepresentativeName { get; set; }
+    public string? CompanyRepresentativePosition { get; set; }
     public string? CompanyRepresentativeCitizenId { get; set; }
     public DateTime? CompanyRepresentativeCitizenIdIssuedDate { get; set; }
+    public string? CompanyRepresentativeCitizenIdIssuedPlace { get; set; }
     public string? CompanyRepresentativeSignatureFileUrl { get; set; }
     public DateTime? CompanyRepresentativeSignedAt { get; set; }
 
@@ -98,14 +100,25 @@ public sealed class ContractDetailDto
     public Guid? VehicleId { get; set; }
     public string? VehiclePlate { get; set; }
     public string? VehicleCode { get; set; }
+    public string? VehiclePermitNumber { get; set; }
     public string? VehicleBrand { get; set; }
+    public string? VehicleType { get; set; }
+    public string? VehicleChassisNumber { get; set; }
+    public string? VehicleEngineNumber { get; set; }
     public int? SeatCount { get; set; }
     public int? ActualPassengerCount { get; set; }
     public string? OwnerName { get; set; }
     public string? OwnerCitizenId { get; set; }
     public DateTime? OwnerCitizenIdIssuedDate { get; set; }
+    public string? OwnerCitizenIdIssuedPlace { get; set; }
+    public string? OwnerAddress { get; set; }
+    public string? OwnerPhoneNumber { get; set; }
     public string? VehicleOwnerSignatureFileUrl { get; set; }
     public DateTime? VehicleOwnerSignedAt { get; set; }
+
+    public string SubContractNumber { get; set; } = string.Empty;
+    public DateTime SubContractEffectiveFrom { get; set; }
+    public DateTime SubContractEffectiveTo { get; set; }
 
     public string? OperatingDriverName { get; set; }
     public string? OperatingDriverPhoneNumber { get; set; }
