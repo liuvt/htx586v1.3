@@ -1,0 +1,885 @@
+@page "/owner/sub-contract-templates"
+@attribute [Authorize(Roles = "Owner")]
+@inject SubContractTemplateService TemplateService
+@inject IDbContextFactory<ApplicationDbContext> Factory
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IUploadFileStorage Storage
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<PageTitle>Quản lý mẫu Hợp đồng phụ (Web & Word)</PageTitle>
+<PageHeader Title="Quản lý mẫu Hợp đồng phụ — HỢP ĐỒNG DỊCH VỤ VẬN TẢI"
+            Subtitle="Chỉnh sửa trực tiếp trên Web (Hướng 1) hoặc Tải về / Upload file Word .docx theo từng Đơn vị (Hướng 3). Chỉ Owner mới có quyền truy cập và chỉnh sửa." />
+
+@if (!_authChecked || _loading)
+{
+    <MudPaper Class="pa-6" Outlined="true">
+        <MudStack AlignItems="AlignItems.Center" Spacing="2">
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+            <MudText Typo="Typo.body2" Color="Color.Secondary">Đang tải cấu hình mẫu Hợp đồng phụ...</MudText>
+        </MudStack>
+    </MudPaper>
+}
+else if (!_isOwner)
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Filled">
+        Chỉ tài khoản <b>Owner (Chủ hệ thống)</b> mới có quyền truy cập và chỉnh sửa mẫu Hợp đồng phụ.
+    </MudAlert>
+}
+else
+{
+    <MudStack Spacing="3" Class="subcontract-editor-page">
+        <!-- THANH CÔNG CỤ CHỌN ĐƠN VỊ + WORD (.DOCX) + LƯU -->
+        <MudPaper Class="pa-4" Elevation="1">
+            <MudGrid Spacing="2">
+                <MudItem xs="12" md="5">
+                    <MudSelect T="string"
+                               Label="Chọn Đơn vị (Công ty / Văn phòng) hoặc Mẫu mặc định"
+                               Value="@_selectedTargetKey"
+                               ValueChanged="OnTargetChangedAsync"
+                               Variant="Variant.Outlined"
+                               Dense="true"
+                               AdornmentIcon="@Icons.Material.Filled.Apartment"
+                               AdornmentColor="Color.Primary">
+                        <MudSelectItem T="string" Value="@PresetCaoSonKey">
+                            [Mẫu gốc mặc định] Nhóm Cao Sơn Car (HTXCSRCN / 11 điều khoản)
+                        </MudSelectItem>
+                        <MudSelectItem T="string" Value="@PresetMekongKey">
+                            [Mẫu gốc mặc định] Nhóm Mekong Xanh / HTX (HTXMKXCN / 10 điều khoản)
+                        </MudSelectItem>
+                        @foreach (var company in _companies)
+                        {
+                            <MudSelectItem T="string" Value="@company.Id.ToString()">
+                                @company.CompanyName @(TemplateService.HasCustomCompanyTemplate(company.Id) ? " — [Đã tùy chỉnh riêng]" : " — [Đang kế thừa mặc định]")
+                            </MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem xs="12" md="7">
+                    <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" Justify="Justify.FlexEnd" AlignItems="AlignItems.Center">
+                        <MudButton Variant="Variant.Filled"
+                                   Color="Color.Primary"
+                                   StartIcon="@Icons.Material.Filled.Save"
+                                   Disabled="@_saving"
+                                   OnClick="SaveTemplateAsync">
+                            @(_saving ? "Đang lưu..." : "Lưu mẫu Hợp đồng phụ")
+                        </MudButton>
+
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Info"
+                                   StartIcon="@Icons.Material.Filled.Download"
+                                   Disabled="@_saving"
+                                   OnClick="DownloadTemplateDocxAsync">
+                            Tải mẫu Word (.docx)
+                        </MudButton>
+
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Secondary"
+                                   StartIcon="@Icons.Material.Filled.Visibility"
+                                   Disabled="@_saving"
+                                   OnClick="DownloadSampleFilledDocxAsync">
+                            Tải Word (.docx) điền mẫu
+                        </MudButton>
+
+                        <InputFile id="subcontract-docx-upload"
+                                   OnChange="OnDocxInputFileChangedAsync"
+                                   accept=".docx"
+                                   style="display:none" />
+                        <MudButton HtmlTag="label"
+                                   Variant="Variant.Filled"
+                                   Color="Color.Info"
+                                   StartIcon="@Icons.Material.Filled.UploadFile"
+                                   Disabled="@_saving"
+                                   for="subcontract-docx-upload">
+                            Upload file Word (.docx)
+                        </MudButton>
+
+                        <MudButton Variant="Variant.Outlined"
+                                   Color="Color.Warning"
+                                   StartIcon="@Icons.Material.Filled.RestartAlt"
+                                   Disabled="@_saving"
+                                   OnClick="ResetToDefaultAsync">
+                            Khôi phục mặc định
+                        </MudButton>
+                    </MudStack>
+                </MudItem>
+            </MudGrid>
+
+            <MudDivider Class="my-3" />
+
+            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap" Spacing="2">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                    <MudChip T="string" Color="@(_isCustomForSelectedCompany ? Color.Success : Color.Info)" Variant="Variant.Filled" Size="Size.Small">
+                        @TargetStatusBadgeText
+                    </MudChip>
+                    @if (!string.IsNullOrWhiteSpace(_editingTemplate.UploadedDocxFileName))
+                    {
+                        <MudChip T="string" Color="Color.Secondary" Variant="Variant.Outlined" Size="Size.Small" Icon="@Icons.Material.Filled.Description">
+                            Đã nạp từ Word: @_editingTemplate.UploadedDocxFileName
+                        </MudChip>
+                    }
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Cập nhật lần cuối: @VietnamTime(_editingTemplate.UpdatedAtUtc).ToString("dd/MM/yyyy HH:mm")
+                    </MudText>
+                </MudStack>
+
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                    <MudButton Size="Size.Small"
+                               Variant="Variant.Text"
+                               Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.ContentCopy"
+                               OnClick="@(() => LoadPresetIntoEditor(isCaoSon: true))">
+                        Nạp khung Cao Sơn Car
+                    </MudButton>
+                    <MudButton Size="Size.Small"
+                               Variant="Variant.Text"
+                               Color="Color.Secondary"
+                               StartIcon="@Icons.Material.Filled.ContentCopy"
+                               OnClick="@(() => LoadPresetIntoEditor(isCaoSon: false))">
+                        Nạp khung Mekong Xanh
+                    </MudButton>
+                </MudStack>
+            </MudStack>
+        </MudPaper>
+
+        <!-- DANH SÁCH BIẾN ĐỘNG {{...}} -->
+        <MudPaper Class="pa-3" Elevation="0" Outlined="true">
+            <MudStack Spacing="1">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap">
+                    <MudText Typo="Typo.subtitle2" Color="Color.Primary">
+                        <MudIcon Icon="@Icons.Material.Filled.Code" Size="Size.Small" Class="mr-1" />
+                        Từ điển biến tự động (Bấm vào biến để sao chép nhanh khi soạn trên Web hoặc trong file Word .docx)
+                    </MudText>
+                    <MudSwitch T="bool"
+                               @bind-Value="_previewWithSampleData"
+                               Color="Color.Primary"
+                               Label="Xem trước A4 với dữ liệu thực tế của Đơn vị" />
+                </MudStack>
+                <div class="placeholder-chip-list">
+                    @foreach (var p in SubContractTemplateService.SupportedPlaceholders)
+                    {
+                        <MudTooltip Text="@($"{p.Label} — Ví dụ: {p.SampleValue}")">
+                            <MudChip T="string"
+                                     Size="Size.Small"
+                                     Variant="Variant.Outlined"
+                                     Color="Color.Primary"
+                                     OnClick="@(() => CopyPlaceholderAsync(p.Token))">
+                                <b>@p.Token</b>&nbsp;<span class="text-muted">(@p.Label)</span>
+                            </MudChip>
+                        </MudTooltip>
+                    }
+                </div>
+            </MudStack>
+        </MudPaper>
+
+        <!-- KHUNG SOẠN THẢO WEB (BÊN TRÁI) & XEM TRƯỚC TRANG A4 TRỰC TIẾP (BÊN PHẢI) -->
+        <MudGrid Spacing="3">
+            <!-- BÊN TRÁI: SOẠN THẢO TRỰC TIẾP (HƯỚNG 1) -->
+            <MudItem xs="12" lg="6">
+                <MudPaper Class="pa-4 editor-scroll-panel" Elevation="1">
+                    <MudStack Spacing="3">
+                        <MudText Typo="Typo.h6">1. Quốc hiệu, Tiêu đề Đơn vị &amp; Số Hợp đồng</MudText>
+
+                        <MudGrid Spacing="2">
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_editingTemplate.TemplateName"
+                                              Immediate="true"
+                                              Label="Tên mẫu quản lý"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_editingTemplate.UnitHeaderTitle"
+                                              Immediate="true"
+                                              Label="Tiêu đề Đơn vị góc trái (hoặc {{COMPANY_NAME}})"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense" />
+                            </MudItem>
+                            <MudItem xs="12" md="5">
+                                <MudTextField @bind-Value="_editingTemplate.ContractNumberLine"
+                                              Immediate="true"
+                                              Label="Dòng Số HĐ"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense" />
+                            </MudItem>
+                            <MudItem xs="12" md="7">
+                                <MudTextField @bind-Value="_editingTemplate.DocumentTitle"
+                                              Immediate="true"
+                                              Label="Tiêu đề chính văn bản"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense" />
+                            </MudItem>
+                        </MudGrid>
+
+                        <MudTextField @bind-Value="_editingTemplate.LegalBasesText"
+                                      Immediate="true"
+                                      Label="Căn cứ pháp lý (mỗi dòng 1 căn cứ)"
+                                      Lines="5"
+                                      Variant="Variant.Outlined" />
+
+                        <MudTextField @bind-Value="_editingTemplate.IntroLocationText"
+                                      Immediate="true"
+                                      Label="Dòng thời gian &amp; địa điểm lập hợp đồng"
+                                      Lines="2"
+                                      Variant="Variant.Outlined" />
+
+                        <MudDivider />
+                        <MudText Typo="Typo.h6">2. Thông tin Bên A (Đơn vị), Bên B (Chủ xe) &amp; Lời dẫn</MudText>
+
+                        <MudTextField @bind-Value="_editingTemplate.PartyAText"
+                                      Immediate="true"
+                                      Label="Nội dung chi tiết Bên A — Đơn vị cung ứng dịch vụ vận tải (mỗi dòng 1 mục)"
+                                      Lines="6"
+                                      Variant="Variant.Outlined" />
+
+                        <MudTextField @bind-Value="_editingTemplate.PartyBText"
+                                      Immediate="true"
+                                      Label="Nội dung chi tiết Bên B — Chủ phương tiện / Xe (mỗi dòng 1 mục)"
+                                      Lines="6"
+                                      Variant="Variant.Outlined" />
+
+                        <MudTextField @bind-Value="_editingTemplate.PreambleText"
+                                      Immediate="true"
+                                      Label="Lời dẫn thỏa thuận trước các Điều khoản"
+                                      Lines="3"
+                                      Variant="Variant.Outlined" />
+
+                        <MudDivider />
+                        <MudText Typo="Typo.h6">3. Nội dung các Điều khoản (Điều 1 → Điều 5)</MudText>
+
+                        <MudTextField @bind-Value="_editingTemplate.Article1Text"
+                                      Immediate="true"
+                                      Label="Điều 1: Nội dung sản phẩm dịch vụ"
+                                      Lines="6"
+                                      Variant="Variant.Outlined" />
+
+                        <MudTextField @bind-Value="_editingTemplate.Article2Text"
+                                      Immediate="true"
+                                      Label="Điều 2: Phí dịch vụ và phương thức thanh toán"
+                                      Lines="3"
+                                      Variant="Variant.Outlined" />
+
+                        <MudTextField @bind-Value="_editingTemplate.Article3PartyAText"
+                                      Immediate="true"
+                                      Label="Điều 3 — Mục 1: Trách nhiệm và quyền hạn của Bên A (Đơn vị / HTX)"
+                                      Lines="11"
+                                      Variant="Variant.Outlined" />
+
+                        <MudTextField @bind-Value="_editingTemplate.Article3PartyBText"
+                                      Immediate="true"
+                                      Label="Điều 3 — Mục 2: Trách nhiệm và quyền hạn của Bên B (Chủ phương tiện)"
+                                      Lines="9"
+                                      Variant="Variant.Outlined" />
+
+                        <MudTextField @bind-Value="_editingTemplate.Article4Text"
+                                      Immediate="true"
+                                      Label="Điều 4: Các thỏa thuận khác"
+                                      Lines="7"
+                                      Variant="Variant.Outlined" />
+
+                        <MudTextField @bind-Value="_editingTemplate.Article5Text"
+                                      Immediate="true"
+                                      Label="Điều 5: Thời hạn hiệu lực hợp đồng (4 năm)"
+                                      Lines="6"
+                                      Variant="Variant.Outlined" />
+
+                        <MudDivider />
+                        <MudText Typo="Typo.h6">4. Khối Chữ ký cuối trang</MudText>
+                        <MudGrid Spacing="2">
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_editingTemplate.SignatureLeftTitle"
+                                              Immediate="true"
+                                              Label="Tiêu đề cột ký Bên A"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense" />
+                            </MudItem>
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="_editingTemplate.SignatureRightTitle"
+                                              Immediate="true"
+                                              Label="Tiêu đề cột ký Bên B"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+
+            <!-- BÊN PHẢI: XEM TRƯỚC TRANG GIẤY A4 TRỰC TIẾP -->
+            <MudItem xs="12" lg="6">
+                <MudPaper Class="pa-4 preview-scroll-panel" Elevation="1">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="mb-3">
+                        <MudText Typo="Typo.subtitle1" Class="fw-700">
+                            Xem trước Bản in A4 (@(_previewWithSampleData ? "Đã điền dữ liệu mẫu" : "Hiển thị nguyên biến {{...}}"))
+                        </MudText>
+                        <MudChip T="string" Size="Size.Small" Color="Color.Default" Variant="Variant.Outlined">
+                            Times New Roman · Chuẩn A4
+                        </MudChip>
+                    </MudStack>
+
+                    <div class="a4-preview-sheet">
+                        <div class="a4-header-grid">
+                            <div class="a4-header-left">
+                                <div class="a4-bold">@RenderLine(_editingTemplate.UnitHeaderTitle)</div>
+                                <div>-----------------------</div>
+                                <div class="a4-regular">@RenderLine(_editingTemplate.ContractNumberLine)</div>
+                            </div>
+                            <div class="a4-header-right">
+                                <div class="a4-bold">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
+                                <div class="a4-bold">Độc lập - Tự do - Hạnh phúc</div>
+                                <div>--------------------</div>
+                            </div>
+                        </div>
+
+                        <div class="a4-title-block">
+                            <div class="a4-main-title">@RenderLine(_editingTemplate.DocumentTitle)</div>
+                        </div>
+
+                        <div class="a4-section">
+                            @foreach (var line in SplitLines(_editingTemplate.LegalBasesText))
+                            {
+                                <div class="a4-paragraph a4-italic a4-indent">@RenderLine(line)</div>
+                            }
+                        </div>
+
+                        <div class="a4-section">
+                            @foreach (var line in SplitLines(_editingTemplate.IntroLocationText))
+                            {
+                                <div class="a4-paragraph a4-indent">@RenderLine(line)</div>
+                            }
+                        </div>
+
+                        <div class="a4-section">
+                            <div class="a4-paragraph a4-bold">Bên A : ( Bên cung ứng dịch vụ vận tải)</div>
+                            @foreach (var line in SplitLines(_editingTemplate.PartyAText))
+                            {
+                                <div class="a4-paragraph a4-indent">@RenderLine(line)</div>
+                            }
+                        </div>
+
+                        <div class="a4-section">
+                            <div class="a4-paragraph a4-bold">Bên B : ( Bên sử dụng dịch vụ vận tải )</div>
+                            @foreach (var line in SplitLines(_editingTemplate.PartyBText))
+                            {
+                                <div class="a4-paragraph a4-indent">@RenderLine(line)</div>
+                            }
+                        </div>
+
+                        <div class="a4-section">
+                            @foreach (var line in SplitLines(_editingTemplate.PreambleText))
+                            {
+                                <div class="a4-paragraph a4-indent">@RenderLine(line)</div>
+                            }
+                        </div>
+
+                        <div class="a4-section">
+                            <div class="a4-paragraph a4-bold">Điều 1: Nội dung sản phẩm dịch vụ</div>
+                            @foreach (var line in SplitLines(_editingTemplate.Article1Text))
+                            {
+                                <div class="a4-paragraph a4-indent">@RenderLine(line)</div>
+                            }
+                        </div>
+
+                        <div class="a4-section">
+                            <div class="a4-paragraph a4-bold">Điều 2: Phí dịch vụ và phương thức thanh toán khi thành viên nhận dịch vụ hợp tác xã phải trả cho Hợp Tác Xã một khoản chi phí:</div>
+                            @foreach (var line in SplitLines(_editingTemplate.Article2Text))
+                            {
+                                <div class="a4-paragraph a4-indent">@RenderLine(line)</div>
+                            }
+                        </div>
+
+                        <div class="a4-section">
+                            <div class="a4-paragraph a4-bold">Điều 3: Trách nhiệm và quyền hạn của các bên:</div>
+                            <div class="a4-paragraph a4-bold">1. Trách nhiệm và quyền hạn của bên A:</div>
+                            @foreach (var line in SplitLines(_editingTemplate.Article3PartyAText))
+                            {
+                                <div class="a4-paragraph @(IsBoldSubHeading(line) ? "a4-bold" : "a4-indent")">@RenderLine(line)</div>
+                            }
+                            <div class="a4-paragraph a4-bold">2. Trách nhiệm và quyền hạn của bên B:</div>
+                            @foreach (var line in SplitLines(_editingTemplate.Article3PartyBText))
+                            {
+                                <div class="a4-paragraph @(IsBoldSubHeading(line) ? "a4-bold" : "a4-indent")">@RenderLine(line)</div>
+                            }
+                        </div>
+
+                        <div class="a4-section">
+                            <div class="a4-paragraph a4-bold">Điều 4: Các thỏa thuận khác</div>
+                            @foreach (var line in SplitLines(_editingTemplate.Article4Text))
+                            {
+                                <div class="a4-paragraph a4-indent">@RenderLine(line)</div>
+                            }
+                        </div>
+
+                        <div class="a4-section">
+                            <div class="a4-paragraph a4-bold">Điều 5: Thời hạn hiệu lực hợp đồng</div>
+                            @foreach (var line in SplitLines(_editingTemplate.Article5Text))
+                            {
+                                <div class="a4-paragraph a4-indent">@RenderLine(line)</div>
+                            }
+                        </div>
+
+                        <div class="a4-signature-grid">
+                            <div class="a4-signature-col">
+                                <div class="a4-bold">@RenderLine(_editingTemplate.SignatureLeftTitle)</div>
+                                <div class="a4-signature-space">(Chữ ký &amp; con dấu Đơn vị)</div>
+                                <div class="a4-bold">@RenderLine("{{COMPANY_REPRESENTATIVE}}")</div>
+                            </div>
+                            <div class="a4-signature-col">
+                                <div class="a4-bold">@RenderLine(_editingTemplate.SignatureRightTitle)</div>
+                                <div class="a4-signature-space">(Chữ ký Chủ phương tiện)</div>
+                                <div class="a4-bold">@RenderLine("{{OWNER_NAME}}")</div>
+                            </div>
+                        </div>
+                    </div>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    </MudStack>
+}
+
+<style>
+    .placeholder-chip-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        max-height: 135px;
+        overflow-y: auto;
+        padding: 4px 0;
+    }
+
+    .editor-scroll-panel,
+    .preview-scroll-panel {
+        max-height: calc(100vh - 210px);
+        overflow-y: auto;
+    }
+
+    .a4-preview-sheet {
+        background: #ffffff;
+        color: #111827;
+        border: 1px solid #d1d5db;
+        box-shadow: 0 8px 28px rgba(15, 23, 42, 0.08);
+        border-radius: 6px;
+        padding: 36px 42px;
+        font-family: "Times New Roman", Times, serif;
+        font-size: 13.5px;
+        line-height: 1.52;
+    }
+
+    .a4-header-grid {
+        display: grid;
+        grid-template-columns: 1fr 1.15fr;
+        gap: 12px;
+        margin-bottom: 16px;
+    }
+
+    .a4-header-left,
+    .a4-header-right {
+        text-align: center;
+    }
+
+    .a4-title-block {
+        text-align: center;
+        margin: 14px 0 16px;
+    }
+
+    .a4-main-title {
+        font-size: 18px;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+
+    .a4-section {
+        margin-top: 8px;
+    }
+
+    .a4-paragraph {
+        margin-bottom: 4px;
+        text-align: justify;
+        white-space: pre-wrap;
+    }
+
+    .a4-indent {
+        padding-left: 16px;
+    }
+
+    .a4-bold {
+        font-weight: 700;
+    }
+
+    .a4-italic {
+        font-style: italic;
+    }
+
+    .a4-signature-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        margin-top: 28px;
+        text-align: center;
+    }
+
+    .a4-signature-space {
+        height: 68px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #9ca3af;
+        font-style: italic;
+        font-size: 12px;
+    }
+</style>
+
+@code {
+    private const string PresetCaoSonKey = "PRESET:CAOSON";
+    private const string PresetMekongKey = "PRESET:MEKONG";
+
+    private bool _authChecked;
+    private bool _isOwner;
+    private bool _loading = true;
+    private bool _saving;
+    private bool _previewWithSampleData = true;
+    private string _selectedTargetKey = PresetCaoSonKey;
+    private bool _isCustomForSelectedCompany;
+
+    private List<CompanyProfile> _companies = [];
+    private SubContractTemplateDto _editingTemplate = SubContractTemplateService.CreateDefaultPreset(isCaoSon: true);
+    private Dictionary<string, string> _samplePlaceholders = new(StringComparer.OrdinalIgnoreCase);
+
+    private CompanyProfile? SelectedCompany
+        => Guid.TryParse(_selectedTargetKey, out var id)
+            ? _companies.FirstOrDefault(x => x.Id == id)
+            : null;
+
+    private string TargetStatusBadgeText
+    {
+        get
+        {
+            if (_selectedTargetKey == PresetCaoSonKey)
+                return "Mẫu gốc mặc định: Nhóm Cao Sơn Car";
+            if (_selectedTargetKey == PresetMekongKey)
+                return "Mẫu gốc mặc định: Nhóm Mekong Xanh / HTX";
+
+            return _isCustomForSelectedCompany
+                ? $"Mẫu tùy chỉnh riêng cho: {SelectedCompany?.CompanyName}"
+                : $"Đang kế thừa mẫu mặc định cho: {SelectedCompany?.CompanyName}";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var auth = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            _isOwner = auth.User.Identity?.IsAuthenticated == true && auth.User.IsInRole("Owner");
+            _authChecked = true;
+
+            if (!_isOwner)
+                return;
+
+            await using var db = await Factory.CreateDbContextAsync();
+            _companies = await db.CompanyProfiles.AsNoTracking()
+                .Where(x => x.IsActive && !x.IsDeleted)
+                .OrderBy(x => x.CompanyName)
+                .ToListAsync();
+
+            if (_companies.Count > 0)
+            {
+                _selectedTargetKey = _companies[0].Id.ToString();
+            }
+
+            LoadTargetIntoEditor(_selectedTargetKey);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task OnTargetChangedAsync(string newKey)
+    {
+        _selectedTargetKey = newKey;
+        LoadTargetIntoEditor(newKey);
+        return Task.CompletedTask;
+    }
+
+    private void LoadTargetIntoEditor(string targetKey)
+    {
+        if (targetKey == PresetCaoSonKey)
+        {
+            _editingTemplate = TemplateService.GetTemplateForCompany(null, "CAO SƠN CAR", "0319340385-001");
+            _isCustomForSelectedCompany = false;
+            _samplePlaceholders = SubContractTemplateService.BuildSamplePlaceholders(null);
+            return;
+        }
+
+        if (targetKey == PresetMekongKey)
+        {
+            _editingTemplate = TemplateService.GetTemplateForCompany(null, "HTX CỘNG ĐỒNG MEKONG XANH", "0316700428-002");
+            _isCustomForSelectedCompany = false;
+            _samplePlaceholders = SubContractTemplateService.BuildSamplePlaceholders(null);
+            _samplePlaceholders["{{COMPANY_NAME}}"] = "CN HTX CỘNG ĐỒNG MEKONG XANH TẠI CẦN THƠ";
+            _samplePlaceholders["{{SUB_CONTRACT_NUMBER}}"] = "0709. 04HTXMKXCN";
+            return;
+        }
+
+        if (Guid.TryParse(targetKey, out var companyId))
+        {
+            var company = _companies.FirstOrDefault(x => x.Id == companyId);
+            _isCustomForSelectedCompany = TemplateService.HasCustomCompanyTemplate(companyId);
+            _editingTemplate = TemplateService.GetTemplateForCompany(
+                companyId,
+                company?.CompanyName,
+                company?.TaxCode);
+            _samplePlaceholders = SubContractTemplateService.BuildSamplePlaceholders(company);
+        }
+    }
+
+    private void LoadPresetIntoEditor(bool isCaoSon)
+    {
+        var source = SubContractTemplateService.CreateDefaultPreset(isCaoSon);
+        if (SelectedCompany is not null)
+        {
+            source.CompanyProfileId = SelectedCompany.Id;
+            source.TemplateName = $"Mẫu HĐ phụ - {SelectedCompany.CompanyName}";
+        }
+
+        _editingTemplate = source;
+        Snackbar.Add($"Đã nạp nội dung khung {(isCaoSon ? "Cao Sơn Car" : "Mekong Xanh")} vào trình soạn thảo. Bấm 'Lưu mẫu Hợp đồng phụ' để áp dụng.", Severity.Info);
+    }
+
+    private async Task SaveTemplateAsync()
+    {
+        if (_saving)
+            return;
+
+        _saving = true;
+        try
+        {
+            if (_selectedTargetKey == PresetCaoSonKey)
+            {
+                await TemplateService.SaveCompanyTemplateAsync(
+                    AuthenticationStateProvider,
+                    companyProfileId: null,
+                    _editingTemplate,
+                    companyName: "CAO SƠN CAR",
+                    taxCode: "0319340385-001");
+                Snackbar.Add("Đã lưu mẫu mặc định cho nhóm Cao Sơn Car.", Severity.Success);
+            }
+            else if (_selectedTargetKey == PresetMekongKey)
+            {
+                await TemplateService.SaveCompanyTemplateAsync(
+                    AuthenticationStateProvider,
+                    companyProfileId: null,
+                    _editingTemplate,
+                    companyName: "HTX CỘNG ĐỒNG MEKONG XANH",
+                    taxCode: "0316700428-002");
+                Snackbar.Add("Đã lưu mẫu mặc định cho nhóm Mekong Xanh / HTX.", Severity.Success);
+            }
+            else if (SelectedCompany is not null)
+            {
+                await TemplateService.SaveCompanyTemplateAsync(
+                    AuthenticationStateProvider,
+                    SelectedCompany.Id,
+                    _editingTemplate,
+                    SelectedCompany.CompanyName,
+                    SelectedCompany.TaxCode);
+                Snackbar.Add($"Đã lưu mẫu Hợp đồng phụ riêng cho đơn vị '{SelectedCompany.CompanyName}'.", Severity.Success);
+            }
+
+            LoadTargetIntoEditor(_selectedTargetKey);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task ResetToDefaultAsync()
+    {
+        if (_saving)
+            return;
+
+        _saving = true;
+        try
+        {
+            if (_selectedTargetKey == PresetCaoSonKey)
+            {
+                await TemplateService.ResetCompanyTemplateToDefaultAsync(
+                    AuthenticationStateProvider,
+                    companyProfileId: null,
+                    companyName: "CAO SƠN CAR",
+                    taxCode: "0319340385-001");
+                Snackbar.Add("Đã khôi phục mẫu gốc Cao Sơn Car về mặc định ban đầu.", Severity.Success);
+            }
+            else if (_selectedTargetKey == PresetMekongKey)
+            {
+                await TemplateService.ResetCompanyTemplateToDefaultAsync(
+                    AuthenticationStateProvider,
+                    companyProfileId: null,
+                    companyName: "HTX CỘNG ĐỒNG MEKONG XANH",
+                    taxCode: "0316700428-002");
+                Snackbar.Add("Đã khôi phục mẫu gốc Mekong Xanh về mặc định ban đầu.", Severity.Success);
+            }
+            else if (SelectedCompany is not null)
+            {
+                await TemplateService.ResetCompanyTemplateToDefaultAsync(
+                    AuthenticationStateProvider,
+                    SelectedCompany.Id,
+                    SelectedCompany.CompanyName,
+                    SelectedCompany.TaxCode);
+                Snackbar.Add($"Đã xóa tùy chỉnh riêng và khôi phục mẫu mặc định cho '{SelectedCompany.CompanyName}'.", Severity.Success);
+            }
+
+            LoadTargetIntoEditor(_selectedTargetKey);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task DownloadTemplateDocxAsync()
+    {
+        try
+        {
+            var bytes = TemplateService.ExportTemplateAsDocxBytes(_editingTemplate, replacements: null);
+            var url = await SavePreviewDocxFileAsync(bytes, "Mau-Bien-Dong");
+            await JS.InvokeVoidAsync("open", url, "_blank");
+            Snackbar.Add("Đã xuất file Word (.docx) chứa các biến {{...}}. Bạn có thể chỉnh sửa trên Word rồi Upload lại.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task DownloadSampleFilledDocxAsync()
+    {
+        try
+        {
+            var bytes = TemplateService.ExportTemplateAsDocxBytes(_editingTemplate, _samplePlaceholders);
+            var url = await SavePreviewDocxFileAsync(bytes, "Xem-Truoc-Da-Dien");
+            await JS.InvokeVoidAsync("open", url, "_blank");
+            Snackbar.Add("Đã xuất file Word (.docx) điền dữ liệu mẫu của Đơn vị.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task<string> SavePreviewDocxFileAsync(byte[] bytes, string prefix)
+    {
+        var segments = new[] { "templates", "sub-contracts" };
+        var directory = Storage.GetPhysicalDirectory(segments);
+        Directory.CreateDirectory(directory);
+
+        var targetSlug = SelectedCompany?.TaxCode
+            ?? (_selectedTargetKey == PresetCaoSonKey ? "CaoSonCar" : "MekongXanh");
+        var safeSlug = string.Concat(targetSlug.Where(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_'));
+        if (string.IsNullOrWhiteSpace(safeSlug))
+            safeSlug = "DonVi";
+
+        var fileName = $"{prefix}-HDP-{safeSlug}-{DateTime.UtcNow:yyyyMMddHHmmss}.docx";
+        var fullPath = Path.Combine(directory, fileName);
+        await File.WriteAllBytesAsync(fullPath, bytes);
+        return Storage.BuildRelativeUrl(segments, fileName);
+    }
+
+    private async Task OnDocxInputFileChangedAsync(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file is null)
+            return;
+
+        if (!file.Name.EndsWith(".docx", StringComparison.OrdinalIgnoreCase))
+        {
+            Snackbar.Add("Vui lòng chọn đúng định dạng file Word (.docx).", Severity.Warning);
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            await using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            var companyName = SelectedCompany?.CompanyName
+                ?? (_selectedTargetKey == PresetCaoSonKey ? "CAO SƠN CAR" : "HTX CỘNG ĐỒNG MEKONG XANH");
+            var taxCode = SelectedCompany?.TaxCode
+                ?? (_selectedTargetKey == PresetCaoSonKey ? "0319340385-001" : "0316700428-002");
+
+            var imported = await TemplateService.ImportFromDocxAsync(
+                AuthenticationStateProvider,
+                SelectedCompany?.Id,
+                stream,
+                file.Name,
+                companyName,
+                taxCode);
+
+            _editingTemplate = imported;
+            LoadTargetIntoEditor(_selectedTargetKey);
+            Snackbar.Add($"Đã nạp và lưu nội dung từ file Word '{file.Name}' cho Đơn vị đang chọn.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Không thể đọc file Word (.docx): {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task CopyPlaceholderAsync(string token)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", token);
+            Snackbar.Add($"Đã sao chép biến {token}", Severity.Info);
+        }
+        catch
+        {
+            Snackbar.Add($"Biến: {token}", Severity.Info);
+        }
+    }
+
+    private string RenderLine(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+            return string.Empty;
+
+        return _previewWithSampleData
+            ? SubContractTemplateService.ReplacePlaceholders(raw, _samplePlaceholders)
+            : raw;
+    }
+
+    private static IReadOnlyList<string> SplitLines(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return [];
+
+        return text
+            .Replace("\r\n", "\n")
+            .Replace('\r', '\n')
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    }
+
+    private static bool IsBoldSubHeading(string line)
+        => line.StartsWith("Trách nhiệm", StringComparison.OrdinalIgnoreCase) ||
+           line.StartsWith("Quyền hạn", StringComparison.OrdinalIgnoreCase);
+
+    private static DateTime VietnamTime(DateTime utc)
+        => utc.Kind == DateTimeKind.Utc ? utc.AddHours(7) : utc;
+}

@@ -156,6 +156,7 @@ builder.Services.AddScoped<IContractService, ContractService>();
 builder.Services.AddScoped<ISavedDriverService, SavedDriverService>();
 builder.Services.AddScoped<IDriverNotificationService, DriverNotificationService>();
 builder.Services.AddSingleton<IUploadFileStorage, LocalUploadFileStorage>();
+builder.Services.AddSingleton<SubContractTemplateService>();
 builder.Services.AddSingleton<PdfContractTemplateRenderer>();
 builder.Services.AddScoped<PdfLayoutDesignerService>();
 builder.Services.AddScoped<MasterSignatureService>();

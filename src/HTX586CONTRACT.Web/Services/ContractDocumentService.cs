@@ -18,6 +18,7 @@ namespace HTX586CONTRACT.Web.Services;
 public sealed class ContractDocumentService(
     IDbContextFactory<ApplicationDbContext> factory,
     PdfContractTemplateRenderer pdfTemplateRenderer,
+    SubContractTemplateService subContractTemplateService,
     IUploadFileStorage storage,
     ILogger<ContractDocumentService> logger) : IContractDocumentService
 {
@@ -602,6 +603,56 @@ public sealed class ContractDocumentService(
 
         await pdfTemplateRenderer.RenderSubContractPdfAsync(contract, fullPath, ct);
 
+        return relativeUrl;
+    }
+
+    public async Task<string> GenerateSubContractDocxAsync(Guid contractId, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        db.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
+
+        var contract = await db.Contracts.AsNoTracking()
+            .Include(x => x.CompanyProfile)
+            .Include(x => x.Driver)
+            .Include(x => x.Customer)
+            .Include(x => x.Vehicle)
+            .FirstOrDefaultAsync(x => x.Id == contractId && !x.IsDeleted, ct)
+            ?? throw new KeyNotFoundException("Không tìm thấy hợp đồng.");
+
+        var snapshot = ContractSnapshotData.FromJson(contract.ContractDataJson)
+            ?? ContractSnapshotData.CaptureLegacy(contract);
+
+        var pdfFolderSegments = new[]
+        {
+            "contracts",
+            contractId.ToString("N"),
+            "pdf"
+        };
+        var directory = storage.GetPhysicalDirectory(pdfFolderSegments);
+        Directory.CreateDirectory(directory);
+
+        var plateNumber = SafeFileName(
+            snapshot.Vehicle.PlateNumber ?? contract.VehiclePlateSnapshot ?? contract.Vehicle?.PlateNumber ?? "xe");
+        var companyName = snapshot.Company.Name ?? contract.CompanyNameSnapshot ?? contract.CompanyProfile?.CompanyName;
+        var companyTaxCode = snapshot.Company.TaxCode ?? contract.CompanyTaxCodeSnapshot ?? contract.CompanyProfile?.TaxCode;
+        var subContractNumber = SafeFileName(SubContractHelper.BuildSubContractNumber(
+            contract.ContractNumber,
+            contract.CreatedAt,
+            companyName,
+            companyTaxCode));
+        var createdDate = VietnamTime(contract.CreatedAt).ToString("yyyyMMdd");
+        var fileName = $"{plateNumber}-HDP-{subContractNumber}-{createdDate}-{contractId:N}.docx";
+        var fullPath = Path.Combine(directory, fileName);
+        var relativeUrl = storage.BuildRelativeUrl(pdfFolderSegments, fileName);
+
+        var template = subContractTemplateService.GetTemplateForCompany(
+            contract.CompanyProfileId,
+            companyName,
+            companyTaxCode);
+        var placeholders = SubContractTemplateService.BuildContractPlaceholders(contract);
+        var docxBytes = subContractTemplateService.ExportTemplateAsDocxBytes(template, placeholders);
+
+        await File.WriteAllBytesAsync(fullPath, docxBytes, ct);
         return relativeUrl;
     }
 

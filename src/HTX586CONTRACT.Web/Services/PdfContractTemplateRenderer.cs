@@ -20,6 +20,7 @@ public sealed class PdfContractTemplateRenderer(
     IWebHostEnvironment environment,
     IConfiguration configuration,
     IUploadFileStorage storage,
+    SubContractTemplateService subContractTemplateService,
     ILogger<PdfContractTemplateRenderer> logger)
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -411,11 +412,57 @@ public sealed class PdfContractTemplateRenderer(
                 currentY += rendered.HeightPoints + spacingAfter;
             }
 
+            void DrawMultiLineSection(
+                string? rawTemplateSection,
+                IReadOnlyDictionary<string, string> replacements,
+                float fontSize = 10.5f,
+                bool bold = false,
+                bool italic = false,
+                double defaultIndent = 0.0,
+                double spacingAfter = 2.2)
+            {
+                var resolved = SubContractTemplateService.ReplacePlaceholders(rawTemplateSection, replacements);
+                if (string.IsNullOrWhiteSpace(resolved))
+                    return;
+
+                var lines = resolved.Replace("\r\n", "\n").Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                for (var i = 0; i < lines.Length; i++)
+                {
+                    var line = lines[i].Trim();
+                    if (string.IsNullOrWhiteSpace(line))
+                        continue;
+
+                    var isSubHeading = line.Equals("Trách nhiệm:", StringComparison.OrdinalIgnoreCase) ||
+                                       line.Equals("Quyền hạn:", StringComparison.OrdinalIgnoreCase);
+                    var isBullet = line.StartsWith('-') || line.StartsWith('·') || line.StartsWith('•');
+                    var indent = isSubHeading ? 6.0 : isBullet ? Math.Max(10.0, defaultIndent) : defaultIndent;
+                    var isLast = i == lines.Length - 1;
+
+                    DrawParagraph(
+                        line,
+                        fontSize: fontSize,
+                        bold: bold,
+                        italic: italic || isSubHeading,
+                        indent: indent,
+                        spacingAfter: isLast ? spacingAfter + 2.0 : spacingAfter);
+                }
+            }
+
+            var placeholders = SubContractTemplateService.BuildContractPlaceholders(contract);
+            var template = subContractTemplateService.GetTemplateForCompany(
+                contract.CompanyProfileId,
+                companyName,
+                companyTaxCode);
+
             // Quốc hiệu & Tiêu đề Đơn vị (2 cột)
-            var unitTitleUpper = companyName.ToUpper(CultureInfo.GetCultureInfo("vi-VN"));
+            var unitTitleUpper = SubContractTemplateService.ReplacePlaceholders(template.UnitHeaderTitle, placeholders)
+                .ToUpper(CultureInfo.GetCultureInfo("vi-VN"));
+            var contractNumberLine = SubContractTemplateService.ReplacePlaceholders(template.ContractNumberLine, placeholders);
+            var documentTitle = SubContractTemplateService.ReplacePlaceholders(template.DocumentTitle, placeholders);
+
             DrawBoxedText(unitTitleUpper, 38, currentY, 248, 34, 9.5f, bold: true, alignment: "Center", maxLines: 2);
             DrawBoxedText("-----------------------", 38, currentY + 28, 248, 14, 9.5f, alignment: "Center", maxLines: 1);
-            DrawBoxedText($"Số:{subContractNumber}", 38, currentY + 41, 248, 16, 10.5f, alignment: "Center", maxLines: 1);
+            DrawBoxedText(contractNumberLine, 38, currentY + 41, 248, 16, 10.5f, alignment: "Center", maxLines: 1);
 
             DrawBoxedText("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", 290, currentY, 265, 16, 10.5f, bold: true, alignment: "Center", maxLines: 1);
             DrawBoxedText("Độc lập - Tự do - Hạnh phúc", 290, currentY + 15, 265, 16, 11.0f, bold: true, alignment: "Center", maxLines: 1);
@@ -424,95 +471,45 @@ public sealed class PdfContractTemplateRenderer(
             currentY += 64.0;
 
             // Tiêu đề Hợp đồng
-            DrawParagraph("HỢP ĐỒNG DỊCH VỤ VẬN TẢI", fontSize: 14.0f, bold: true, alignment: "Center", spacingAfter: 8.0);
+            DrawParagraph(documentTitle, fontSize: 14.0f, bold: true, alignment: "Center", spacingAfter: 8.0);
 
-            // Căn cứ pháp lý
-            DrawParagraph("Căn cứ Nghị định số 158/2024/NĐ-CP ngày 18 tháng 12 năm 2024 của Chính phủ Quy định về hoạt động vận tải đường bộ;", fontSize: 10.0f, italic: true, spacingAfter: 2.5);
-            DrawParagraph("Căn cứ Nghị định số 218/2026/NĐ-CP ngày 19 tháng 06 năm 2026 của Chính phủ về sửa đổi, bổ sung một số điều của Nghị định 158/2024/NĐ-CP ngày 18 tháng 12 năm 2024 của Chính phủ Quy định về hoạt động vận tải đường bộ;", fontSize: 10.0f, italic: true, spacingAfter: 2.5);
-            DrawParagraph("Căn cứ Thông tư 36/2024/TT-BGTVT ngày 15 tháng 11 năm 2024 của Bộ Giao thông vận tải Quy định về tổ chức, quản lý hoạt động vận tải bằng xe ô tô và hoạt động của bến xe, bãi đỗ xe, trạm dừng nghỉ, điểm dừng xe trên đường bộ; quy định trình tự, thủ tục đưa bến xe, trạm dừng nghỉ vào khai thác;", fontSize: 10.0f, italic: true, spacingAfter: 2.5);
-            DrawParagraph("Căn cứ Thông tư số 72/2025/TT-BXD ngày 31 tháng 12 năm 2025 của Bộ trưởng Bộ xây dựng về sửa bổ sung một số điều của Thông tư số 36/2024/TT-BGTVT ngày 15 tháng 11 năm 2024;", fontSize: 10.0f, italic: true, spacingAfter: 5.0);
-
-            DrawParagraph($"Hôm nay, ngày {contractDate:dd} tháng {contractDate:MM} năm {contractDate:yyyy}", fontSize: 10.5f, italic: true, spacingAfter: 2.5);
-            DrawParagraph($"Tại văn phòng {companyName} chúng tôi gồm:", fontSize: 10.5f, spacingAfter: 5.0);
+            // Căn cứ pháp lý & Thời gian/Địa điểm
+            DrawMultiLineSection(template.LegalBasesText, placeholders, fontSize: 10.0f, italic: true, spacingAfter: 2.2);
+            DrawMultiLineSection(template.IntroLocationText, placeholders, fontSize: 10.5f, spacingAfter: 2.5);
 
             // Bên A
             DrawParagraph("Bên A : ( Bên cung ứng dịch vụ vận tải)", fontSize: 10.8f, bold: true, spacingAfter: 2.5);
-            DrawParagraph(unitTitleUpper, fontSize: 10.8f, bold: true, spacingAfter: 2.5);
-            DrawParagraph($"Địa chỉ trụ sở: {companyAddress}   -   Số điện thoại (Fax): {companyPhone}", fontSize: 10.5f, spacingAfter: 2.5);
-            var licenseLabel = isCaoSon
-                ? $"Giấy chứng nhận đăng ký kinh doanh số : {companyLicense}"
-                : $"Giấy phép kinh doanh vận tải số : {companyLicense}";
-            DrawParagraph($"{licenseLabel}   -   Nơi cấp: {companyLicenseIssuedPlace}   -   Mã số thuế : {companyTaxCode}", fontSize: 10.5f, spacingAfter: 2.5);
-            DrawParagraph($"Đại diện: {companyRepName}   -   Chức Vụ: {companyRepPosition}", fontSize: 10.5f, bold: true, spacingAfter: 2.5);
-            DrawParagraph($"CCCD số: {companyRepCitizenId}   -   Ngày cấp: {companyRepIssuedDate}   -   Nơi cấp: {companyRepIssuedPlace}", fontSize: 10.5f, spacingAfter: 5.0);
+            DrawMultiLineSection(template.PartyAText, placeholders, fontSize: 10.5f, spacingAfter: 2.5);
 
             // Bên B
             DrawParagraph($"Bên B : ( Bên sử dụng dịch vụ vận tải ) {ownerName.ToUpper(CultureInfo.GetCultureInfo("vi-VN"))}", fontSize: 10.8f, bold: true, spacingAfter: 2.5);
-            DrawParagraph($"CCCD số: {ownerCitizenId}   -   Ngày cấp: {ownerIssuedDate}   -   Nơi cấp: {ownerIssuedPlace}", fontSize: 10.5f, spacingAfter: 2.5);
-            DrawParagraph($"Địa chỉ : {ownerAddress}", fontSize: 10.5f, spacingAfter: 2.5);
-            DrawParagraph($"Chủ phương tiện biển số: {plateNumber}   -   Nhãn hiệu: {brand}   -   Số chỗ: {seatCount}", fontSize: 10.5f, bold: true, spacingAfter: 2.5);
-            DrawParagraph($"Số Khung: {chassisNumber}   -   Số Máy: {engineNumber}", fontSize: 10.5f, spacingAfter: 2.5);
-            DrawParagraph($"Nơi sản xuất : VIỆT NAM   -   Tải trọng (kg): /   -   Loại phương tiện: {vehicleTypeDisplay}", fontSize: 10.5f, spacingAfter: 5.0);
+            DrawMultiLineSection(template.PartyBText, placeholders, fontSize: 10.5f, spacingAfter: 2.5);
 
-            DrawParagraph("Sau khi trao đổi, bàn bạc về yêu cầu sử dụng dịch vụ vận tải của bên B và khả năng cung ứng dịch vụ vận tải của bên A. Hai bên thống nhất ký hợp đồng với những điều khoản sau đây:", fontSize: 10.5f, spacingAfter: 5.0);
+            DrawMultiLineSection(template.PreambleText, placeholders, fontSize: 10.5f, spacingAfter: 3.0);
 
             // Điều 1
             DrawParagraph("Điều 1: Nội dung sản phẩm dịch vụ", fontSize: 10.8f, bold: true, spacingAfter: 2.5);
-            DrawParagraph("Bên A đồng ý cung ứng cho bên B các sản phẩm dịch vụ vận tải sau:", fontSize: 10.5f, spacingAfter: 2.0);
-            DrawParagraph("- Dịch vụ vận tải về hành chính: Dịch vụ hỗ trợ các thủ tục về hành chính do ngành Giao Thông vận tải quy định.", fontSize: 10.5f, indent: 10, spacingAfter: 2.0);
-            DrawParagraph("- Dịch vụ vận chuyển hành khách theo Hợp Đồng, vận chuyển hành khách Du Lịch; dịch vụ về nguồn hàng hóa, nguồn hành khách.", fontSize: 10.5f, indent: 10, spacingAfter: 2.0);
-            DrawParagraph("- Dịch vụ hỗ trợ thành viên mua xe, thay đổi phương tiện vận chuyển; mua bảo hiểm bắt buộc, bảo hiểm vật chất tự nguyện; sửa chữa phương tiện vận tải và các dịch vụ khác theo yêu cầu của thành viên HTX.", fontSize: 10.5f, indent: 10, spacingAfter: 4.5);
+            DrawMultiLineSection(template.Article1Text, placeholders, fontSize: 10.5f, defaultIndent: 8.0, spacingAfter: 2.0);
 
             // Điều 2
             DrawParagraph("Điều 2: Phí dịch vụ và phương thức thanh toán khi thành viên nhận dịch vụ hợp tác xã phải trả cho Hợp Tác Xã một khoản chi phí:", fontSize: 10.8f, bold: true, spacingAfter: 2.5);
-            DrawParagraph("- Chi phí phải trả cho từng sản phẩm dịch vụ vận tải cụ thể từng năm.", fontSize: 10.5f, indent: 10, spacingAfter: 2.0);
-            DrawParagraph("- Phương thức thanh toán: Thanh toán 100% bằng tiền mặt hoặc chuyển khoản.", fontSize: 10.5f, indent: 10, spacingAfter: 4.5);
+            DrawMultiLineSection(template.Article2Text, placeholders, fontSize: 10.5f, defaultIndent: 8.0, spacingAfter: 2.0);
 
             // Điều 3
             DrawParagraph("Điều 3: Trách nhiệm và quyền hạn của các bên:", fontSize: 10.8f, bold: true, spacingAfter: 2.5);
             DrawParagraph("1. Trách nhiệm và quyền hạn của bên A:", fontSize: 10.5f, bold: true, spacingAfter: 2.0);
-            DrawParagraph("Trách nhiệm:", fontSize: 10.5f, italic: true, indent: 8, spacingAfter: 2.0);
-            DrawParagraph("- Bên A có trách nhiệm hỗ trợ cung ứng nguồn khách, nguồn hàng… cho thành viên ( nếu có ).", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
-            DrawParagraph("- Thông báo kịp thời cho Bên B về nguồn khách, nguồn hàng… nếu có sự thay đổi về thời gian, lộ trình, giá cả và các yêu cầu khác ( nếu có ).", fontSize: 10.5f, indent: 14, spacingAfter: 2.5);
-
-            DrawParagraph("Quyền hạn:", fontSize: 10.5f, italic: true, indent: 8, spacingAfter: 2.0);
-            DrawParagraph("- Hợp Tác Xã được quyền, trách nhiệm và nghĩa vụ quản lý, sử dụng và điều hành phương tiện theo hợp đồng này ( bao gồm chi phí nhiên liệu, sửa chữa, BOT, ... ) khi phương tiện có phát sinh doanh thu tại HTX.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
-            DrawParagraph("- Yêu cầu thành viên cung cấp thông tin và những điều kiện cần thiết khác để thực hiện tốt công việc cung cấp sản phẩm, dịch vụ vận tải của Hợp Tác Xã.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
-            if (isCaoSon)
-            {
-                DrawParagraph("- Yêu cầu thành viên thanh toán các loại thuế ( nếu có ) và phí dịch vụ cho HTX đúng hạn.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
-                DrawParagraph("- Đối với các xã viên không có phát sinh doanh thu tại app Grab và app Xanh Plasform thì phí duy trì HTX: 500.000 VND/năm. Phần phí này sẽ được thu cùng lúc cho các năm của phù hiệu được cấp trên 1 xe khi làm hợp đồng thanh lý.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
-            }
-            DrawParagraph("- Từ chối cung cấp sản phẩm, dịch vụ về pháp lý khi thành viên vi phạm thỏa thuận hợp đồng, vi phạm nội quy của HTX và các điều khoản quy định của ngành vận tải, hoặc vi phạm pháp luật.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
-            DrawParagraph("- HTX có quyền đề nghị cấp thời hạn có hiệu lực của phù hiệu, biển hiệu nhưng không quá thời hạn có hiệu lực của Giấy phép kinh doanh vận tải và không quá niên hạn sử dụng của phương tiện.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
-            DrawParagraph("- Các loại phù hiệu, biển hiệu do HTX cấp cho thành viên là tài sản của HTX. Bên A có quyền ngưng cấp \"LỆNH VẬN CHUYỂN\"; thu hồi Phù hiệu \"XE HỢP ĐỒNG\"; \"XE TẢI\"… của bên B trong trường hợp xe cố tình vi phạm luật GTĐB, vi phạm pháp luật hoặc không đóng các khoản phí cho HTX đúng hạn.", fontSize: 10.5f, indent: 14, spacingAfter: 3.5);
+            DrawMultiLineSection(template.Article3PartyAText, placeholders, fontSize: 10.5f, defaultIndent: 12.0, spacingAfter: 2.0);
 
             DrawParagraph("2. Trách nhiệm và quyền hạn của bên B:", fontSize: 10.5f, bold: true, spacingAfter: 2.0);
-            DrawParagraph("Trách nhiệm:", fontSize: 10.5f, italic: true, indent: 8, spacingAfter: 2.0);
-            DrawParagraph("- Cam kết cung cấp thông tin trung thực, cần thiết để HTX cung ứng sản phẩm, dịch vụ VT thuận lợi; tuân thủ theo Luật pháp của Việt Nam và điều lệ, quy chế của HTX.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
-            DrawParagraph("- Không được chở hành khách quá quy định và hàng hoá trái phép; thanh toán các khoản thuế của thành viên HTX phải đóng khi cơ quan thuế yêu cầu; thanh toán phí sử dụng sản phẩm dịch vụ vận tải đúng hạn.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
-            DrawParagraph("- Thông báo cho bên A ngay khi có thay đổi; luôn kiểm tra kỹ thuật xe và lái xe an toàn.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
-            DrawParagraph("- Lái xe phải nghiêm chỉnh chấp hành Luật Giao thông đường bộ Việt Nam khi tham gia giao thông. Trong trường hợp lái xe bị xử phạt về hành vi vi phạm An toàn giao thông đường bộ Việt Nam thì lái xe phải hoàn toàn chịu trách nhiệm xử phạt trước Pháp luật về các hành vi trên và Bên A sẽ không phải chịu trách nhiệm liên đới.", fontSize: 10.5f, indent: 14, spacingAfter: 2.5);
-
-            DrawParagraph("Quyền hạn:", fontSize: 10.5f, italic: true, indent: 8, spacingAfter: 2.0);
-            DrawParagraph("- Yêu cầu bên cung ứng sản phẩm dịch vụ vận tải HTX thực hiện công việc theo đúng chất lượng, số lượng, thời gian, địa điểm và các thỏa thuận khác.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
-            DrawParagraph("- Được đàm phán khi có sự thay đổi về các sản phẩm, dịch vụ vận tải được cung ứng làm ảnh hưởng đến sản xuất kinh doanh của thành viên.", fontSize: 10.5f, indent: 14, spacingAfter: 2.0);
-            DrawParagraph("- Trong trường hợp bên A cung ứng dịch vụ vận tải vi phạm nghiêm trọng nghĩa vụ thì bên B có quyền đơn phương chấm dứt thực hiện hợp đồng và yêu cầu bồi thường thiệt hại; ngưng sử dụng sản phẩm dịch vụ vận tải khi các yêu cầu không được HTX giải quyết, khắc phục.", fontSize: 10.5f, indent: 14, spacingAfter: 4.5);
+            DrawMultiLineSection(template.Article3PartyBText, placeholders, fontSize: 10.5f, defaultIndent: 12.0, spacingAfter: 2.0);
 
             // Điều 4
             DrawParagraph("Điều 4: Các thỏa thuận khác", fontSize: 10.8f, bold: true, spacingAfter: 2.5);
-            DrawParagraph("- Thành viên không sử dụng sản phẩm dịch vụ trong thời gian liên tục 6 tháng thì sẽ bị chấm dứt tư cách thành viên và tự chịu mọi trách nhiệm.", fontSize: 10.5f, indent: 10, spacingAfter: 2.0);
-            DrawParagraph("- Trong 45 ngày kể từ ngày có phù hiệu nếu xã viên không cung cấp đủ hồ sơ thì sẽ thu hồi phù hiệu do thiếu hồ sơ lưu trữ.", fontSize: 10.5f, indent: 10, spacingAfter: 2.0);
-            DrawParagraph("- Các trường hợp lái xe không hoạt động tại khu vực Cần Thơ sẽ áp dụng mức phí quản lý là 300.000 VNĐ/tháng. Các chi phí quản lý có thể thay đổi theo tình hình và điều kiện kinh doanh.", fontSize: 10.5f, indent: 10, spacingAfter: 2.0);
-            DrawParagraph("- Ngoài các chi phí cố định nêu trên, các chi phí quản lý và vận hành khác có thể được điều chỉnh, phát sinh hoặc thay đổi tùy theo tình hình thực tế, nhu cầu hoạt động và điều kiện kinh doanh của công ty tại từng thời điểm nhằm đảm bảo hiệu quả quản lý và vận hành và đúng pháp luật.", fontSize: 10.5f, indent: 10, spacingAfter: 2.0);
-            DrawParagraph("- Tài xế/chủ xe có trách nhiệm cung cấp đầy đủ và chính xác các thông tin theo đúng nội dung hợp đồng, đồng thời đảm bảo cung cấp thông tin và dữ liệu định vị của chuyến đi khi có yêu cầu của HTX. Về thực hiện việc xuất hóa đơn Tài xế/chủ xe cam kết không được xuất hóa đơn khống, mua bán hóa đơn.", fontSize: 10.5f, indent: 10, spacingAfter: 4.5);
+            DrawMultiLineSection(template.Article4Text, placeholders, fontSize: 10.5f, defaultIndent: 8.0, spacingAfter: 2.0);
 
             // Điều 5
             DrawParagraph("Điều 5: Thời hạn hiệu lực hợp đồng", fontSize: 10.8f, bold: true, spacingAfter: 2.5);
-            DrawParagraph($"- Hợp đồng có hiệu lực 4 năm kể từ ngày ký: {effectiveFrom:dd / MM / yyyy} đến {effectiveTo:dd / MM / yyyy} hoặc đến khi hai bên ký thanh lý hợp đồng.", fontSize: 10.5f, indent: 10, spacingAfter: 2.0);
-            DrawParagraph("- Khi bên B thanh lý trước thời hạn, phí rời HTX: 2.000.000 VNĐ, thời gian thanh lý trong 15 ngày (tính các ngày làm việc), kể từ khi bên B yêu cầu thanh lý và hoàn trả phù hiệu cho HTX.", fontSize: 10.5f, indent: 10, spacingAfter: 2.0);
-            DrawParagraph("- Các nảy sinh tranh chấp được giải quyết trên cơ sở hòa giải trên tinh thần hợp tác, tương trợ lẫn nhau; trường hợp không đạt được thỏa thuận thì trình Đại hội thành viên xem xét giải quyết. Trường hợp không giải quyết được thì một trong hai bên có quyền yêu cầu cơ quan nhà nước có thẩm quyền xử lý theo quy định của pháp luật.", fontSize: 10.5f, indent: 10, spacingAfter: 2.0);
-            DrawParagraph("- Hợp đồng này được làm thành 03 bản có giá trị như nhau. Bên A giữ 01 bản, bên B giữ 01 bản và 01 bản nộp Sở Xây Dựng.", fontSize: 10.5f, indent: 10, spacingAfter: 12.0);
+            DrawMultiLineSection(template.Article5Text, placeholders, fontSize: 10.5f, defaultIndent: 8.0, spacingAfter: 4.0);
 
             // Khu vực Chữ ký ĐẠI DIỆN BÊN A & ĐẠI DIỆN BÊN B
             if (currentY + 135.0 > bottomLimitY)
@@ -525,8 +522,10 @@ public sealed class PdfContractTemplateRenderer(
                 currentY = 48.0;
             }
 
-            DrawBoxedText("ĐẠI DIỆN BÊN A", 55, currentY, 220, 18, 11.0f, bold: true, alignment: "Center", maxLines: 1);
-            DrawBoxedText("ĐẠI DIỆN BÊN B", 320, currentY, 220, 18, 11.0f, bold: true, alignment: "Center", maxLines: 1);
+            var sigLeftTitle = SubContractTemplateService.ReplacePlaceholders(template.SignatureLeftTitle, placeholders);
+            var sigRightTitle = SubContractTemplateService.ReplacePlaceholders(template.SignatureRightTitle, placeholders);
+            DrawBoxedText(sigLeftTitle, 55, currentY, 220, 18, 11.0f, bold: true, alignment: "Center", maxLines: 1);
+            DrawBoxedText(sigRightTitle, 320, currentY, 220, 18, 11.0f, bold: true, alignment: "Center", maxLines: 1);
 
             var officeSignaturePath = StoredSignaturePath(snapshot is not null
                 ? snapshot.Company.RepresentativeSignatureFileUrl

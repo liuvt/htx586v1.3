@@ -566,9 +566,15 @@ else
         <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mt-4">
             <MudButton Color="Color.Secondary"
                        Variant="Variant.Filled"
-                       StartIcon="@Icons.Material.Filled.Description"
+                       StartIcon="@Icons.Material.Filled.PictureAsPdf"
                        OnClick="GenerateSubContractPdfAsync">
                 Hợp đồng phụ (PDF)
+            </MudButton>
+            <MudButton Color="Color.Info"
+                       Variant="Variant.Outlined"
+                       StartIcon="@Icons.Material.Filled.Article"
+                       OnClick="GenerateSubContractDocxAsync">
+                Tải HĐ phụ (.docx)
             </MudButton>
             <MudButton Color="Color.Error"
                        Variant="Variant.Filled"
@@ -1367,6 +1373,22 @@ else
         try
         {
             var url = await DocumentService.GenerateSubContractPdfAsync(Id.Value);
+            await JS.InvokeVoidAsync("open", url, "_blank");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task GenerateSubContractDocxAsync()
+    {
+        if (!Id.HasValue)
+            return;
+
+        try
+        {
+            var url = await DocumentService.GenerateSubContractDocxAsync(Id.Value);
             await JS.InvokeVoidAsync("open", url, "_blank");
         }
         catch (Exception ex)

@@ -323,12 +323,20 @@
                 <MudText Typo="Typo.h6">@(Detail.BusinessType == ContractBusinessType.Cargo ? "6. Hợp đồng phụ kèm theo — HỢP ĐỒNG DỊCH VỤ VẬN TẢI" : "7. Hợp đồng phụ kèm theo — HỢP ĐỒNG DỊCH VỤ VẬN TẢI")</MudText>
                 <MudText Typo="Typo.body2" Color="Color.Secondary">Hợp đồng dịch vụ vận tải đi kèm theo Đơn vị (@Detail.CompanyName) và Chủ phương tiện/Xe, tự động ánh xạ từ dữ liệu hợp đồng.</MudText>
             </div>
-            <MudButton Color="Color.Secondary"
-                       Variant="Variant.Filled"
-                       StartIcon="@Icons.Material.Filled.Description"
-                       OnClick="OpenSubContractPdfAsync">
-                Hợp đồng phụ (PDF)
-            </MudButton>
+            <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
+                <MudButton Color="Color.Secondary"
+                           Variant="Variant.Filled"
+                           StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                           OnClick="OpenSubContractPdfAsync">
+                    Hợp đồng phụ (PDF)
+                </MudButton>
+                <MudButton Color="Color.Info"
+                           Variant="Variant.Outlined"
+                           StartIcon="@Icons.Material.Filled.Article"
+                           OnClick="OpenSubContractDocxAsync">
+                    Tải HĐ phụ (.docx)
+                </MudButton>
+            </MudStack>
         </div>
         <div class="data-grid">
             @DataBlock("Số Hợp đồng phụ", Detail.SubContractNumber)
@@ -388,12 +396,20 @@
             <MudButton Href="@BackUrl" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack">
                 Quay lại danh sách
             </MudButton>
-            <MudButton Color="Color.Secondary"
-                       Variant="Variant.Filled"
-                       StartIcon="@Icons.Material.Filled.Description"
-                       OnClick="OpenSubContractPdfAsync">
-                Hợp đồng phụ (PDF)
-            </MudButton>
+            <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
+                <MudButton Color="Color.Secondary"
+                           Variant="Variant.Filled"
+                           StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                           OnClick="OpenSubContractPdfAsync">
+                    Hợp đồng phụ (PDF)
+                </MudButton>
+                <MudButton Color="Color.Info"
+                           Variant="Variant.Outlined"
+                           StartIcon="@Icons.Material.Filled.Article"
+                           OnClick="OpenSubContractDocxAsync">
+                    Tải HĐ phụ (.docx)
+                </MudButton>
+            </MudStack>
             @if (Detail.Status == ContractStatus.Completed)
             {
                 <MudButton Color="Color.Error"
@@ -770,6 +786,19 @@
         try
         {
             var url = await DocumentService.GenerateSubContractPdfAsync(Detail.Id);
+            await JS.InvokeVoidAsync("open", url, "_blank");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task OpenSubContractDocxAsync()
+    {
+        try
+        {
+            var url = await DocumentService.GenerateSubContractDocxAsync(Detail.Id);
             await JS.InvokeVoidAsync("open", url, "_blank");
         }
         catch (Exception ex)
