@@ -29,34 +29,34 @@ else
 {
     <MudStack Spacing="3" Class="contract-detail-mud-page">
         <!-- HEADER / ACTIONS -->
-        <MudPaper Class="pa-4" Elevation="1">
+        <MudPaper Class="ent-hero-card" Elevation="0">
             <MudStack Spacing="3">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
                     <MudButton Href="/vehicle-owner/contracts"
-                               Variant="Variant.Text"
-                               Color="Color.Default"
+                               Variant="Variant.Outlined"
+                               Color="Color.Inherit"
                                StartIcon="@Icons.Material.Filled.ArrowBack">
                         Quay lại
                     </MudButton>
 
-                    <MudAvatar Size="Size.Large" Color="Color.Primary" Variant="Variant.Filled">
+                    <MudAvatar Size="Size.Large" Color="Color.Surface" Variant="Variant.Outlined" Style="color:#fff; border-color:rgba(255,255,255,.28); background:rgba(255,255,255,.12);">
                         <MudIcon Icon="@(_detail.BusinessType == ContractBusinessType.Cargo ? Icons.Material.Filled.LocalShipping : Icons.Material.Filled.DirectionsBus)" />
                     </MudAvatar>
 
                     <MudStack Spacing="0" Class="flex-grow-1">
-                        <MudText Typo="Typo.overline" Color="Color.Secondary">@BusinessName(_detail.BusinessType)</MudText>
+                        <MudText Typo="Typo.overline" Class="ent-hero-subtitle">@BusinessName(_detail.BusinessType)</MudText>
                         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap">
-                            <MudText Typo="Typo.h5" Class="fw-700">@_detail.ContractNumber</MudText>
+                            <MudText Typo="Typo.h5" Class="fw-800" Style="color:#fff;">@_detail.ContractNumber</MudText>
                             <ContractStatusChip Status="_detail.Status" ChipSize="Size.Small" />
                         </MudStack>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary">@_detail.CompanyName</MudText>
+                        <MudText Typo="Typo.body2" Class="ent-hero-subtitle">@_detail.CompanyName</MudText>
                     </MudStack>
 
                     <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" Class="contract-detail-actions">
                         @if (!IsHistoryStatus(_detail.Status) && _canEditCurrentContract)
                         {
                             <MudButton Href="@($"/vehicle-owner/contracts/{Id}")"
-                                       Color="Color.Primary"
+                                       Color="Color.Warning"
                                        Variant="Variant.Filled"
                                        StartIcon="@Icons.Material.Filled.Edit">
                                 Chỉnh sửa / xử lý
@@ -69,15 +69,15 @@ else
                             Hợp đồng phụ (PDF)
                         </MudButton>
                         <MudButton Color="Color.Info"
-                                   Variant="Variant.Outlined"
+                                   Variant="Variant.Filled"
                                    StartIcon="@Icons.Material.Filled.Article"
                                    OnClick="OpenSubContractDocxAsync">
                             Tải HĐ phụ (.docx)
                         </MudButton>
                         @if (_detail.Status == ContractStatus.Completed)
                         {
-                            <MudButton Color="Color.Success"
-                                       Variant="Variant.Outlined"
+                            <MudButton Color="Color.Error"
+                                       Variant="Variant.Filled"
                                        StartIcon="@Icons.Material.Filled.PictureAsPdf"
                                        OnClick="OpenPdfAsync">
                                 Mở PDF HĐ chính
@@ -86,51 +86,29 @@ else
                     </MudStack>
                 </MudStack>
 
-                <MudDivider />
-
                 <MudGrid Spacing="2">
                     <MudItem xs="6" md="3">
-                        <MudPaper Class="pa-3 h-100" Outlined="true" Elevation="0">
-                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                                <MudIcon Icon="@Icons.Material.Filled.CalendarMonth" Color="Color.Primary" />
-                                <MudStack Spacing="0">
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Ngày tạo</MudText>
-                                    <MudText Typo="Typo.body2" Class="fw-600">@FormatDateTime(_detail.CreatedAt)</MudText>
-                                </MudStack>
-                            </MudStack>
+                        <MudPaper Class="ent-hero-metric h-100" Elevation="0">
+                            <span class="ent-hero-metric__label">Ngày khởi tạo</span>
+                            <strong class="ent-hero-metric__value">@FormatDateTime(_detail.CreatedAt)</strong>
                         </MudPaper>
                     </MudItem>
                     <MudItem xs="6" md="3">
-                        <MudPaper Class="pa-3 h-100" Outlined="true" Elevation="0">
-                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                                <MudIcon Icon="@Icons.Material.Filled.DirectionsCar" Color="Color.Primary" />
-                                <MudStack Spacing="0">
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Biển số xe</MudText>
-                                    <MudText Typo="Typo.body2" Class="fw-600">@(_detail.VehiclePlate ?? "-")</MudText>
-                                </MudStack>
-                            </MudStack>
+                        <MudPaper Class="ent-hero-metric h-100" Elevation="0">
+                            <span class="ent-hero-metric__label">Biển số phương tiện</span>
+                            <strong class="ent-hero-metric__value">@(_detail.VehiclePlate ?? "-")</strong>
                         </MudPaper>
                     </MudItem>
                     <MudItem xs="6" md="3">
-                        <MudPaper Class="pa-3 h-100" Outlined="true" Elevation="0">
-                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                                <MudIcon Icon="@Icons.Material.Filled.Person" Color="Color.Primary" />
-                                <MudStack Spacing="0">
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Khách hàng</MudText>
-                                    <MudText Typo="Typo.body2" Class="fw-600 text-break">@CustomerDisplayName</MudText>
-                                </MudStack>
-                            </MudStack>
+                        <MudPaper Class="ent-hero-metric h-100" Elevation="0">
+                            <span class="ent-hero-metric__label">Khách hàng / Bên thuê</span>
+                            <strong class="ent-hero-metric__value text-break">@CustomerDisplayName</strong>
                         </MudPaper>
                     </MudItem>
                     <MudItem xs="6" md="3">
-                        <MudPaper Class="pa-3 h-100" Outlined="true" Elevation="0">
-                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                                <MudIcon Icon="@Icons.Material.Filled.Draw" Color="Color.Primary" />
-                                <MudStack Spacing="0">
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Chữ ký</MudText>
-                                    <MudText Typo="Typo.body2" Class="fw-600">@_detail.Signatures.Count xác nhận</MudText>
-                                </MudStack>
-                            </MudStack>
+                        <MudPaper Class="ent-hero-metric h-100" Elevation="0">
+                            <span class="ent-hero-metric__label">Số HĐ phụ kèm theo</span>
+                            <strong class="ent-hero-metric__value">@_detail.SubContractNumber</strong>
                         </MudPaper>
                     </MudItem>
                 </MudGrid>
@@ -569,15 +547,30 @@ else
                     </MudStack>
                 </MudStack>
                 <MudDivider />
+                @{
+                    var subUnit = SubContractHelper.ResolveFixedUnitProfile(
+                        _detail.CompanyName,
+                        _detail.CompanyTaxCode,
+                        _detail.CompanyAddress,
+                        _detail.CompanyPhoneNumber,
+                        _detail.CompanyBusinessLicenseNumber,
+                        _detail.CompanyBusinessLicenseIssuedPlace,
+                        _detail.CompanyRepresentativeName,
+                        _detail.CompanyRepresentativePosition,
+                        _detail.CompanyRepresentativeCitizenId,
+                        _detail.CompanyRepresentativeCitizenIdIssuedDate,
+                        _detail.CompanyRepresentativeCitizenIdIssuedPlace);
+                }
                 <MudGrid Spacing="2">
                     <MudItem xs="12" md="6">
                         <MudList T="string" Dense="true" Class="pa-0">
                             <InfoListItem Label="Số Hợp đồng phụ" Value="@_detail.SubContractNumber" Icon="@Icons.Material.Filled.Tag" />
                             <InfoListItem Label="Thời hạn hiệu lực (4 năm)" Value="@($"{FormatDate(_detail.SubContractEffectiveFrom)} → {FormatDate(_detail.SubContractEffectiveTo)}")" Icon="@Icons.Material.Filled.DateRange" />
-                            <InfoListItem Label="Bên A (Đơn vị cung ứng DVVT)" Value="@_detail.CompanyName" Icon="@Icons.Material.Filled.Business" />
-                            <InfoListItem Label="Mã số thuế Bên A" Value="@(_detail.CompanyTaxCode ?? "-")" Icon="@Icons.Material.Filled.ReceiptLong" />
-                            <InfoListItem Label="Số GPKDVT / ĐKKD" Value="@(_detail.CompanyBusinessLicenseNumber ?? "-")" Icon="@Icons.Material.Filled.Badge" />
-                            <InfoListItem Label="Đại diện Bên A" Value="@($"{_detail.CompanyRepresentativeName ?? "-"} ({_detail.CompanyRepresentativePosition ?? "Giám đốc"})")" Icon="@Icons.Material.Filled.Person" />
+                            <InfoListItem Label="Bên A (Đơn vị cung ứng DVVT cứng)" Value="@subUnit.PartyAName" Icon="@Icons.Material.Filled.Business" />
+                            <InfoListItem Label="Địa chỉ trụ sở Bên A" Value="@subUnit.Address" Icon="@Icons.Material.Filled.Place" />
+                            <InfoListItem Label="Mã số thuế / SĐT Bên A" Value="@($"{subUnit.TaxCode} · SĐT: {subUnit.PhoneNumber}")" Icon="@Icons.Material.Filled.ReceiptLong" />
+                            <InfoListItem Label="Số GPKDVT / ĐKKD" Value="@($"{subUnit.LicenseNumber} ({subUnit.LicenseIssuedPlace})")" Icon="@Icons.Material.Filled.Badge" />
+                            <InfoListItem Label="Đại diện Bên A" Value="@($"{subUnit.RepresentativeName} ({subUnit.RepresentativePosition})")" Icon="@Icons.Material.Filled.Person" />
                         </MudList>
                     </MudItem>
                     <MudItem xs="12" md="6">

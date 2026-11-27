@@ -20,102 +20,133 @@ else if (_model is null)
 }
 else
 {
-    <MudPaper Class="pa-4" Elevation="1">
-        <MudGrid>
-            <MudItem xs="12" md="4"><MudTextField T="string" Value="@_userName" Label="Tên đăng nhập" Disabled="true" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4">
-                @if (_isOwner)
-                {
-                    <MudSelect T="string" @bind-Value="_model.Role" Label="Vai trò" Required="true" Variant="Variant.Outlined">
-                        <MudSelectItem T="string" Value="@SystemRoleDisplay.AdminRole">Quản lý</MudSelectItem>
-                        <MudSelectItem T="string" Value="@SystemRoleDisplay.VehicleOwnerRole">Chủ xe</MudSelectItem>
-                    </MudSelect>
-                }
-                else
-                {
-                    <MudTextField T="string" Value="@VehicleOwnerRoleLabel" Label="Vai trò" Disabled="true" Variant="Variant.Outlined" />
-                }
-            </MudItem>
-            <MudItem xs="12" md="4" Class="d-flex align-center"><MudSwitch T="bool" @bind-Value="_model.IsActive" Color="Color.Success" Label="Tài khoản hoạt động" /></MudItem>
-
-            @if (_model.Role == SystemRoleDisplay.AdminRole)
-            {
-                <MudItem xs="12">
-                    <MudSelect T="Guid" Label="Công ty/Văn phòng quản lý" MultiSelection="true" Required="true"
-                               SelectedValues="_model.OfficeIds" SelectedValuesChanged="OnOfficeSelectionChanged"
-                               Variant="Variant.Outlined" HelperText="Tài khoản Quản lý có thể quản lý nhiều Công ty/Văn phòng.">
-                        @foreach (var office in _offices)
-                        {
-                            <MudSelectItem T="Guid" Value="@office.Id">@OfficeDisplay(office)</MudSelectItem>
-                        }
-                    </MudSelect>
-                </MudItem>
-            }
-            else
-            {
-                <MudItem xs="12">
-                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
-                        Chủ xe không gán trực tiếp văn phòng. Văn phòng được suy ra từ các xe sở hữu.
-                    </MudAlert>
-                </MudItem>
-            }
-
-            <MudItem xs="12"><MudDivider Class="my-2" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.FullName" Label="Họ và tên" Required="true" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.EmployeeCode" Label="Mã nhân viên" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.PhoneNumber" Label="Số điện thoại" Required="true" HelperText="@VietnamPhoneNumber.ValidationMessage" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.Email" Label="Email" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudDatePicker @bind-Date="_model.DateOfBirth" Label="Ngày sinh" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Culture="@AppCulture.Vietnamese" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.CitizenId" Label="CCCD" Required="@IsVehicleOwner" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudDatePicker @bind-Date="_model.CitizenIdIssuedDate" Label="Ngày cấp CCCD" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Culture="@AppCulture.Vietnamese" Required="@IsVehicleOwner" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><CitizenIdIssuedPlaceInput @bind-Value="_model.CitizenIdIssuedPlace" Required="@IsVehicleOwner" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.AreaCode" Label="Mã khu vực" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4" Class="d-flex align-center"><MudSwitch T="bool" @bind-Value="_model.MustChangePassword" Color="Color.Warning" Label="Bắt buộc đổi mật khẩu" /></MudItem>
-            <MudItem xs="12"><MudTextField @bind-Value="_model.Address" Label="Địa chỉ" Required="@IsVehicleOwner" Variant="Variant.Outlined" /></MudItem>
-
-            @if (IsVehicleOwner)
-            {
-                <MudItem xs="12">
-                    <MudAlert Severity="Severity.Info" Variant="Variant.Text">
-                        Các xe đang chọn tài khoản này làm Chủ xe sẽ được đồng bộ hồ sơ pháp lý sau khi lưu. Chân ký luôn được lấy trực tiếp từ tài khoản Chủ xe.
-                    </MudAlert>
-                </MudItem>
-                <MudItem xs="12" md="6">
-                    <MudText Typo="Typo.subtitle1">Chân ký Chủ xe</MudText>
-                    <MudText Typo="Typo.caption" Color="Color.Secondary">
-                        Hợp đồng mới sẽ tự động lấy chân ký này theo tài khoản Chủ xe.
-                    </MudText>
-                    @if (_originalRole == SystemRoleDisplay.VehicleOwnerRole)
+    <MudStack Spacing="3">
+        <MudPaper Class="ent-section-card" Elevation="0">
+            <div class="ent-section-header">
+                <div class="ent-section-header__left">
+                    <div class="ent-section-icon"><MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" Size="Size.Small" /></div>
+                    <div>
+                        <MudText Class="ent-section-title">1. Định danh, Vai trò &amp; Phạm vi quản lý</MudText>
+                        <MudText Class="ent-section-subtitle">Cấu hình quyền truy cập, trạng thái hoạt động và phạm vi Công ty/Văn phòng.</MudText>
+                    </div>
+                </div>
+            </div>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" md="4"><MudTextField T="string" Value="@_userName" Label="Tên đăng nhập" Disabled="true" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" md="4">
+                    @if (_isOwner)
                     {
-                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-2 mb-2">
-                            Có thể cập nhật chân ký Chủ xe. Chữ ký mới sẽ ghi đè chân ký hiện hành trên tài khoản; hợp đồng cũ đã snapshot không bị thay đổi.
-                        </MudAlert>
-                        <SignaturePad ExistingSignatureUrl="@SignatureUrl"
-                                      SignerName="@_model.FullName"
-                                      StrokeColor="#0066CC"
-                                      StrokeWidth="1.5"
-                                      SignedAt="@_detail?.VehicleOwnerSignedAt"
-                                      OnSignatureSaved="SaveVehicleOwnerSignatureAsync"
-                                      ConfirmationButtonText="Lưu chân ký Chủ xe"
-                                      SavedStatusText="Chân ký hiện tại" />
+                        <MudSelect T="string" @bind-Value="_model.Role" Label="Vai trò" Required="true" Variant="Variant.Outlined">
+                            <MudSelectItem T="string" Value="@SystemRoleDisplay.AdminRole">Quản lý</MudSelectItem>
+                            <MudSelectItem T="string" Value="@SystemRoleDisplay.VehicleOwnerRole">Chủ xe</MudSelectItem>
+                        </MudSelect>
                     }
                     else
                     {
-                        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mt-2">
-                            Hãy lưu thay đổi vai trò thành Chủ xe trước, sau đó mở lại tài khoản để tạo chân ký.
-                        </MudAlert>
+                        <MudTextField T="string" Value="@VehicleOwnerRoleLabel" Label="Vai trò" Disabled="true" Variant="Variant.Outlined" />
                     }
                 </MudItem>
-            }
-        </MudGrid>
+                <MudItem xs="12" md="4">
+                    <MudPaper Class="pa-3 d-flex align-center justify-space-between h-100" Outlined="true" Elevation="0" Style="border-radius:12px;">
+                        <MudSwitch T="bool" @bind-Value="_model.IsActive" Color="Color.Success" Label="Tài khoản hoạt động" />
+                        <MudSwitch T="bool" @bind-Value="_model.MustChangePassword" Color="Color.Warning" Label="Đổi mật khẩu" />
+                    </MudPaper>
+                </MudItem>
 
-        <MudStack Row="true" Class="mt-4" Spacing="2">
-            <MudButton Variant="Variant.Outlined" OnClick="@(() => Navigation.NavigateTo($"/admin/accounts/{UserId}"))">Quay lại</MudButton>
-            <MudButton Variant="Variant.Outlined" Color="Color.Warning" Disabled="_saving" OnClick="ResetPasswordAsync">Reset mật khẩu</MudButton>
-            <MudSpacer />
-            <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_saving" OnClick="SaveAsync">Lưu thay đổi</MudButton>
-        </MudStack>
-    </MudPaper>
+                @if (_model.Role == SystemRoleDisplay.AdminRole)
+                {
+                    <MudItem xs="12">
+                        <MudSelect T="Guid" Label="Công ty/Văn phòng quản lý" MultiSelection="true" Required="true"
+                                   SelectedValues="_model.OfficeIds" SelectedValuesChanged="OnOfficeSelectionChanged"
+                                   Variant="Variant.Outlined" HelperText="Tài khoản Quản lý có thể quản lý nhiều Công ty/Văn phòng.">
+                            @foreach (var office in _offices)
+                            {
+                                <MudSelectItem T="Guid" Value="@office.Id">@OfficeDisplay(office)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+                }
+                else
+                {
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
+                            Chủ xe không gán trực tiếp văn phòng. Văn phòng được suy ra từ các xe đang sở hữu.
+                        </MudAlert>
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudPaper>
+
+        <MudPaper Class="ent-section-card" Elevation="0">
+            <div class="ent-section-header">
+                <div class="ent-section-header__left">
+                    <div class="ent-section-icon"><MudIcon Icon="@Icons.Material.Filled.Badge" Size="Size.Small" /></div>
+                    <div>
+                        <MudText Class="ent-section-title">2. Hồ sơ cá nhân &amp; Giấy tờ pháp lý</MudText>
+                        <MudText Class="ent-section-subtitle">Thông tin họ tên, liên lạc, CCCD và địa chỉ phục vụ đồng bộ hợp đồng.</MudText>
+                    </div>
+                </div>
+            </div>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.FullName" Label="Họ và tên" Required="true" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.PhoneNumber" Label="Số điện thoại" Required="true" HelperText="@VietnamPhoneNumber.ValidationMessage" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.Email" Label="Email" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.EmployeeCode" Label="Mã nhân viên" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" md="4"><MudDatePicker @bind-Date="_model.DateOfBirth" Label="Ngày sinh" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Culture="@AppCulture.Vietnamese" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.AreaCode" Label="Mã khu vực" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.CitizenId" Label="Số CCCD" Required="@IsVehicleOwner" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" md="4"><MudDatePicker @bind-Date="_model.CitizenIdIssuedDate" Label="Ngày cấp CCCD" DateFormat="dd/MM/yyyy" Editable="true" ImmediateText="true" Culture="@AppCulture.Vietnamese" Required="@IsVehicleOwner" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" md="4"><CitizenIdIssuedPlaceInput @bind-Value="_model.CitizenIdIssuedPlace" Required="@IsVehicleOwner" /></MudItem>
+                <MudItem xs="12"><MudTextField @bind-Value="_model.Address" Label="Địa chỉ thường trú" Required="@IsVehicleOwner" Variant="Variant.Outlined" /></MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        @if (IsVehicleOwner)
+        {
+            <MudPaper Class="ent-section-card" Elevation="0">
+                <div class="ent-section-header">
+                    <div class="ent-section-header__left">
+                        <div class="ent-section-icon"><MudIcon Icon="@Icons.Material.Filled.Draw" Size="Size.Small" /></div>
+                        <div>
+                            <MudText Class="ent-section-title">3. Chân ký cố định của Chủ xe</MudText>
+                            <MudText Class="ent-section-subtitle">Hợp đồng mới tự động lấy chân ký này theo tài khoản Chủ xe.</MudText>
+                        </div>
+                    </div>
+                </div>
+                @if (_originalRole == SystemRoleDisplay.VehicleOwnerRole)
+                {
+                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="mb-3">
+                        Các xe đang chọn tài khoản này làm Chủ xe sẽ được đồng bộ hồ sơ pháp lý sau khi lưu. Chữ ký mới chỉ áp dụng cho các hợp đồng mới, không làm thay đổi hợp đồng cũ đã khóa snapshot.
+                    </MudAlert>
+                    <SignaturePad ExistingSignatureUrl="@SignatureUrl"
+                                  SignerName="@_model.FullName"
+                                  StrokeColor="#0066CC"
+                                  StrokeWidth="1.5"
+                                  SignedAt="@_detail?.VehicleOwnerSignedAt"
+                                  OnSignatureSaved="SaveVehicleOwnerSignatureAsync"
+                                  ConfirmationButtonText="Lưu chân ký Chủ xe"
+                                  SavedStatusText="Chân ký hiện tại" />
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">
+                        Hãy lưu thay đổi vai trò thành Chủ xe trước, sau đó mở lại tài khoản để tạo chân ký.
+                    </MudAlert>
+                }
+            </MudPaper>
+        }
+
+        <MudPaper Class="ent-action-bar" Elevation="0">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Navigation.NavigateTo($"/admin/accounts/{UserId}"))">Quay lại chi tiết</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.LockReset" Disabled="_saving" OnClick="ResetPasswordAsync">Reset mật khẩu mặc định</MudButton>
+                <MudSpacer />
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Save" Disabled="_saving" OnClick="SaveAsync">
+                    @(_saving ? "Đang lưu..." : "Lưu thay đổi")
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    </MudStack>
 }
 
 @code {

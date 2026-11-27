@@ -19,89 +19,115 @@ else if (_model is null)
 }
 else
 {
-    <MudPaper Class="pa-4" Elevation="1">
-        <MudGrid>
-            <MudItem xs="12" md="6">
-                <MudAutocomplete T="ApplicationUser"
-                                 Value="@SelectedVehicleOwner"
-                                 ValueChanged="SelectVehicleOwner"
-                                 SearchFunc="SearchVehicleOwnersAsync"
-                                 ToStringFunc="UserDisplay"
-                                 Label="Tài khoản Chủ xe (không bắt buộc)"
-                                 Placeholder="Gõ họ tên hoặc số điện thoại Chủ xe"
-                                 HelperText="Gõ họ tên hoặc số điện thoại; kết quả gợi ý hiển thị ngay bên dưới. Có thể xóa lựa chọn nếu xe chưa xác định Chủ xe."
-                                 Variant="Variant.Outlined"
-                                 Clearable="true"
-                                 ResetValueOnEmptyText="true"
-                                 CoerceText="true"
-                                 MinCharacters="1"
-                                 DebounceInterval="300"
-                                 MaxItems="30" />
-            </MudItem>
-            <MudItem xs="12" md="6">
-                <MudSelect T="Guid?" @bind-Value="_officeId" Label="Công ty/Văn phòng hoạt động" Required="true"
-                           Variant="Variant.Outlined" HelperText="Một xe chỉ được chọn một Công ty/Văn phòng.">
-                    @foreach (var office in _offices)
-                    {
-                        <MudSelectItem T="Guid?" Value="@((Guid?)office.Id)">@OfficeDisplay(office)</MudSelectItem>
-                    }
-                </MudSelect>
-            </MudItem>
+    <MudStack Spacing="3">
+        <MudPaper Class="ent-section-card" Elevation="0">
+            <div class="ent-section-header">
+                <div class="ent-section-header__left">
+                    <div class="ent-section-icon"><MudIcon Icon="@Icons.Material.Filled.Apartment" Size="Size.Small" /></div>
+                    <div>
+                        <MudText Class="ent-section-title">1. Phân công Đơn vị vận hành &amp; Chủ sở hữu xe</MudText>
+                        <MudText Class="ent-section-subtitle">Mỗi phương tiện thuộc đúng một Công ty/Văn phòng và liên kết với một tài khoản Chủ xe.</MudText>
+                    </div>
+                </div>
+                <MudSwitch T="bool" @bind-Value="_model.IsActive" Color="Color.Success" Label="Phương tiện đang hoạt động" />
+            </div>
 
-            @if (SelectedVehicleOwner is not null)
-            {
-                <MudItem xs="12">
-                    <MudPaper Class="pa-3" Outlined="true">
-                        <MudText Typo="Typo.subtitle1" Class="mb-2">Thông tin Chủ xe lấy từ tài khoản</MudText>
-                        <MudGrid>
-                            <MudItem xs="12" md="4"><InfoListItem Label="Họ và tên" Value="@SelectedVehicleOwner.FullName" /></MudItem>
-                            <MudItem xs="12" md="4"><InfoListItem Label="Số điện thoại" Value="@Display(SelectedVehicleOwner.PhoneNumber)" /></MudItem>
-                            <MudItem xs="12" md="4"><InfoListItem Label="CCCD" Value="@Display(SelectedVehicleOwner.CitizenId)" /></MudItem>
-                            <MudItem xs="12" md="4"><InfoListItem Label="Ngày cấp CCCD" Value="@DateText(SelectedVehicleOwner.CitizenIdIssuedDate)" /></MudItem>
-                            <MudItem xs="12" md="4"><InfoListItem Label="Nơi cấp CCCD" Value="@Display(SelectedVehicleOwner.CitizenIdIssuedPlace)" /></MudItem>
-                            <MudItem xs="12" md="4"><InfoListItem Label="Địa chỉ" Value="@Display(SelectedVehicleOwner.Address)" /></MudItem>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" md="6">
+                    <MudSelect T="Guid?" @bind-Value="_officeId" Label="Công ty/Văn phòng hoạt động" Required="true"
+                               Variant="Variant.Outlined" HelperText="Một xe chỉ được chọn một Công ty/Văn phòng.">
+                        @foreach (var office in _offices)
+                        {
+                            <MudSelectItem T="Guid?" Value="@((Guid?)office.Id)">@OfficeDisplay(office)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" md="6">
+                    <MudAutocomplete T="ApplicationUser"
+                                     Value="@SelectedVehicleOwner"
+                                     ValueChanged="SelectVehicleOwner"
+                                     SearchFunc="SearchVehicleOwnersAsync"
+                                     ToStringFunc="UserDisplay"
+                                     Label="Tài khoản Chủ xe (không bắt buộc)"
+                                     Placeholder="Gõ họ tên hoặc số điện thoại Chủ xe"
+                                     HelperText="Gõ họ tên hoặc số điện thoại để tìm; có thể xóa lựa chọn nếu chưa xác định Chủ xe."
+                                     Variant="Variant.Outlined"
+                                     Clearable="true"
+                                     ResetValueOnEmptyText="true"
+                                     CoerceText="true"
+                                     MinCharacters="1"
+                                     DebounceInterval="300"
+                                     MaxItems="30" />
+                </MudItem>
+
+                @if (SelectedVehicleOwner is not null)
+                {
+                    <MudItem xs="12">
+                        <MudGrid Spacing="2" Class="mt-1">
+                            <MudItem xs="12" sm="6" md="4"><InfoListItem Label="Họ tên Chủ xe" Value="@SelectedVehicleOwner.FullName" Icon="@Icons.Material.Filled.Person" /></MudItem>
+                            <MudItem xs="12" sm="6" md="4"><InfoListItem Label="Số điện thoại" Value="@Display(SelectedVehicleOwner.PhoneNumber)" Icon="@Icons.Material.Filled.Phone" /></MudItem>
+                            <MudItem xs="12" sm="6" md="4"><InfoListItem Label="Số CCCD" Value="@Display(SelectedVehicleOwner.CitizenId)" Icon="@Icons.Material.Filled.CreditCard" /></MudItem>
+                            <MudItem xs="12" sm="6" md="4"><InfoListItem Label="Ngày cấp CCCD" Value="@DateText(SelectedVehicleOwner.CitizenIdIssuedDate)" Icon="@Icons.Material.Filled.Event" /></MudItem>
+                            <MudItem xs="12" sm="6" md="4"><InfoListItem Label="Nơi cấp CCCD" Value="@Display(SelectedVehicleOwner.CitizenIdIssuedPlace)" Icon="@Icons.Material.Filled.AccountBalance" /></MudItem>
+                            <MudItem xs="12" sm="6" md="4"><InfoListItem Label="Địa chỉ Chủ xe" Value="@Display(SelectedVehicleOwner.Address)" Icon="@Icons.Material.Filled.LocationOn" /></MudItem>
                         </MudGrid>
-                    </MudPaper>
-                </MudItem>
-            }
-            else
-            {
-                <MudItem xs="12">
-                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
-                        Xe hiện chưa gán Chủ xe. Bạn có thể chọn một tài khoản Chủ xe và lưu lại bất kỳ lúc nào.
-                    </MudAlert>
-                </MudItem>
-            }
+                    </MudItem>
+                }
+                else
+                {
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
+                            Xe hiện chưa gán Chủ xe. Bạn có thể chọn một tài khoản Chủ xe và lưu lại bất kỳ lúc nào.
+                        </MudAlert>
+                    </MudItem>
+                }
 
-            <MudItem xs="12"><MudDivider Class="my-2" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.PlateNumber" Label="Biển số" Required="true" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.VehicleCode" Label="Mã xe" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.PermitNumber" Label="Số phù hiệu" Required="true" Variant="Variant.Outlined" HelperText="Dùng làm tiền tố số hợp đồng khi hoàn tất." /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.VehicleType" Label="Loại xe" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.Brand" Label="Nhãn hiệu" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.Model" Label="Dòng xe" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudNumericField T="int?" @bind-Value="_model.SeatCount" Label="Số chỗ" Min="1" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.Color" Label="Màu xe" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.ChassisNumber" Label="Số khung" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.EngineNumber" Label="Số máy" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12"><MudSwitch T="bool" @bind-Value="_model.IsActive" Color="Color.Success" Label="Xe đang hoạt động" /></MudItem>
+                @if (VehicleOwnerChanged)
+                {
+                    <MudItem xs="12">
+                        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true">
+                            Chủ xe đã thay đổi. Sau khi lưu, thông tin Chủ xe sẽ đồng bộ từ tài khoản mới; chân ký hợp đồng luôn lấy trực tiếp từ hồ sơ tài khoản Chủ xe.
+                        </MudAlert>
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudPaper>
 
-            @if (VehicleOwnerChanged)
-            {
-                <MudItem xs="12">
-                    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
-                        Chủ xe đã thay đổi. Sau khi lưu, thông tin Chủ xe sẽ lấy từ tài khoản mới; chân ký hợp đồng luôn lấy trực tiếp từ hồ sơ tài khoản Chủ xe.
-                    </MudAlert>
-                </MudItem>
-            }
-        </MudGrid>
+        <MudPaper Class="ent-section-card" Elevation="0">
+            <div class="ent-section-header">
+                <div class="ent-section-header__left">
+                    <div class="ent-section-icon"><MudIcon Icon="@Icons.Material.Filled.DirectionsCar" Size="Size.Small" /></div>
+                    <div>
+                        <MudText Class="ent-section-title">2. Thông tin nhận diện &amp; Thông số kỹ thuật phương tiện</MudText>
+                        <MudText Class="ent-section-subtitle">Biển kiểm soát, số phù hiệu vận tải (dùng sinh số HĐ) và thông số đăng kiểm của xe.</MudText>
+                    </div>
+                </div>
+            </div>
 
-        <MudStack Row="true" Class="mt-4">
-            <MudButton Variant="Variant.Outlined" OnClick="@(() => Navigation.NavigateTo($"/admin/vehicles/{Id}"))">Quay lại</MudButton>
-            <MudSpacer />
-            <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="_saving" OnClick="SaveAsync">Lưu thay đổi</MudButton>
-        </MudStack>
-    </MudPaper>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6" md="4"><MudTextField @bind-Value="_model.PlateNumber" Label="Biển kiểm soát" Required="true" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" sm="6" md="4"><MudTextField @bind-Value="_model.PermitNumber" Label="Số phù hiệu vận tải" Required="true" Variant="Variant.Outlined" HelperText="Tiền tố sinh số hợp đồng khi hoàn tất." /></MudItem>
+                <MudItem xs="12" sm="6" md="4"><MudTextField @bind-Value="_model.VehicleCode" Label="Mã phương tiện nội bộ" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" sm="6" md="3"><MudTextField @bind-Value="_model.VehicleType" Label="Loại phương tiện" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" sm="6" md="3"><MudTextField @bind-Value="_model.Brand" Label="Nhãn hiệu (Hãng xe)" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" sm="6" md="3"><MudTextField @bind-Value="_model.Model" Label="Dòng xe (Model)" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" sm="6" md="3"><MudNumericField T="int?" @bind-Value="_model.SeatCount" Label="Số chỗ ngồi" Min="1" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" sm="6" md="4"><MudTextField @bind-Value="_model.Color" Label="Màu sơn" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" sm="6" md="4"><MudTextField @bind-Value="_model.ChassisNumber" Label="Số khung (VIN)" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" sm="6" md="4"><MudTextField @bind-Value="_model.EngineNumber" Label="Số máy" Variant="Variant.Outlined" /></MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        <MudPaper Class="ent-action-bar" Elevation="0">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Navigation.NavigateTo($"/admin/vehicles/{Id}"))">Quay lại chi tiết</MudButton>
+                <MudSpacer />
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Save" Disabled="_saving" OnClick="SaveAsync">
+                    @(_saving ? "Đang lưu..." : "Lưu thay đổi")
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    </MudStack>
 }
 
 @code {

@@ -452,7 +452,8 @@ public sealed class PdfContractTemplateRenderer(
             var template = subContractTemplateService.GetTemplateForCompany(
                 contract.CompanyProfileId,
                 companyName,
-                companyTaxCode);
+                companyTaxCode,
+                company);
 
             // Quốc hiệu & Tiêu đề Đơn vị (2 cột)
             var unitTitleUpper = SubContractTemplateService.ReplacePlaceholders(template.UnitHeaderTitle, placeholders)
@@ -557,7 +558,10 @@ public sealed class PdfContractTemplateRenderer(
                 });
             }
 
-            DrawBoxedText(companyRepName.ToUpper(CultureInfo.GetCultureInfo("vi-VN")), 45, currentY + 92, 240, 20, 10.8f, bold: true, alignment: "Center", maxLines: 1);
+            var leftSignerText = string.IsNullOrWhiteSpace(template.SignatureLeftSignerName)
+                ? companyRepName
+                : SubContractTemplateService.ReplacePlaceholders(template.SignatureLeftSignerName, placeholders);
+            DrawBoxedText(leftSignerText.ToUpper(CultureInfo.GetCultureInfo("vi-VN")), 45, currentY + 92, 240, 20, 10.8f, bold: true, alignment: "Center", maxLines: 1);
             DrawBoxedText(ownerName.ToUpper(CultureInfo.GetCultureInfo("vi-VN")), 310, currentY + 92, 240, 20, 10.8f, bold: true, alignment: "Center", maxLines: 1);
 
             graphics.Dispose();

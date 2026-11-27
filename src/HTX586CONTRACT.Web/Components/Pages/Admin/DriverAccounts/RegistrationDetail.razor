@@ -20,19 +20,63 @@ else if (_item is null)
 }
 else
 {
-    <MudPaper Class="pa-4" Elevation="1">
-        <MudGrid>
-            <MudItem xs="12" sm="6"><InfoListItem Label="ID đăng nhập" Value="@_item.UserName" /></MudItem>
-            <MudItem xs="12" sm="6"><InfoListItem Label="Họ và tên" Value="@_item.FullName" /></MudItem>
-            <MudItem xs="12" sm="6"><InfoListItem Label="Số điện thoại" Value="@_item.PhoneNumber" /></MudItem>
-            <MudItem xs="12" sm="6"><InfoListItem Label="Thời gian gửi" Value="@_item.RequestedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")" /></MudItem>
-            <MudItem xs="12"><MudTextField @bind-Value="_reviewNote" Label="Ghi chú xét duyệt" Lines="3" Variant="Variant.Outlined" /></MudItem>
-        </MudGrid>
-        <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-4">
-            <MudButton Color="Color.Error" Variant="Variant.Outlined" Disabled="_working" OnClick="@(() => ReviewAsync(false))">Từ chối</MudButton>
-            <MudButton Color="Color.Success" Variant="Variant.Filled" Disabled="_working" OnClick="@(() => ReviewAsync(true))">Phê duyệt</MudButton>
-        </MudStack>
-    </MudPaper>
+    <MudStack Spacing="3">
+        <MudPaper Class="ent-hero-card" Elevation="0">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                <MudAvatar Size="Size.Large" Color="Color.Surface" Variant="Variant.Outlined" Style="color:#fff; border-color:rgba(255,255,255,.28); background:rgba(255,255,255,.12);">
+                    <MudIcon Icon="@Icons.Material.Filled.PersonAddAlt1" />
+                </MudAvatar>
+                <div>
+                    <MudText Typo="Typo.h5" Class="fw-700" Style="color:#fff;">@_item.FullName</MudText>
+                    <MudText Typo="Typo.body2" Class="ent-hero-subtitle">Yêu cầu đăng ký tài khoản Chủ xe · ID: @_item.UserName</MudText>
+                    <MudStack Row="true" Spacing="1" Class="mt-2" Wrap="Wrap.Wrap">
+                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Filled" Icon="@Icons.Material.Filled.HourglassTop">Chờ xét duyệt</MudChip>
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Phone">@_item.PhoneNumber</MudChip>
+                    </MudStack>
+                </div>
+                <MudSpacer />
+                <MudPaper Class="ent-hero-metric" Elevation="0">
+                    <span class="ent-hero-metric__label">Thời gian gửi yêu cầu</span>
+                    <strong class="ent-hero-metric__value">@_item.RequestedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</strong>
+                </MudPaper>
+            </MudStack>
+        </MudPaper>
+
+        <MudPaper Class="ent-section-card" Elevation="0">
+            <div class="ent-section-header">
+                <div class="ent-section-header__left">
+                    <div class="ent-section-icon"><MudIcon Icon="@Icons.Material.Filled.FactCheck" Size="Size.Small" /></div>
+                    <div>
+                        <MudText Class="ent-section-title">1. Thông tin đăng ký của Chủ xe</MudText>
+                        <MudText Class="ent-section-subtitle">Đối chiếu thông tin định danh và số điện thoại trước khi phê duyệt cấp quyền truy cập.</MudText>
+                    </div>
+                </div>
+            </div>
+
+            <MudGrid Spacing="2">
+                <MudItem xs="12" sm="6" md="3"><InfoListItem Label="ID đăng nhập" Value="@_item.UserName" Icon="@Icons.Material.Filled.AccountCircle" /></MudItem>
+                <MudItem xs="12" sm="6" md="3"><InfoListItem Label="Họ và tên Chủ xe" Value="@_item.FullName" Icon="@Icons.Material.Filled.Badge" /></MudItem>
+                <MudItem xs="12" sm="6" md="3"><InfoListItem Label="Số điện thoại liên hệ" Value="@_item.PhoneNumber" Icon="@Icons.Material.Filled.Phone" /></MudItem>
+                <MudItem xs="12" sm="6" md="3"><InfoListItem Label="Thời điểm đăng ký" Value="@_item.RequestedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")" Icon="@Icons.Material.Filled.Schedule" /></MudItem>
+                <MudItem xs="12" Class="mt-2">
+                    <MudTextField @bind-Value="_reviewNote"
+                                  Label="Ghi chú xét duyệt / Lý do từ chối (nếu có)"
+                                  Placeholder="Nhập ghi chú nội bộ hoặc lý do phê duyệt/từ chối..."
+                                  Lines="3"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        <MudPaper Class="ent-action-bar" Elevation="0">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Navigation.NavigateTo("/admin/account-registrations"))">Quay lại danh sách</MudButton>
+                <MudSpacer />
+                <MudButton Color="Color.Error" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Close" Disabled="_working" OnClick="@(() => ReviewAsync(false))">Từ chối yêu cầu</MudButton>
+                <MudButton Color="Color.Success" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.CheckCircle" Disabled="_working" OnClick="@(() => ReviewAsync(true))">Phê duyệt tài khoản</MudButton>
+            </MudStack>
+        </MudPaper>
+    </MudStack>
 }
 
 @code {

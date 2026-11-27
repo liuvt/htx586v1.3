@@ -287,14 +287,21 @@ else
                         <MudDivider />
                         <MudText Typo="Typo.h6">4. Khối Chữ ký cuối trang</MudText>
                         <MudGrid Spacing="2">
-                            <MudItem xs="12" md="6">
+                            <MudItem xs="12" md="4">
                                 <MudTextField @bind-Value="_editingTemplate.SignatureLeftTitle"
                                               Immediate="true"
                                               Label="Tiêu đề cột ký Bên A"
                                               Variant="Variant.Outlined"
                                               Margin="Margin.Dense" />
                             </MudItem>
-                            <MudItem xs="12" md="6">
+                            <MudItem xs="12" md="4">
+                                <MudTextField @bind-Value="_editingTemplate.SignatureLeftSignerName"
+                                              Immediate="true"
+                                              Label="Họ tên người ký cứng Bên A"
+                                              Variant="Variant.Outlined"
+                                              Margin="Margin.Dense" />
+                            </MudItem>
+                            <MudItem xs="12" md="4">
                                 <MudTextField @bind-Value="_editingTemplate.SignatureRightTitle"
                                               Immediate="true"
                                               Label="Tiêu đề cột ký Bên B"
@@ -423,7 +430,7 @@ else
                             <div class="a4-signature-col">
                                 <div class="a4-bold">@RenderLine(_editingTemplate.SignatureLeftTitle)</div>
                                 <div class="a4-signature-space">(Chữ ký &amp; con dấu Đơn vị)</div>
-                                <div class="a4-bold">@RenderLine("{{COMPANY_REPRESENTATIVE}}")</div>
+                                <div class="a4-bold">@RenderLine(string.IsNullOrWhiteSpace(_editingTemplate.SignatureLeftSignerName) ? "{{COMPANY_REPRESENTATIVE}}" : _editingTemplate.SignatureLeftSignerName)</div>
                             </div>
                             <div class="a4-signature-col">
                                 <div class="a4-bold">@RenderLine(_editingTemplate.SignatureRightTitle)</div>
@@ -634,7 +641,8 @@ else
             _editingTemplate = TemplateService.GetTemplateForCompany(
                 companyId,
                 company?.CompanyName,
-                company?.TaxCode);
+                company?.TaxCode,
+                company);
             _samplePlaceholders = SubContractTemplateService.BuildSamplePlaceholders(company);
         }
     }
@@ -735,8 +743,9 @@ else
                     AuthenticationStateProvider,
                     SelectedCompany.Id,
                     SelectedCompany.CompanyName,
-                    SelectedCompany.TaxCode);
-                Snackbar.Add($"Đã xóa tùy chỉnh riêng và khôi phục mẫu mặc định cho '{SelectedCompany.CompanyName}'.", Severity.Success);
+                    SelectedCompany.TaxCode,
+                    SelectedCompany);
+                Snackbar.Add($"Đã khôi phục mẫu Hợp đồng phụ cứng mặc định cho '{SelectedCompany.CompanyName}'.", Severity.Success);
             }
 
             LoadTargetIntoEditor(_selectedTargetKey);

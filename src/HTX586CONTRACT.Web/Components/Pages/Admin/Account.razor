@@ -17,21 +17,59 @@ else if (_model is null)
 }
 else
 {
-    <MudPaper Class="pa-4" Elevation="1">
-        <MudGrid>
-            <MudItem xs="12" md="4"><MudTextField Value="@_model.UserName" Label="ID đăng nhập" Disabled="true" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField T="string" Value="@RoleDisplayName" Label="Vai trò" Disabled="true" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="4"><MudTextField Value="@_model.CompanyName" Label="Công ty/Văn phòng" Disabled="true" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.FullName" Label="Họ tên" Required="true" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.PhoneNumber" Label="Số điện thoại" Required="true" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.Email" Label="Email" Variant="Variant.Outlined" /></MudItem>
-            <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.EmployeeCode" Label="Mã nhân viên" Variant="Variant.Outlined" /></MudItem>
-        </MudGrid>
-        <MudStack Row="true" Class="mt-4" Justify="Justify.FlexEnd">
-            <MudButton Color="Color.Warning" Variant="Variant.Outlined" Disabled="@(_saving || _resetting)" OnClick="ResetPasswordAsync">Reset mật khẩu về Htx@586</MudButton>
-            <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_saving || _resetting)" OnClick="SaveAsync">Cập nhật thông tin</MudButton>
-        </MudStack>
-    </MudPaper>
+    <MudStack Spacing="3">
+        <MudPaper Class="ent-hero-card" Elevation="0">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                <MudAvatar Size="Size.Large" Color="Color.Surface" Variant="Variant.Outlined" Style="color:#fff; border-color:rgba(255,255,255,.28); background:rgba(255,255,255,.12);">
+                    <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" />
+                </MudAvatar>
+                <div>
+                    <MudText Typo="Typo.h5" Class="fw-700" Style="color:#fff;">@_model.FullName</MudText>
+                    <MudText Typo="Typo.body2" Class="ent-hero-subtitle">Tài khoản Quản lý · ID đăng nhập: @_model.UserName</MudText>
+                    <MudStack Row="true" Spacing="1" Class="mt-2" Wrap="Wrap.Wrap">
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Filled">Đang hoạt động</MudChip>
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Apartment">@_model.CompanyName</MudChip>
+                    </MudStack>
+                </div>
+                <MudSpacer />
+                <MudPaper Class="ent-hero-metric" Elevation="0">
+                    <span class="ent-hero-metric__label">Số điện thoại</span>
+                    <strong class="ent-hero-metric__value">@(string.IsNullOrWhiteSpace(_model.PhoneNumber) ? "—" : _model.PhoneNumber)</strong>
+                </MudPaper>
+            </MudStack>
+        </MudPaper>
+
+        <MudPaper Class="ent-section-card" Elevation="0">
+            <div class="ent-section-header">
+                <div class="ent-section-header__left">
+                    <div class="ent-section-icon"><MudIcon Icon="@Icons.Material.Filled.Badge" Size="Size.Small" /></div>
+                    <div>
+                        <MudText Class="ent-section-title">Thông tin cá nhân &amp; Đơn vị quản lý</MudText>
+                        <MudText Class="ent-section-subtitle">Cập nhật họ tên, số điện thoại, email và mã nhân viên của tài khoản Quản lý.</MudText>
+                    </div>
+                </div>
+            </div>
+            <MudGrid Spacing="2">
+                <MudItem xs="12" md="4"><MudTextField Value="@_model.UserName" Label="ID đăng nhập" Disabled="true" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" md="4"><MudTextField T="string" Value="@RoleDisplayName" Label="Vai trò" Disabled="true" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.EmployeeCode" Label="Mã nhân viên" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.FullName" Label="Họ và tên" Required="true" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.PhoneNumber" Label="Số điện thoại" Required="true" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12" md="4"><MudTextField @bind-Value="_model.Email" Label="Email liên hệ" Variant="Variant.Outlined" /></MudItem>
+                <MudItem xs="12"><MudTextField Value="@_model.CompanyName" Label="Công ty / Văn phòng được phân quyền" Disabled="true" Variant="Variant.Outlined" /></MudItem>
+            </MudGrid>
+        </MudPaper>
+
+        <MudPaper Class="ent-action-bar" Elevation="0">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                <MudButton Color="Color.Warning" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.LockReset" Disabled="@(_saving || _resetting)" OnClick="ResetPasswordAsync">Reset mật khẩu về Htx@586</MudButton>
+                <MudSpacer />
+                <MudButton Color="Color.Primary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.Save" Disabled="@(_saving || _resetting)" OnClick="SaveAsync">
+                    @(_saving ? "Đang lưu..." : "Lưu thay đổi")
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    </MudStack>
 }
 
 @code {

@@ -1,17 +1,12 @@
-﻿<MudListItem T="string"
-             Icon="@Icon">
-
-    <MudText Typo="Typo.caption"
-             Color="Color.Secondary">
-        @Label
-    </MudText>
-
-    <MudText Typo="Typo.body1"
-             Class="text-break">
-        @DisplayValue
-    </MudText>
-
-</MudListItem>
+﻿<div class="htx-info-item @Class">
+    <div class="htx-info-item__icon">
+        <MudIcon Icon="@Icon" Size="Size.Small" />
+    </div>
+    <div class="htx-info-item__body">
+        <span class="htx-info-item__label">@Label</span>
+        <strong class="htx-info-item__value">@DisplayValue</strong>
+    </div>
+</div>
 
 @code {
     [Parameter]
@@ -21,11 +16,13 @@
     public string? Value { get; set; }
 
     [Parameter]
-    public string Icon { get; set; }
-        = Icons.Material.Filled.Info;
+    public string Icon { get; set; } = Icons.Material.Filled.Info;
+
+    [Parameter]
+    public string? Class { get; set; }
 
     private string DisplayValue =>
         string.IsNullOrWhiteSpace(Value)
             ? "Chưa cập nhật"
-            : Value;
+            : Value.Trim();
 }

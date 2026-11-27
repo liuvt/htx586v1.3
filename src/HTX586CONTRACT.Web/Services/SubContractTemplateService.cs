@@ -24,7 +24,7 @@ public sealed class SubContractTemplateDto
 {
     public Guid? CompanyProfileId { get; set; }
     public string TemplateName { get; set; } = "Mẫu Hợp đồng dịch vụ vận tải";
-    public string UnitHeaderTitle { get; set; } = "{{COMPANY_NAME}}";
+    public string UnitHeaderTitle { get; set; } = string.Empty;
     public string ContractNumberLine { get; set; } = "Số:{{SUB_CONTRACT_NUMBER}}";
     public string DocumentTitle { get; set; } = "HỢP ĐỒNG DỊCH VỤ VẬN TẢI";
     public string LegalBasesText { get; set; } = string.Empty;
@@ -39,6 +39,7 @@ public sealed class SubContractTemplateDto
     public string Article4Text { get; set; } = string.Empty;
     public string Article5Text { get; set; } = string.Empty;
     public string SignatureLeftTitle { get; set; } = "ĐẠI DIỆN BÊN A";
+    public string SignatureLeftSignerName { get; set; } = string.Empty;
     public string SignatureRightTitle { get; set; } = "ĐẠI DIỆN BÊN B";
     public string? UploadedDocxFileName { get; set; }
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
@@ -46,15 +47,15 @@ public sealed class SubContractTemplateDto
 
 public sealed class SubContractTemplateBundleDto
 {
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = 2;
     public SubContractTemplateDto DefaultCaoSon { get; set; } = new();
     public SubContractTemplateDto DefaultMekongXanh { get; set; } = new();
     public Dictionary<string, SubContractTemplateDto> CompanyTemplates { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 /// <summary>
-/// Quản lý Mẫu Hợp đồng phụ (Hợp đồng dịch vụ vận tải) theo từng Đơn vị (CompanyProfile).
-/// Kết hợp Hướng 1 (Soạn thảo trực tiếp trên Web có gắn biến {{...}}) và Hướng 3 (Nhập/Xuất file Word .docx).
+/// Quản lý Mẫu Hợp đồng phụ (Hợp đồng dịch vụ vận tải) cứng riêng cho từng Đơn vị / Khu HTX.
+/// Kết hợp Hướng 1 (Soạn thảo trực tiếp trên Web) và Hướng 3 (Nhập/Xuất file Word .docx).
 /// Chỉ tài khoản Owner mới có quyền chỉnh sửa mẫu.
 /// </summary>
 public sealed class SubContractTemplateService(
@@ -87,17 +88,6 @@ public sealed class SubContractTemplateService(
         new() { Token = "{{SIGN_YEAR}}", Label = "Năm ký (yyyy)", SampleValue = "2026" },
         new() { Token = "{{EFFECTIVE_FROM}}", Label = "Ngày hiệu lực từ", SampleValue = "07 / 09 / 2026" },
         new() { Token = "{{EFFECTIVE_TO}}", Label = "Ngày hết hiệu lực (4 năm)", SampleValue = "07 / 09 / 2030" },
-        new() { Token = "{{COMPANY_NAME}}", Label = "Tên Đơn vị (Bên A)", SampleValue = "CN HTX CÔNG NGHỆ VT CAO SƠN CAR TẠI CẦN THƠ" },
-        new() { Token = "{{COMPANY_ADDRESS}}", Label = "Địa chỉ trụ sở Bên A", SampleValue = "Số 47 đường số 12, KTĐC Thới Nhựt 2, Phường Tân An, Thành phố Cần Thơ" },
-        new() { Token = "{{COMPANY_PHONE}}", Label = "Số điện thoại Bên A", SampleValue = "0925351111" },
-        new() { Token = "{{COMPANY_TAX_CODE}}", Label = "Mã số thuế Bên A", SampleValue = "0319340385-001" },
-        new() { Token = "{{COMPANY_LICENSE}}", Label = "Số GPKDVT / ĐKKD Bên A", SampleValue = "922643479/GPKDVT" },
-        new() { Token = "{{COMPANY_LICENSE_PLACE}}", Label = "Nơi cấp GPKDVT Bên A", SampleValue = "Sở Xây dựng Thành phố Cần Thơ" },
-        new() { Token = "{{COMPANY_REPRESENTATIVE}}", Label = "Người đại diện Bên A", SampleValue = "Nguyễn Trọng Hậu" },
-        new() { Token = "{{COMPANY_REP_POSITION}}", Label = "Chức vụ đại diện Bên A", SampleValue = "Giám đốc" },
-        new() { Token = "{{COMPANY_REP_CITIZEN_ID}}", Label = "CCCD đại diện Bên A", SampleValue = "82203018675" },
-        new() { Token = "{{COMPANY_REP_ISSUED_DATE}}", Label = "Ngày cấp CCCD Bên A", SampleValue = "19/01/2026" },
-        new() { Token = "{{COMPANY_REP_ISSUED_PLACE}}", Label = "Nơi cấp CCCD Bên A", SampleValue = "Bộ Công An" },
         new() { Token = "{{OWNER_NAME}}", Label = "Tên Chủ phương tiện (Bên B)", SampleValue = "PHAN THỊ VIỆT HÀ" },
         new() { Token = "{{OWNER_CITIZEN_ID}}", Label = "CCCD Chủ phương tiện (Bên B)", SampleValue = "092162002859" },
         new() { Token = "{{OWNER_ISSUED_DATE}}", Label = "Ngày cấp CCCD Bên B", SampleValue = "29/04/2021" },
@@ -109,7 +99,18 @@ public sealed class SubContractTemplateService(
         new() { Token = "{{SEAT_COUNT}}", Label = "Số chỗ", SampleValue = "16" },
         new() { Token = "{{VEHICLE_CHASSIS}}", Label = "Số khung", SampleValue = "P7P36941DURATORQ4D225H" },
         new() { Token = "{{VEHICLE_ENGINE}}", Label = "Số máy", SampleValue = "RL3DLT6MMPTR56568" },
-        new() { Token = "{{VEHICLE_TYPE}}", Label = "Loại phương tiện", SampleValue = "XE HỢP ĐỒNG" }
+        new() { Token = "{{VEHICLE_TYPE}}", Label = "Loại phương tiện", SampleValue = "XE HỢP ĐỒNG" },
+        new() { Token = "{{COMPANY_NAME}}", Label = "Tên Đơn vị (Bên A)", SampleValue = "CN HTX CÔNG NGHỆ VT CAO SƠN CAR TẠI CẦN THƠ" },
+        new() { Token = "{{COMPANY_ADDRESS}}", Label = "Địa chỉ trụ sở Bên A", SampleValue = "Số 47 đường số 12, KTĐC Thới Nhựt 2, Phường Tân An, Thành phố Cần Thơ" },
+        new() { Token = "{{COMPANY_PHONE}}", Label = "Số điện thoại Bên A", SampleValue = "0925351111" },
+        new() { Token = "{{COMPANY_TAX_CODE}}", Label = "Mã số thuế Bên A", SampleValue = "0319340385-001" },
+        new() { Token = "{{COMPANY_LICENSE}}", Label = "Số GPKDVT / ĐKKD Bên A", SampleValue = "922643479/GPKDVT" },
+        new() { Token = "{{COMPANY_LICENSE_PLACE}}", Label = "Nơi cấp GPKDVT Bên A", SampleValue = "Sở Xây dựng Thành phố Cần Thơ" },
+        new() { Token = "{{COMPANY_REPRESENTATIVE}}", Label = "Người đại diện Bên A", SampleValue = "Nguyễn Trọng Hậu" },
+        new() { Token = "{{COMPANY_REP_POSITION}}", Label = "Chức vụ đại diện Bên A", SampleValue = "Giám đốc." },
+        new() { Token = "{{COMPANY_REP_CITIZEN_ID}}", Label = "CCCD đại diện Bên A", SampleValue = "82203018675" },
+        new() { Token = "{{COMPANY_REP_ISSUED_DATE}}", Label = "Ngày cấp CCCD Bên A", SampleValue = "19/01/2026" },
+        new() { Token = "{{COMPANY_REP_ISSUED_PLACE}}", Label = "Nơi cấp CCCD Bên A", SampleValue = "Bộ Công An" }
     ];
 
     public string GetTemplatesJsonPath()
@@ -127,7 +128,8 @@ public sealed class SubContractTemplateService(
     public SubContractTemplateDto GetTemplateForCompany(
         Guid? companyProfileId,
         string? companyName,
-        string? taxCode)
+        string? taxCode,
+        CompanyProfile? companyEntity = null)
     {
         var bundle = LoadBundle();
         if (companyProfileId.HasValue &&
@@ -136,13 +138,28 @@ public sealed class SubContractTemplateService(
             return Clone(custom);
         }
 
-        var isCaoSon = SubContractHelper.IsCaoSonUnit(companyName, taxCode);
-        var preset = isCaoSon ? bundle.DefaultCaoSon : bundle.DefaultMekongXanh;
-        var clone = Clone(preset);
-        clone.CompanyProfileId = companyProfileId;
-        if (!string.IsNullOrWhiteSpace(companyName))
-            clone.TemplateName = $"Mẫu HĐ phụ - {companyName}";
-        return clone;
+        if (SubContractHelper.IsCaoSonUnit(companyName, taxCode))
+        {
+            var caoSon = Clone(bundle.DefaultCaoSon);
+            caoSon.CompanyProfileId = companyProfileId;
+            return caoSon;
+        }
+
+        if (SubContractHelper.IsMekongXanhUnit(companyName, taxCode))
+        {
+            var mekong = Clone(bundle.DefaultMekongXanh);
+            mekong.CompanyProfileId = companyProfileId;
+            return mekong;
+        }
+
+        if (companyEntity is not null || !string.IsNullOrWhiteSpace(companyName))
+        {
+            return CreateFixedUnitTemplate(companyEntity, companyProfileId, companyName, taxCode);
+        }
+
+        var fallback = Clone(bundle.DefaultMekongXanh);
+        fallback.CompanyProfileId = companyProfileId;
+        return fallback;
     }
 
     public bool HasCustomCompanyTemplate(Guid companyProfileId)
@@ -186,7 +203,7 @@ public sealed class SubContractTemplateService(
 
             await PersistBundleAsync(path, bundle, ct);
             logger.LogInformation(
-                "Owner đã lưu mẫu Hợp đồng phụ. CompanyProfileId={CompanyProfileId}, Path={Path}",
+                "Owner đã lưu mẫu Hợp đồng phụ cứng riêng cho đơn vị. CompanyProfileId={CompanyProfileId}, Path={Path}",
                 companyProfileId,
                 path);
         }
@@ -201,6 +218,7 @@ public sealed class SubContractTemplateService(
         Guid? companyProfileId,
         string? companyName,
         string? taxCode,
+        CompanyProfile? companyEntity = null,
         CancellationToken ct = default)
     {
         await EnsureOwnerAccessAsync(authStateProvider);
@@ -213,11 +231,18 @@ public sealed class SubContractTemplateService(
         {
             var bundle = LoadBundle();
             var isCaoSon = SubContractHelper.IsCaoSonUnit(companyName, taxCode);
-            var defaultPreset = CreateDefaultPreset(isCaoSon);
+            var isMekong = SubContractHelper.IsMekongXanhUnit(companyName, taxCode);
+
+            SubContractTemplateDto defaultPreset = isCaoSon
+                ? CreateDefaultPreset(isCaoSon: true)
+                : isMekong
+                    ? CreateDefaultPreset(isCaoSon: false)
+                    : CreateFixedUnitTemplate(companyEntity, companyProfileId, companyName, taxCode);
 
             if (companyProfileId.HasValue)
             {
-                bundle.CompanyTemplates.Remove(companyProfileId.Value.ToString("N"));
+                defaultPreset.CompanyProfileId = companyProfileId;
+                bundle.CompanyTemplates[companyProfileId.Value.ToString("N")] = Clone(defaultPreset);
             }
             else if (isCaoSon)
             {
@@ -229,9 +254,6 @@ public sealed class SubContractTemplateService(
             }
 
             await PersistBundleAsync(path, bundle, ct);
-            defaultPreset.CompanyProfileId = companyProfileId;
-            if (!string.IsNullOrWhiteSpace(companyName))
-                defaultPreset.TemplateName = $"Mẫu HĐ phụ - {companyName}";
             return defaultPreset;
         }
         finally
@@ -275,7 +297,6 @@ public sealed class SubContractTemplateService(
         if (paragraphs.Count == 0)
             throw new InvalidOperationException("File Word (.docx) không chứa đoạn văn bản nào.");
 
-        // Lưu bản sao file .docx đã upload vào Templates/Contracts/SubContracts
         var subContractsDir = Path.Combine(Path.GetDirectoryName(GetTemplatesJsonPath())!, "SubContracts");
         Directory.CreateDirectory(subContractsDir);
         var keySegment = companyProfileId?.ToString("N") ?? (SubContractHelper.IsCaoSonUnit(companyName, taxCode) ? "default-caoson" : "default-mekongxanh");
@@ -306,7 +327,6 @@ public sealed class SubContractTemplateService(
             mainPart.Document = new Document();
             var body = new Body();
 
-            // Bảng Header 2 cột (Đơn vị & Quốc hiệu)
             var headerTable = new Table(
                 new TableProperties(
                     new TableWidth { Width = "5000", Type = TableWidthUnitValues.Pct },
@@ -369,7 +389,10 @@ public sealed class SubContractTemplateService(
 
             AppendParagraph(body, string.Empty, bold: false, italic: false);
 
-            var repA = R("{{COMPANY_REPRESENTATIVE}}").ToUpper(CultureInfo.GetCultureInfo("vi-VN"));
+            var leftSignerSource = string.IsNullOrWhiteSpace(template.SignatureLeftSignerName)
+                ? "{{COMPANY_REPRESENTATIVE}}"
+                : template.SignatureLeftSignerName;
+            var repA = R(leftSignerSource).ToUpper(CultureInfo.GetCultureInfo("vi-VN"));
             var repB = R("{{OWNER_NAME}}").ToUpper(CultureInfo.GetCultureInfo("vi-VN"));
 
             var sigTable = new Table(
@@ -404,7 +427,6 @@ public sealed class SubContractTemplateService(
             sigTable.Append(sigRow);
             body.Append(sigTable);
 
-            // Cấu hình trang A4 chuẩn
             body.Append(new SectionProperties(
                 new PageSize { Width = 11906U, Height = 16838U },
                 new PageMargin { Top = 850, Right = 850, Bottom = 850, Left = 1134 }));
@@ -423,39 +445,25 @@ public sealed class SubContractTemplateService(
         var vehicle = contract.Vehicle;
         var driver = contract.Driver;
 
-        var companyName = snapshot is not null
+        var rawCompanyName = snapshot is not null
             ? First(snapshot.Company.Name, contract.CompanyNameSnapshot, company?.CompanyName, "...")
             : First(contract.CompanyNameSnapshot, company?.CompanyName, "...");
-        var companyTaxCode = snapshot is not null
+        var rawCompanyTaxCode = snapshot is not null
             ? First(snapshot.Company.TaxCode, contract.CompanyTaxCodeSnapshot, company?.TaxCode, "...")
             : First(contract.CompanyTaxCodeSnapshot, company?.TaxCode, "...");
-        var companyAddress = snapshot is not null
-            ? First(snapshot.Company.Address, contract.CompanyAddressSnapshot, company?.Address, "...")
-            : First(contract.CompanyAddressSnapshot, company?.Address, "...");
-        var companyPhone = snapshot is not null
-            ? First(snapshot.Company.PhoneNumber, company?.PhoneNumber, "...")
-            : First(company?.PhoneNumber, "...");
-        var companyLicense = snapshot is not null
-            ? First(snapshot.Company.BusinessLicenseNumber, company?.BusinessLicenseNumber, "...")
-            : First(company?.BusinessLicenseNumber, "...");
-        var companyLicenseIssuedPlace = snapshot is not null
-            ? First(snapshot.Company.BusinessLicenseIssuedPlace, company?.BusinessLicenseIssuedPlace, "Sở Xây dựng Thành phố Cần Thơ")
-            : First(company?.BusinessLicenseIssuedPlace, "Sở Xây dựng Thành phố Cần Thơ");
-        var companyRepName = snapshot is not null
-            ? First(snapshot.Company.RepresentativeName, contract.CompanyRepresentativeSnapshot, company?.RepresentativeName, "...")
-            : First(contract.CompanyRepresentativeSnapshot, company?.RepresentativeName, "...");
-        var companyRepPosition = snapshot is not null
-            ? First(snapshot.Company.RepresentativePosition, contract.CompanyRepresentativePositionSnapshot, company?.RepresentativePosition, "Giám đốc")
-            : First(contract.CompanyRepresentativePositionSnapshot, company?.RepresentativePosition, "Giám đốc");
-        var companyRepCitizenId = snapshot is not null
-            ? First(snapshot.Company.RepresentativeCitizenId, company?.RepresentativeCitizenId, "...")
-            : First(company?.RepresentativeCitizenId, "...");
-        var companyRepIssuedDate = FormatDateOnly(snapshot is not null
-            ? snapshot.Company.RepresentativeCitizenIdIssuedDate ?? company?.RepresentativeCitizenIdIssuedDate
-            : company?.RepresentativeCitizenIdIssuedDate);
-        var companyRepIssuedPlace = snapshot is not null
-            ? First(snapshot.Company.RepresentativeCitizenIdIssuedPlace, company?.RepresentativeCitizenIdIssuedPlace, "Cục Cảnh Sát QLHC về TTXH")
-            : First(company?.RepresentativeCitizenIdIssuedPlace, "Cục Cảnh Sát QLHC về TTXH");
+
+        var fixedUnit = SubContractHelper.ResolveFixedUnitProfile(
+            rawCompanyName,
+            rawCompanyTaxCode,
+            fallbackAddress: snapshot?.Company.Address ?? contract.CompanyAddressSnapshot ?? company?.Address,
+            fallbackPhone: snapshot?.Company.PhoneNumber ?? company?.PhoneNumber,
+            fallbackLicenseNumber: snapshot?.Company.BusinessLicenseNumber ?? company?.BusinessLicenseNumber,
+            fallbackLicensePlace: snapshot?.Company.BusinessLicenseIssuedPlace ?? company?.BusinessLicenseIssuedPlace,
+            fallbackRepName: snapshot?.Company.RepresentativeName ?? contract.CompanyRepresentativeSnapshot ?? company?.RepresentativeName,
+            fallbackRepPosition: snapshot?.Company.RepresentativePosition ?? contract.CompanyRepresentativePositionSnapshot ?? company?.RepresentativePosition,
+            fallbackRepCitizenId: snapshot?.Company.RepresentativeCitizenId ?? company?.RepresentativeCitizenId,
+            fallbackRepCitizenIssuedDate: snapshot?.Company.RepresentativeCitizenIdIssuedDate ?? company?.RepresentativeCitizenIdIssuedDate,
+            fallbackRepCitizenIssuedPlace: snapshot?.Company.RepresentativeCitizenIdIssuedPlace ?? company?.RepresentativeCitizenIdIssuedPlace);
 
         var ownerName = snapshot is not null
             ? First(snapshot.Vehicle.OwnerName, contract.VehicleOwnerNameSnapshot, vehicle?.OwnerName, driver?.FullName, "...")
@@ -496,8 +504,8 @@ public sealed class SubContractTemplateService(
         var subContractNumber = SubContractHelper.BuildSubContractNumber(
             contract.ContractNumber,
             contract.CreatedAt,
-            companyName,
-            companyTaxCode);
+            rawCompanyName,
+            rawCompanyTaxCode);
         var (effectiveFrom, effectiveTo) = SubContractHelper.GetEffectivePeriod(contract.CreatedAt);
         var contractDate = contract.CreatedAt.Kind == DateTimeKind.Utc
             ? contract.CreatedAt.AddHours(7)
@@ -512,17 +520,17 @@ public sealed class SubContractTemplateService(
             ["{{SIGN_YEAR}}"] = contractDate.ToString("yyyy", CultureInfo.InvariantCulture),
             ["{{EFFECTIVE_FROM}}"] = effectiveFrom.ToString("dd / MM / yyyy", CultureInfo.InvariantCulture),
             ["{{EFFECTIVE_TO}}"] = effectiveTo.ToString("dd / MM / yyyy", CultureInfo.InvariantCulture),
-            ["{{COMPANY_NAME}}"] = companyName,
-            ["{{COMPANY_ADDRESS}}"] = companyAddress,
-            ["{{COMPANY_PHONE}}"] = companyPhone,
-            ["{{COMPANY_TAX_CODE}}"] = companyTaxCode,
-            ["{{COMPANY_LICENSE}}"] = companyLicense,
-            ["{{COMPANY_LICENSE_PLACE}}"] = companyLicenseIssuedPlace,
-            ["{{COMPANY_REPRESENTATIVE}}"] = companyRepName,
-            ["{{COMPANY_REP_POSITION}}"] = companyRepPosition,
-            ["{{COMPANY_REP_CITIZEN_ID}}"] = companyRepCitizenId,
-            ["{{COMPANY_REP_ISSUED_DATE}}"] = companyRepIssuedDate,
-            ["{{COMPANY_REP_ISSUED_PLACE}}"] = companyRepIssuedPlace,
+            ["{{COMPANY_NAME}}"] = fixedUnit.PartyAName,
+            ["{{COMPANY_ADDRESS}}"] = fixedUnit.Address,
+            ["{{COMPANY_PHONE}}"] = fixedUnit.PhoneNumber,
+            ["{{COMPANY_TAX_CODE}}"] = fixedUnit.TaxCode,
+            ["{{COMPANY_LICENSE}}"] = fixedUnit.LicenseNumber,
+            ["{{COMPANY_LICENSE_PLACE}}"] = fixedUnit.LicenseIssuedPlace,
+            ["{{COMPANY_REPRESENTATIVE}}"] = fixedUnit.RepresentativeName,
+            ["{{COMPANY_REP_POSITION}}"] = fixedUnit.RepresentativePosition,
+            ["{{COMPANY_REP_CITIZEN_ID}}"] = fixedUnit.RepresentativeCitizenId,
+            ["{{COMPANY_REP_ISSUED_DATE}}"] = fixedUnit.RepresentativeCitizenIdIssuedDateText,
+            ["{{COMPANY_REP_ISSUED_PLACE}}"] = fixedUnit.RepresentativeCitizenIdIssuedPlace,
             ["{{OWNER_NAME}}"] = ownerName,
             ["{{OWNER_CITIZEN_ID}}"] = ownerCitizenId,
             ["{{OWNER_ISSUED_DATE}}"] = ownerIssuedDate,
@@ -547,23 +555,49 @@ public sealed class SubContractTemplateService(
 
         if (company is not null)
         {
-            var isCaoSon = SubContractHelper.IsCaoSonUnit(company.CompanyName, company.TaxCode);
-            map["{{COMPANY_NAME}}"] = First(company.CompanyName, map["{{COMPANY_NAME}}"]);
-            map["{{COMPANY_ADDRESS}}"] = First(company.Address, map["{{COMPANY_ADDRESS}}"]);
-            map["{{COMPANY_PHONE}}"] = First(company.PhoneNumber, map["{{COMPANY_PHONE}}"]);
-            map["{{COMPANY_TAX_CODE}}"] = First(company.TaxCode, map["{{COMPANY_TAX_CODE}}"]);
-            map["{{COMPANY_LICENSE}}"] = First(company.BusinessLicenseNumber, map["{{COMPANY_LICENSE}}"]);
-            map["{{COMPANY_LICENSE_PLACE}}"] = First(company.BusinessLicenseIssuedPlace, map["{{COMPANY_LICENSE_PLACE}}"]);
-            map["{{COMPANY_REPRESENTATIVE}}"] = First(company.RepresentativeName, map["{{COMPANY_REPRESENTATIVE}}"]);
-            map["{{COMPANY_REP_POSITION}}"] = First(company.RepresentativePosition, "Giám đốc");
-            map["{{COMPANY_REP_CITIZEN_ID}}"] = First(company.RepresentativeCitizenId, map["{{COMPANY_REP_CITIZEN_ID}}"]);
-            map["{{COMPANY_REP_ISSUED_DATE}}"] = FormatDateOnly(company.RepresentativeCitizenIdIssuedDate);
-            map["{{COMPANY_REP_ISSUED_PLACE}}"] = First(company.RepresentativeCitizenIdIssuedPlace, map["{{COMPANY_REP_ISSUED_PLACE}}"]);
+            var fixedUnit = SubContractHelper.ResolveFixedUnitProfile(
+                company.CompanyName,
+                company.TaxCode,
+                fallbackAddress: company.Address,
+                fallbackPhone: company.PhoneNumber,
+                fallbackLicenseNumber: company.BusinessLicenseNumber,
+                fallbackLicensePlace: company.BusinessLicenseIssuedPlace,
+                fallbackRepName: company.RepresentativeName,
+                fallbackRepPosition: company.RepresentativePosition,
+                fallbackRepCitizenId: company.RepresentativeCitizenId,
+                fallbackRepCitizenIssuedDate: company.RepresentativeCitizenIdIssuedDate,
+                fallbackRepCitizenIssuedPlace: company.RepresentativeCitizenIdIssuedPlace);
+
+            map["{{COMPANY_NAME}}"] = fixedUnit.PartyAName;
+            map["{{COMPANY_ADDRESS}}"] = fixedUnit.Address;
+            map["{{COMPANY_PHONE}}"] = fixedUnit.PhoneNumber;
+            map["{{COMPANY_TAX_CODE}}"] = fixedUnit.TaxCode;
+            map["{{COMPANY_LICENSE}}"] = fixedUnit.LicenseNumber;
+            map["{{COMPANY_LICENSE_PLACE}}"] = fixedUnit.LicenseIssuedPlace;
+            map["{{COMPANY_REPRESENTATIVE}}"] = fixedUnit.RepresentativeName;
+            map["{{COMPANY_REP_POSITION}}"] = fixedUnit.RepresentativePosition;
+            map["{{COMPANY_REP_CITIZEN_ID}}"] = fixedUnit.RepresentativeCitizenId;
+            map["{{COMPANY_REP_ISSUED_DATE}}"] = fixedUnit.RepresentativeCitizenIdIssuedDateText;
+            map["{{COMPANY_REP_ISSUED_PLACE}}"] = fixedUnit.RepresentativeCitizenIdIssuedPlace;
             map["{{SUB_CONTRACT_NUMBER}}"] = SubContractHelper.BuildSubContractNumber(
-                isCaoSon ? "65E00389-02" : "68E00317-04",
+                fixedUnit.IsCaoSonPreset ? "65E00389-02" : "83G00100-04",
                 DateTime.UtcNow,
                 company.CompanyName,
                 company.TaxCode);
+
+            if (!fixedUnit.IsCaoSonPreset && SubContractHelper.IsMekongXanhUnit(company.CompanyName, company.TaxCode))
+            {
+                map["{{OWNER_NAME}}"] = "ĐẶNG MINH HIỀN";
+                map["{{OWNER_CITIZEN_ID}}"] = "94091006036";
+                map["{{OWNER_ISSUED_DATE}}"] = "09/08/2021";
+                map["{{OWNER_ISSUED_PLACE}}"] = "Cục Cảnh Sát QLHC về TTXH";
+                map["{{OWNER_ADDRESS}}"] = "Xây Đá B, Xã Hồ Đác Kiệm, Huyện Châu Thành, Tỉnh Sóc Trăng";
+                map["{{VEHICLE_PLATE}}"] = "83G-001.00";
+                map["{{VEHICLE_BRAND}}"] = "VINFAST";
+                map["{{SEAT_COUNT}}"] = "5";
+                map["{{VEHICLE_CHASSIS}}"] = "RLLVAGND4RH770763";
+                map["{{VEHICLE_ENGINE}}"] = "VFCAJB24B180043";
+            }
         }
 
         return map;
@@ -610,7 +644,7 @@ public sealed class SubContractTemplateService(
 
         return new SubContractTemplateBundleDto
         {
-            Version = 1,
+            Version = 2,
             DefaultCaoSon = CreateDefaultPreset(isCaoSon: true),
             DefaultMekongXanh = CreateDefaultPreset(isCaoSon: false),
             CompanyTemplates = new(StringComparer.OrdinalIgnoreCase)
@@ -637,11 +671,99 @@ public sealed class SubContractTemplateService(
         File.Move(tempPath, path, overwrite: true);
     }
 
+    /// <summary>
+    /// Tạo mẫu Hợp đồng phụ cứng riêng cho từng đơn vị cụ thể.
+    /// </summary>
+    public static SubContractTemplateDto CreateFixedUnitTemplate(
+        CompanyProfile? company,
+        Guid? companyProfileId,
+        string? companyName,
+        string? taxCode)
+    {
+        if (SubContractHelper.IsCaoSonUnit(companyName ?? company?.CompanyName, taxCode ?? company?.TaxCode))
+        {
+            var caoSon = CreateDefaultPreset(isCaoSon: true);
+            caoSon.CompanyProfileId = companyProfileId ?? company?.Id;
+            return caoSon;
+        }
+
+        if (SubContractHelper.IsMekongXanhUnit(companyName ?? company?.CompanyName, taxCode ?? company?.TaxCode))
+        {
+            var mekong = CreateDefaultPreset(isCaoSon: false);
+            mekong.CompanyProfileId = companyProfileId ?? company?.Id;
+            return mekong;
+        }
+
+        var fixedUnit = SubContractHelper.ResolveFixedUnitProfile(
+            companyName ?? company?.CompanyName,
+            taxCode ?? company?.TaxCode,
+            fallbackAddress: company?.Address,
+            fallbackPhone: company?.PhoneNumber,
+            fallbackLicenseNumber: company?.BusinessLicenseNumber,
+            fallbackLicensePlace: company?.BusinessLicenseIssuedPlace,
+            fallbackRepName: company?.RepresentativeName,
+            fallbackRepPosition: company?.RepresentativePosition,
+            fallbackRepCitizenId: company?.RepresentativeCitizenId,
+            fallbackRepCitizenIssuedDate: company?.RepresentativeCitizenIdIssuedDate,
+            fallbackRepCitizenIssuedPlace: company?.RepresentativeCitizenIdIssuedPlace);
+
+        var template = CreateDefaultPreset(isCaoSon: false);
+        template.CompanyProfileId = companyProfileId ?? company?.Id;
+        template.TemplateName = $"Mẫu HĐ phụ cứng — {fixedUnit.PartyAName}";
+        template.UnitHeaderTitle = fixedUnit.UnitHeaderTitle;
+        template.IntroLocationText = string.Join("\n",
+        [
+            "Hôm nay, ngày {{SIGN_DAY}} tháng {{SIGN_MONTH}} năm {{SIGN_YEAR}}",
+            $"Tại văn phòng {fixedUnit.OfficeLocationName} chúng tôi gồm:"
+        ]);
+        template.PartyAText = string.Join("\n",
+        [
+            fixedUnit.PartyAName,
+            $"Địa chỉ trụ sở: {fixedUnit.Address}   -   Số điện thoại (Fax): {fixedUnit.PhoneNumber}",
+            $"{fixedUnit.LicenseLabel} : {fixedUnit.LicenseNumber}   -   Nơi cấp: {fixedUnit.LicenseIssuedPlace}   -   Mã số thuế : {fixedUnit.TaxCode}",
+            $"Đại diện: {fixedUnit.RepresentativeName}   -   Chức Vụ: {fixedUnit.RepresentativePosition}",
+            $"CCCD số: {fixedUnit.RepresentativeCitizenId}   -   Ngày cấp: {fixedUnit.RepresentativeCitizenIdIssuedDateText}   -   Nơi cấp: {fixedUnit.RepresentativeCitizenIdIssuedPlace}"
+        ]);
+        template.SignatureLeftSignerName = fixedUnit.SignatureRepresentativeName;
+        return template;
+    }
+
+    /// <summary>
+    /// Tạo 2 mẫu Hợp đồng phụ cứng chuẩn 100% theo 2 khu HTX:
+    /// - Khu CN HTX Công nghệ VT Cao Sơn Car tại Cần Thơ (11 điều khoản)
+    /// - Khu Chi nhánh HTX Cộng đồng Mekong Xanh Cần Thơ (10 điều khoản)
+    /// </summary>
     public static SubContractTemplateDto CreateDefaultPreset(bool isCaoSon)
     {
-        var licenseLabel = isCaoSon
-            ? "Giấy chứng nhận đăng ký kinh doanh số : {{COMPANY_LICENSE}}"
-            : "Giấy phép kinh doanh vận tải số : {{COMPANY_LICENSE}}";
+        var unitHeader = isCaoSon
+            ? "CN HTX CÔNG NGHỆ VT CAO SƠN CAR TẠI CẦN THƠ"
+            : "CHI NHÁNH HỢP TÁC XÃ CỘNG ĐỒNG MEKONG XANH CẦN THƠ";
+
+        var introLocation = isCaoSon
+            ? """
+              Hôm nay, ngày {{SIGN_DAY}} tháng {{SIGN_MONTH}} năm {{SIGN_YEAR}}
+              Tại văn phòng CN Hợp tác xã công nghệ vận tải Cao Sơn Car tại Cần Thơ chúng tôi gồm:
+              """
+            : """
+              Hôm nay, ngày {{SIGN_DAY}} tháng {{SIGN_MONTH}} năm {{SIGN_YEAR}}
+              Tại văn phòng CHI NHÁNH HỢP TÁC XÃ CỘNG ĐỒNG MEKONG XANH CẦN THƠ chúng tôi gồm:
+              """;
+
+        var partyAText = isCaoSon
+            ? """
+              CN HTX CÔNG NGHỆ VT CAO SƠN CAR TẠI CẦN THƠ
+              Địa chỉ trụ sở: Số 47 đường số 12, KTĐC Thới Nhựt 2, Phường Tân An, Thành phố Cần Thơ   -   Số điện thoại (Fax): 0925351111
+              Giấy chứng nhận đăng ký kinh doanh số : 922643479/GPKDVT   -   Ngày cấp: 07 tháng 08 năm 2026   -   Nơi cấp: Sở Xây dựng Thành phố Cần Thơ   -   Mã số thuế : 0319340385-001
+              Đại diện: Nguyễn Trọng Hậu   -   Chức Vụ: Giám đốc.
+              CCCD số: 82203018675   -   Ngày cấp: 19/01/2026   -   Nơi cấp: Bộ Công An
+              """
+            : """
+              CHI NHÁNH HỢP TÁC XÃ CỘNG ĐỒNG MEKONG XANH CẦN THƠ
+              Địa chỉ trụ sở: Số 4/48 Đường Cách Mạng Tháng 8, Phường Cái Khế, Thành Phố Cần Thơ   -   Số điện thoại (Fax): 0911772265
+              Giấy phép kinh doanh vận tải số : 922641667/GPKDVT   -   Ngày cấp: 16 tháng 07 năm 2026   -   Nơi cấp: Sở Xây dựng Thành phố Cần Thơ   -   Mã số thuế : 0319595866-001
+              Đại diện: Phạm Hoàng Nam   -   Chức Vụ: Giám đốc
+              CCCD số: 091092007059   -   Ngày cấp: 22/11/2022   -   Nơi cấp: Cục Cảnh Sát QLHC về TTXH
+              """;
 
         var article3PartyA = isCaoSon
             ? """
@@ -672,9 +794,9 @@ public sealed class SubContractTemplateService(
         return new SubContractTemplateDto
         {
             TemplateName = isCaoSon
-                ? "Mẫu HĐ Dịch vụ Vận tải - CN HTX Cao Sơn Car"
-                : "Mẫu HĐ Dịch vụ Vận tải - CN HTX Cộng đồng Mekong Xanh",
-            UnitHeaderTitle = "{{COMPANY_NAME}}",
+                ? "Mẫu HĐ phụ cứng — Khu CN HTX Công nghệ VT Cao Sơn Car tại Cần Thơ"
+                : "Mẫu HĐ phụ cứng — Khu Chi nhánh HTX Cộng đồng Mekong Xanh Cần Thơ",
+            UnitHeaderTitle = unitHeader,
             ContractNumberLine = "Số:{{SUB_CONTRACT_NUMBER}}",
             DocumentTitle = "HỢP ĐỒNG DỊCH VỤ VẬN TẢI",
             LegalBasesText = """
@@ -683,18 +805,8 @@ public sealed class SubContractTemplateService(
                 Căn cứ Thông tư 36/2024/TT-BGTVT ngày 15 tháng 11 năm 2024 của Bộ Giao thông vận tải Quy định về tổ chức, quản lý hoạt động vận tải bằng xe ô tô và hoạt động của bến xe, bãi đỗ xe, trạm dừng nghỉ, điểm dừng xe trên đường bộ; quy định trình tự, thủ tục đưa bến xe, trạm dừng nghỉ vào khai thác;
                 Căn cứ Thông tư số 72/2025/TT-BXD ngày 31 tháng 12 năm 2025 của Bộ trưởng Bộ xây dựng về sửa bổ sung một số điều của Thông tư số 36/2024/TT-BGTVT ngày 15 tháng 11 năm 2024;
                 """,
-            IntroLocationText = """
-                Hôm nay, ngày {{SIGN_DAY}} tháng {{SIGN_MONTH}} năm {{SIGN_YEAR}}
-                Tại văn phòng {{COMPANY_NAME}} chúng tôi gồm:
-                """,
-            PartyAText = string.Join("\n",
-            [
-                "{{COMPANY_NAME}}",
-                "Địa chỉ trụ sở: {{COMPANY_ADDRESS}}   -   Số điện thoại (Fax): {{COMPANY_PHONE}}",
-                $"{licenseLabel}   -   Nơi cấp: {{{{COMPANY_LICENSE_PLACE}}}}   -   Mã số thuế : {{{{COMPANY_TAX_CODE}}}}",
-                "Đại diện: {{COMPANY_REPRESENTATIVE}}   -   Chức Vụ: {{COMPANY_REP_POSITION}}",
-                "CCCD số: {{COMPANY_REP_CITIZEN_ID}}   -   Ngày cấp: {{COMPANY_REP_ISSUED_DATE}}   -   Nơi cấp: {{COMPANY_REP_ISSUED_PLACE}}"
-            ]),
+            IntroLocationText = introLocation,
+            PartyAText = partyAText,
             PartyBText = """
                 Họ tên / Chủ phương tiện: {{OWNER_NAME}}
                 CCCD số: {{OWNER_CITIZEN_ID}}   -   Ngày cấp: {{OWNER_ISSUED_DATE}}   -   Nơi cấp: {{OWNER_ISSUED_PLACE}}
@@ -707,8 +819,12 @@ public sealed class SubContractTemplateService(
             Article1Text = """
                 Bên A đồng ý cung ứng cho bên B các sản phẩm dịch vụ vận tải sau:
                 - Dịch vụ vận tải về hành chính: Dịch vụ hỗ trợ các thủ tục về hành chính do ngành Giao Thông vận tải quy định.
-                - Dịch vụ vận chuyển hành khách theo Hợp Đồng, vận chuyển hành khách Du Lịch; dịch vụ về nguồn hàng hóa, nguồn hành khách.
-                - Dịch vụ hỗ trợ thành viên mua xe, thay đổi phương tiện vận chuyển; mua bảo hiểm bắt buộc, bảo hiểm vật chất tự nguyện; sửa chữa phương tiện vận tải và các dịch vụ khác theo yêu cầu của thành viên HTX.
+                - Dịch vụ vận chuyển hành khách theo Hợp Đồng, vận chuyển hành khách Du Lịch.
+                - Dịch vụ về nguồn hàng hóa, nguồn hành khách.
+                - Dịch vụ hỗ trợ thành viên mua xe, thay đổi phương tiện vận chuyển.
+                - Dịch vụ hỗ trợ thành viên mua bảo hiểm bắt buộc, bảo hiểm vật chất tự nguyện.
+                - Dịch vụ hỗ trợ sửa chữa phương tiện vận tải.
+                - Dịch vụ khác theo yêu cầu của thành viên HTX.
                 """,
             Article2Text = """
                 - Chi phí phải trả cho từng sản phẩm dịch vụ vận tải cụ thể từng năm.
@@ -740,6 +856,7 @@ public sealed class SubContractTemplateService(
                 - Hợp đồng này được làm thành 03 bản có giá trị như nhau. Bên A giữ 01 bản, bên B giữ 01 bản và 01 bản nộp Sở Xây Dựng.
                 """,
             SignatureLeftTitle = "ĐẠI DIỆN BÊN A",
+            SignatureLeftSignerName = isCaoSon ? "NGUYỄN TRỌNG HẬU" : "PHẠM HOÀNG NAM",
             SignatureRightTitle = "ĐẠI DIỆN BÊN B"
         };
     }
@@ -747,6 +864,7 @@ public sealed class SubContractTemplateService(
     private static void ParseParagraphsIntoTemplate(IReadOnlyList<string> paragraphs, SubContractTemplateDto target)
     {
         var legalLines = new List<string>();
+        var partyALines = new List<string>();
         var a1Lines = new List<string>();
         var a2Lines = new List<string>();
         var a3ALines = new List<string>();
@@ -758,49 +876,72 @@ public sealed class SubContractTemplateService(
         foreach (var raw in paragraphs)
         {
             var line = raw.Trim();
-            if (line.StartsWith("Căn cứ ", StringComparison.OrdinalIgnoreCase))
+            if (line.StartsWith("Căn cứ ", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("Căncứ", StringComparison.OrdinalIgnoreCase))
             {
                 legalLines.Add(line);
                 continue;
             }
 
-            if (line.StartsWith("Điều 1", StringComparison.OrdinalIgnoreCase))
+            if (line.StartsWith("Bên A", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("BênA", StringComparison.OrdinalIgnoreCase))
+            {
+                section = "partya";
+                continue;
+            }
+            if (line.StartsWith("Bên B", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("BênB", StringComparison.OrdinalIgnoreCase))
+            {
+                section = "partyb";
+                continue;
+            }
+            if (line.StartsWith("Điều 1", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("Điều1", StringComparison.OrdinalIgnoreCase))
             {
                 section = "a1";
                 continue;
             }
-            if (line.StartsWith("Điều 2", StringComparison.OrdinalIgnoreCase))
+            if (line.StartsWith("Điều 2", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("Điều2", StringComparison.OrdinalIgnoreCase))
             {
                 section = "a2";
                 continue;
             }
-            if (line.StartsWith("Điều 3", StringComparison.OrdinalIgnoreCase))
+            if (line.StartsWith("Điều 3", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("Điều3", StringComparison.OrdinalIgnoreCase))
             {
                 section = "a3a";
                 continue;
             }
-            if (line.Contains("Trách nhiệm và quyền hạn của bên B", StringComparison.OrdinalIgnoreCase))
+            if (line.Contains("Trách nhiệm và quyền hạn của bên B", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("TráchnhiệmvàquyềnhạncủabênB", StringComparison.OrdinalIgnoreCase))
             {
                 section = "a3b";
                 continue;
             }
-            if (line.StartsWith("Điều 4", StringComparison.OrdinalIgnoreCase))
+            if (line.StartsWith("Điều 4", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("Điều4", StringComparison.OrdinalIgnoreCase))
             {
                 section = "a4";
                 continue;
             }
-            if (line.StartsWith("Điều 5", StringComparison.OrdinalIgnoreCase))
+            if (line.StartsWith("Điều 5", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("Điều5", StringComparison.OrdinalIgnoreCase))
             {
                 section = "a5";
                 continue;
             }
-            if (line.Contains("ĐẠI DIỆN BÊN A", StringComparison.OrdinalIgnoreCase))
+            if (line.Contains("ĐẠI DIỆN BÊN A", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("ĐẠIDIỆNBÊN", StringComparison.OrdinalIgnoreCase))
             {
                 break;
             }
 
             switch (section)
             {
+                case "partya":
+                    partyALines.Add(line);
+                    break;
                 case "a1":
                     a1Lines.Add(line);
                     break;
@@ -808,7 +949,8 @@ public sealed class SubContractTemplateService(
                     a2Lines.Add(line);
                     break;
                 case "a3a":
-                    if (!line.Contains("Trách nhiệm và quyền hạn của bên A", StringComparison.OrdinalIgnoreCase))
+                    if (!line.Contains("Trách nhiệm và quyền hạn của bên A", StringComparison.OrdinalIgnoreCase) &&
+                        !line.Contains("TráchnhiệmvàquyềnhạncủabênA", StringComparison.OrdinalIgnoreCase))
                         a3ALines.Add(line);
                     break;
                 case "a3b":
@@ -825,6 +967,8 @@ public sealed class SubContractTemplateService(
 
         if (legalLines.Count > 0)
             target.LegalBasesText = string.Join(Environment.NewLine, legalLines);
+        if (partyALines.Count > 0)
+            target.PartyAText = string.Join(Environment.NewLine, partyALines);
         if (a1Lines.Count > 0)
             target.Article1Text = string.Join(Environment.NewLine, a1Lines);
         if (a2Lines.Count > 0)

@@ -1985,3 +1985,315 @@ body::before {
 .components-reconnect-rejected .reconnect-rejected-text { display: block; }
 
 @keyframes reconnect-spin { to { transform: rotate(360deg); } }
+
+/* ==========================================================================
+   ENTERPRISE DETAIL & FORM DESIGN SYSTEM (UNIFIED TEXTBOXES & CARDS)
+   ========================================================================== */
+
+/* 1. Upgraded Textboxes / Outlined Inputs across the entire workspace */
+.workspace-content .mud-input-control {
+    margin-top: 2px;
+}
+
+.workspace-content .mud-input-control > .mud-input-control-input-container {
+    position: relative;
+}
+
+.workspace-content .mud-input.mud-input-outlined {
+    border-radius: 12px !important;
+    background: #fcfefd;
+    transition: background-color .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+
+.workspace-content .mud-input.mud-input-outlined:hover:not(.mud-disabled) {
+    background: #ffffff;
+}
+
+.workspace-content .mud-input.mud-input-outlined:hover:not(.mud-disabled) .mud-input-outlined-border {
+    border-color: #9ec5bc !important;
+}
+
+.workspace-content .mud-input-outlined-border {
+    border-color: #d3dfdc !important;
+    border-width: 1px !important;
+    border-radius: 12px !important;
+    transition: border-color .18s ease, box-shadow .18s ease;
+}
+
+.workspace-content .mud-input-control:focus-within .mud-input.mud-input-outlined {
+    background: #ffffff;
+}
+
+.workspace-content .mud-input-control:focus-within .mud-input-outlined-border {
+    border-width: 1.5px !important;
+    border-color: var(--htx-primary) !important;
+    box-shadow: 0 0 0 3.5px rgba(11, 107, 93, .10);
+}
+
+.workspace-content .mud-input-slot,
+.workspace-content .mud-input > input.mud-input-root-outlined,
+.workspace-content .mud-input > textarea.mud-input-root-outlined,
+.workspace-content div.mud-input-slot.mud-input-root-outlined {
+    color: #14231f !important;
+    font-size: .88rem !important;
+    font-weight: 650 !important;
+    line-height: 1.45 !important;
+    padding-top: 13.5px !important;
+    padding-bottom: 13.5px !important;
+}
+
+.workspace-content .mud-input-label-outlined {
+    color: #556863 !important;
+    font-size: .81rem !important;
+    font-weight: 700 !important;
+    letter-spacing: .01em;
+    background: linear-gradient(180deg, transparent 42%, #ffffff 42%, #ffffff 70%, transparent 70%);
+    padding: 0 6px !important;
+    border-radius: 4px;
+}
+
+.workspace-content .mud-input-control:focus-within .mud-input-label-outlined {
+    color: var(--htx-primary) !important;
+}
+
+/* Locked / Disabled / View-Mode Textboxes: Crisp, high-contrast executive appearance */
+.workspace-content .mud-input.mud-input-outlined.mud-disabled {
+    background: #f3f7f6 !important;
+    opacity: 1 !important;
+}
+
+.workspace-content .mud-input.mud-input-outlined.mud-disabled .mud-input-outlined-border {
+    border-color: #dce7e4 !important;
+    border-style: solid !important;
+}
+
+.workspace-content .mud-input.mud-disabled input,
+.workspace-content .mud-input.mud-disabled textarea,
+.workspace-content .mud-input.mud-disabled .mud-input-slot,
+.workspace-content .mud-select .mud-input.mud-disabled input {
+    color: #1c2e29 !important;
+    -webkit-text-fill-color: #1c2e29 !important;
+    font-weight: 700 !important;
+    opacity: 1 !important;
+}
+
+.workspace-content .mud-input-control.mud-input-disabled .mud-input-label-outlined,
+.workspace-content .mud-input-label.mud-disabled {
+    color: #60736e !important;
+    opacity: 1 !important;
+    background: linear-gradient(180deg, transparent 42%, #f3f7f6 42%, #f3f7f6 70%, transparent 70%);
+}
+
+.workspace-content .mud-input-helper-text {
+    margin-top: 4px !important;
+    color: #6f807c !important;
+    font-size: .72rem !important;
+    font-weight: 500;
+    line-height: 1.35;
+}
+
+/* 2. Structured InfoListItem cards (.htx-info-item) */
+.htx-info-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    min-height: 68px;
+    height: 100%;
+    padding: 12px 14px;
+    border: 1px solid #e1eae8;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffffff 0%, #f9fbfb 100%);
+    transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.htx-info-item:hover {
+    border-color: #bdd7d0;
+    box-shadow: 0 6px 16px rgba(11, 107, 93, .055);
+}
+
+.htx-info-item__icon {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    place-items: center;
+    border-radius: 10px;
+    color: var(--htx-primary);
+    background: var(--htx-primary-soft);
+    border: 1px solid rgba(11, 107, 93, .12);
+}
+
+.htx-info-item__icon .mud-icon-root {
+    font-size: 1.05rem !important;
+}
+
+.htx-info-item__body {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.htx-info-item__label {
+    display: block;
+    margin-bottom: 3px;
+    color: #687a75;
+    font-size: .71rem;
+    font-weight: 750;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+    line-height: 1.25;
+}
+
+.htx-info-item__value {
+    display: block;
+    color: #152521;
+    font-size: .9rem;
+    font-weight: 750;
+    line-height: 1.4;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+/* When InfoListItem is placed inside MudList, turn MudList into a clean card stack */
+.workspace-content .mud-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 4px 0 !important;
+}
+
+/* 3. Reusable Enterprise Detail & Form Section Components */
+.ent-detail-page {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.ent-hero-card {
+    position: relative;
+    overflow: hidden;
+    padding: 24px 28px !important;
+    border: 1px solid rgba(11, 107, 93, .16) !important;
+    border-radius: 22px !important;
+    background: linear-gradient(135deg, #075247 0%, #0b6b5d 56%, #138a77 100%) !important;
+    color: #ffffff !important;
+    box-shadow: 0 18px 42px rgba(7, 82, 71, .16) !important;
+}
+
+.ent-hero-card .mud-typography {
+    color: inherit;
+}
+
+.ent-hero-card .ent-hero-subtitle {
+    color: rgba(255, 255, 255, .78) !important;
+}
+
+.ent-hero-card .mud-chip.mud-chip-outlined {
+    color: #ffffff !important;
+    border-color: rgba(255, 255, 255, .28) !important;
+    background: rgba(255, 255, 255, .08) !important;
+}
+
+.ent-hero-metric {
+    min-width: 142px;
+    padding: 12px 16px !important;
+    border-radius: 15px !important;
+    border: 1px solid rgba(255, 255, 255, .18) !important;
+    background: rgba(255, 255, 255, .10) !important;
+    backdrop-filter: blur(8px);
+    color: #ffffff !important;
+}
+
+.ent-hero-metric__label {
+    display: block;
+    color: rgba(255, 255, 255, .68) !important;
+    font-size: .68rem !important;
+    font-weight: 750 !important;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.ent-hero-metric__value {
+    display: block;
+    margin-top: 3px;
+    color: #ffffff !important;
+    font-size: 1.05rem !important;
+    font-weight: 800 !important;
+}
+
+.ent-section-card {
+    padding: 22px 24px !important;
+    border-radius: 20px !important;
+    border: 1px solid #e1eae8 !important;
+    background: #ffffff !important;
+    box-shadow: 0 6px 22px rgba(15, 35, 30, .04) !important;
+}
+
+.ent-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+    padding-bottom: 14px;
+    margin-bottom: 18px;
+    border-bottom: 1px solid #ebf1ef;
+}
+
+.ent-section-header__left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+
+.ent-section-icon {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    place-items: center;
+    border-radius: 12px;
+    color: var(--htx-primary);
+    background: linear-gradient(145deg, #e5f5f1, #f2fbf9);
+    border: 1px solid #cce6df;
+    font-weight: 800;
+    font-size: .88rem;
+}
+
+.ent-section-title {
+    margin: 0 !important;
+    color: #132420 !important;
+    font-size: 1.04rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -.015em;
+}
+
+.ent-section-subtitle {
+    margin: 2px 0 0 !important;
+    color: #6b7d78 !important;
+    font-size: .78rem !important;
+}
+
+.ent-action-bar {
+    padding: 16px 22px !important;
+    border-radius: 18px !important;
+    border: 1px solid #dce6e4 !important;
+    background: rgba(255, 255, 255, .96) !important;
+    box-shadow: 0 10px 28px rgba(15, 35, 30, .06) !important;
+}
+
+@media (max-width: 600px) {
+    .ent-hero-card,
+    .ent-section-card {
+        padding: 16px !important;
+        border-radius: 16px !important;
+    }
+
+    .htx-info-item {
+        padding: 10px 12px;
+        min-height: 60px;
+    }
+}

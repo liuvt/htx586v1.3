@@ -90,8 +90,16 @@ else
 
     <MudForm @ref="_form" @bind-IsValid="_valid">
         <MudPaper Class="pa-4 driver-contract-shell" Elevation="1">
-            <MudPaper Class="pa-4 mb-4 driver-contract-section" Elevation="0" Outlined="true">
-                <MudText Typo="Typo.h6" Class="mb-3">1. Thông tin cố định</MudText>
+            <MudPaper Class="pa-4 mb-4 driver-contract-section ent-section-card" Elevation="0" Outlined="true">
+                <div class="ent-section-header">
+                    <div class="ent-section-header__left">
+                        <div class="ent-section-icon"><MudIcon Icon="@Icons.Material.Filled.DirectionsCar" Size="Size.Small" /></div>
+                        <div>
+                            <MudText Class="ent-section-title">1. Thông tin cố định (Đơn vị &amp; Phương tiện)</MudText>
+                            <MudText Class="ent-section-subtitle">Công ty/Văn phòng quản lý và biển kiểm soát phương tiện.</MudText>
+                        </div>
+                    </div>
+                </div>
                 <MudGrid Spacing="2">
                     @if (!Id.HasValue)
                     {
@@ -135,8 +143,16 @@ else
                 </MudGrid>
             </MudPaper>
 
-            <MudPaper Class="pa-4 mb-4 driver-contract-section" Elevation="0" Outlined="true">
-                <MudText Typo="Typo.h6" Class="mb-3">2. @(_model.BusinessType == ContractBusinessType.Cargo ? "Bên A / Khách hàng gửi hàng" : "Khách hàng/người thuê")</MudText>
+            <MudPaper Class="pa-4 mb-4 driver-contract-section ent-section-card" Elevation="0" Outlined="true">
+                <div class="ent-section-header">
+                    <div class="ent-section-header__left">
+                        <div class="ent-section-icon"><MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Small" /></div>
+                        <div>
+                            <MudText Class="ent-section-title">2. @(_model.BusinessType == ContractBusinessType.Cargo ? "Bên A / Khách hàng gửi hàng" : "Khách hàng / Người thuê phương tiện")</MudText>
+                            <MudText Class="ent-section-subtitle">Thông tin người đặt xe hoặc doanh nghiệp thuê vận chuyển.</MudText>
+                        </div>
+                    </div>
+                </div>
                 @if (_model.BusinessType == ContractBusinessType.Cargo && !Id.HasValue)
                 {
                     <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="mb-3">
@@ -254,13 +270,29 @@ else
                 }
             </MudPaper>
 
-            <MudPaper Class="pa-4 mb-4 driver-contract-section" Elevation="0" Outlined="true">
-                <MudText Typo="Typo.h6" Class="mb-3">3. @(_model.BusinessType == ContractBusinessType.Cargo ? "Thông tin tài xế đi thật" : "Thông tin tài xế")</MudText>
+            <MudPaper Class="pa-4 mb-4 driver-contract-section ent-section-card" Elevation="0" Outlined="true">
+                <div class="ent-section-header">
+                    <div class="ent-section-header__left">
+                        <div class="ent-section-icon"><MudIcon Icon="@Icons.Material.Filled.Badge" Size="Size.Small" /></div>
+                        <div>
+                            <MudText Class="ent-section-title">3. @(_model.BusinessType == ContractBusinessType.Cargo ? "Thông tin tài xế đi thật" : "Thông tin tài xế điều khiển")</MudText>
+                            <MudText Class="ent-section-subtitle">Tài xế 1 là người trực tiếp ký xác nhận trên hợp đồng.</MudText>
+                        </div>
+                    </div>
+                </div>
                 <ContractDriverEditor Model="_model" Disabled="@IsDriverEditableContentLocked" />
             </MudPaper>
 
-            <MudPaper Class="pa-4 mb-4 driver-contract-section" Elevation="0" Outlined="true">
-                <MudText Typo="Typo.h6" Class="mb-3">4. @(_model.BusinessType == ContractBusinessType.Cargo ? "Nội dung hợp đồng / thông tin vận chuyển hàng hóa" : "Nội dung hợp đồng / thông tin chuyến đi")</MudText>
+            <MudPaper Class="pa-4 mb-4 driver-contract-section ent-section-card" Elevation="0" Outlined="true">
+                <div class="ent-section-header">
+                    <div class="ent-section-header__left">
+                        <div class="ent-section-icon"><MudIcon Icon="@Icons.Material.Filled.Route" Size="Size.Small" /></div>
+                        <div>
+                            <MudText Class="ent-section-title">4. @(_model.BusinessType == ContractBusinessType.Cargo ? "Nội dung hợp đồng / Vận chuyển hàng hóa" : "Nội dung hợp đồng / Lịch trình chuyến đi")</MudText>
+                            <MudText Class="ent-section-subtitle">Thời gian, hành trình, quãng đường và giá trị thanh toán.</MudText>
+                        </div>
+                    </div>
+                </div>
                 <MudGrid Spacing="2">
                     <MudItem xs="12" sm="6" md="3">
                         <MudDatePicker Date="@_startDate"

@@ -45,186 +45,196 @@ else
 {
     <MudGrid Spacing="3">
         <MudItem xs="12">
-            <MudPaper Class="company-hero pa-5" Elevation="0">
+            <MudPaper Class="ent-hero-card" Elevation="0">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
-                    <MudAvatar Size="Size.Large" Color="Color.Primary" Variant="Variant.Filled" Class="hero-avatar">
+                    <MudAvatar Size="Size.Large" Color="Color.Surface" Variant="Variant.Outlined" Class="hero-avatar" Style="color:#fff; border-color:rgba(255,255,255,.28); background:rgba(255,255,255,.12);">
                         <MudIcon Icon="@Icons.Material.Filled.Apartment" />
                     </MudAvatar>
 
                     <div>
-                        <MudText Typo="Typo.h5" Class="fw-600">@_detail.CompanyName</MudText>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary">@DisplayBranch(_detail.BranchName)</MudText>
+                        <MudText Typo="Typo.h5" Class="fw-700" Style="color:#fff;">@_detail.CompanyName</MudText>
+                        <MudText Typo="Typo.body2" Class="ent-hero-subtitle">@DisplayBranch(_detail.BranchName)</MudText>
                         <MudStack Row="true" Spacing="1" Class="mt-2" Wrap="Wrap.Wrap">
                             <MudChip T="string" Size="Size.Small" Color="@(_model.IsActive ? Color.Success : Color.Warning)" Variant="Variant.Filled">
                                 @(_model.IsActive ? "Đang hoạt động" : "Ngừng hoạt động")
                             </MudChip>
-                            <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">MST: @Display(_detail.TaxCode)</MudChip>
-                            <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">Người đại diện: @Display(_detail.RepresentativeName)</MudChip>
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">MST: @Display(_detail.TaxCode)</MudChip>
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">Người đại diện: @Display(_detail.RepresentativeName)</MudChip>
                         </MudStack>
                     </div>
 
                     <MudSpacer />
 
                     <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
-                        <MudPaper Class="metric-pill pa-3" Elevation="0">
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">Tài khoản Quản lý</MudText>
-                            <MudText Typo="Typo.subtitle1">@_detail.AdminCount</MudText>
+                        <MudPaper Class="ent-hero-metric" Elevation="0">
+                            <span class="ent-hero-metric__label">Tài khoản Quản lý</span>
+                            <strong class="ent-hero-metric__value">@_detail.AdminCount</strong>
                         </MudPaper>
-                        <MudPaper Class="metric-pill pa-3" Elevation="0">
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">Chủ xe đang cấp xe</MudText>
-                            <MudText Typo="Typo.subtitle1">@_detail.DriverCount</MudText>
+                        <MudPaper Class="ent-hero-metric" Elevation="0">
+                            <span class="ent-hero-metric__label">Chủ xe đang cấp xe</span>
+                            <strong class="ent-hero-metric__value">@_detail.DriverCount</strong>
                         </MudPaper>
-                        <MudPaper Class="metric-pill pa-3" Elevation="0">
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">Số xe</MudText>
-                            <MudText Typo="Typo.subtitle1">@_detail.VehicleCount</MudText>
+                        <MudPaper Class="ent-hero-metric" Elevation="0">
+                            <span class="ent-hero-metric__label">Số xe</span>
+                            <strong class="ent-hero-metric__value">@_detail.VehicleCount</strong>
                         </MudPaper>
-                        <MudPaper Class="metric-pill pa-3" Elevation="0">
-                            <MudText Typo="Typo.caption" Color="Color.Secondary">Số hợp đồng</MudText>
-                            <MudText Typo="Typo.subtitle1">@_detail.ContractCount</MudText>
+                        <MudPaper Class="ent-hero-metric" Elevation="0">
+                            <span class="ent-hero-metric__label">Số hợp đồng</span>
+                            <strong class="ent-hero-metric__value">@_detail.ContractCount</strong>
                         </MudPaper>
                     </MudStack>
                 </MudStack>
             </MudPaper>
         </MudItem>
 
-        <MudItem xs="12">
-            <MudTabs Elevation="0" Class="company-tabs">
-                <MudTabPanel Text="Thông tin chính">
-                    <MudGrid Spacing="3" Class="pt-3">
-                        <MudItem xs="12" md="6">
-                            <MudPaper Class="detail-section pa-4 fill-height" Elevation="1">
-                                <MudText Typo="Typo.h6">Thông tin đơn vị</MudText>
-                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Thông tin cơ bản của công ty / văn phòng đại diện.</MudText>
-                                <MudDivider Class="mb-3" />
-                                <MudGrid>
-                                    <MudItem xs="12"><MudTextField @bind-Value="_model.CompanyName" Label="Tên đơn vị" Required="true" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
-                                    <MudItem xs="12"><MudTextField @bind-Value="_model.BranchName" Label="Tên chi nhánh / văn phòng" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
-                                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.TaxCode" Label="Mã số thuế" Required="true" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
-                                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.BusinessLicenseNumber" Label="Giấy phép kinh doanh" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
-                                    <MudItem xs="12"><MudTextField @bind-Value="_model.Address" Label="Địa chỉ" Required="true" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
-                                </MudGrid>
-                            </MudPaper>
-                        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudPaper Class="ent-section-card fill-height" Elevation="0">
+                <div class="ent-section-header">
+                    <div class="ent-section-header__left">
+                        <div class="ent-section-icon"><MudIcon Icon="@Icons.Material.Filled.Business" Size="Size.Small" /></div>
+                        <div>
+                            <MudText Class="ent-section-title">1. Thông tin pháp lý đơn vị</MudText>
+                            <MudText Class="ent-section-subtitle">Thông tin định danh, mã số thuế và giấy phép kinh doanh vận tải.</MudText>
+                        </div>
+                    </div>
+                </div>
+                <MudGrid Spacing="2">
+                    <MudItem xs="12"><MudTextField @bind-Value="_model.CompanyName" Label="Tên đơn vị" Required="true" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                    <MudItem xs="12"><MudTextField @bind-Value="_model.BranchName" Label="Tên chi nhánh / văn phòng" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.TaxCode" Label="Mã số thuế" Required="true" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.BusinessLicenseNumber" Label="Giấy phép kinh doanh (GPKDVT)" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                    <MudItem xs="12"><MudTextField @bind-Value="_model.BusinessLicenseIssuedPlace" Label="Cơ quan / Nơi cấp phép" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                    <MudItem xs="12"><MudTextField @bind-Value="_model.Address" Label="Địa chỉ trụ sở" Required="true" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                </MudGrid>
+            </MudPaper>
+        </MudItem>
 
-                        <MudItem xs="12" md="6">
-                            <MudPaper Class="detail-section pa-4 fill-height" Elevation="1">
-                                <MudText Typo="Typo.h6">Thông tin người đại diện</MudText>
-                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Dữ liệu pháp lý dùng để in hợp đồng và hồ sơ liên quan.</MudText>
-                                <MudDivider Class="mb-3" />
-                                <MudGrid>
-                                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.RepresentativeName" Label="Người đại diện" Required="true" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
-                                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.RepresentativePosition" Label="Chức vụ" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
-                                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.RepresentativeCitizenId" Label="CCCD người đại diện" Required="true" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
-                                    <MudItem xs="12" md="6">
-                                        <MudDatePicker @bind-Date="_model.RepresentativeCitizenIdIssuedDate"
-                                                       Label="Ngày cấp CCCD"
-                                                       Variant="Variant.Outlined"
-                                                       DateFormat="dd/MM/yyyy"
-                                                       Editable="true"
-                                                       ImmediateText="true"
-                                                       Placeholder="dd/MM/yyyy"
-                                                       Culture="@AppCulture.Vietnamese"
-                                                       AutoClose="true"
-                                                       Disabled="@IsFormLocked" />
-                                    </MudItem>
-                                    <MudItem xs="12"><CitizenIdIssuedPlaceInput @bind-Value="_model.RepresentativeCitizenIdIssuedPlace" Disabled="@IsFormLocked" /></MudItem>
-                                </MudGrid>
-                            </MudPaper>
-                        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudPaper Class="ent-section-card fill-height" Elevation="0">
+                <div class="ent-section-header">
+                    <div class="ent-section-header__left">
+                        <div class="ent-section-icon"><MudIcon Icon="@Icons.Material.Filled.Badge" Size="Size.Small" /></div>
+                        <div>
+                            <MudText Class="ent-section-title">2. Thông tin người đại diện pháp luật</MudText>
+                            <MudText Class="ent-section-subtitle">Dữ liệu người đại diện dùng để in hợp đồng và hồ sơ pháp lý.</MudText>
+                        </div>
+                    </div>
+                </div>
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.RepresentativeName" Label="Họ tên người đại diện" Required="true" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.RepresentativePosition" Label="Chức vụ" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.RepresentativeCitizenId" Label="Số CCCD người đại diện" Required="true" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                    <MudItem xs="12" md="6">
+                        <MudDatePicker @bind-Date="_model.RepresentativeCitizenIdIssuedDate"
+                                       Label="Ngày cấp CCCD"
+                                       Variant="Variant.Outlined"
+                                       DateFormat="dd/MM/yyyy"
+                                       Editable="true"
+                                       ImmediateText="true"
+                                       Placeholder="dd/MM/yyyy"
+                                       Culture="@AppCulture.Vietnamese"
+                                       AutoClose="true"
+                                       Disabled="@IsFormLocked" />
+                    </MudItem>
+                    <MudItem xs="12"><CitizenIdIssuedPlaceInput @bind-Value="_model.RepresentativeCitizenIdIssuedPlace" Disabled="@IsFormLocked" /></MudItem>
+                    <MudItem xs="12">
+                        <MudTextField @bind-Value="_model.ComplaintContact"
+                                      Label="Thông tin liên hệ phản ánh dịch vụ"
+                                      HelperText="Được chụp snapshot vào hợp đồng khi tạo/phát hợp đồng."
+                                      Variant="Variant.Outlined"
+                                      Disabled="@IsFormLocked" />
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        </MudItem>
 
-                        <MudItem xs="12" md="6">
-                            <MudPaper Class="detail-section pa-4 fill-height" Elevation="1">
-                                <MudText Typo="Typo.h6">Liên hệ & tài chính</MudText>
-                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Thông tin kết nối và tài khoản ngân hàng của đơn vị.</MudText>
-                                <MudDivider Class="mb-3" />
-                                <MudGrid>
-                                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.PhoneNumber" Label="Điện thoại" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
-                                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.Email" Label="Email" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
-                                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.BankAccountNumber" Label="Số tài khoản" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
-                                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.BankName" Label="Ngân hàng" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
-                                    <MudItem xs="12">
-                                        <MudPaper Class="soft-box pa-3" Elevation="0">
-                                            <MudSwitch T="bool" @bind-Value="_model.IsActive" Color="Color.Success" Label="Đơn vị đang hoạt động" Disabled="@IsFormLocked" />
-                                            <MudText Typo="Typo.caption" Color="Color.Secondary">Tắt trạng thái nếu tạm ngưng khai thác hoặc dừng tiếp nhận hợp đồng mới.</MudText>
-                                        </MudPaper>
-                                    </MudItem>
-                                </MudGrid>
-                            </MudPaper>
-                        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudPaper Class="ent-section-card fill-height" Elevation="0">
+                <div class="ent-section-header">
+                    <div class="ent-section-header__left">
+                        <div class="ent-section-icon"><MudIcon Icon="@Icons.Material.Filled.AccountBalanceWallet" Size="Size.Small" /></div>
+                        <div>
+                            <MudText Class="ent-section-title">3. Liên hệ, Ngân hàng &amp; Trạng thái</MudText>
+                            <MudText Class="ent-section-subtitle">Thông tin kết nối, tài khoản thanh toán và trạng thái vận hành.</MudText>
+                        </div>
+                    </div>
+                </div>
+                <MudGrid Spacing="2">
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.PhoneNumber" Label="Số điện thoại" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.Email" Label="Email liên hệ" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.BankAccountNumber" Label="Số tài khoản ngân hàng" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                    <MudItem xs="12" md="6"><MudTextField @bind-Value="_model.BankName" Label="Tên ngân hàng" Variant="Variant.Outlined" Disabled="@IsFormLocked" /></MudItem>
+                    <MudItem xs="12">
+                        <MudPaper Class="soft-box pa-3" Elevation="0">
+                            <MudSwitch T="bool" @bind-Value="_model.IsActive" Color="Color.Success" Label="Đơn vị đang hoạt động" Disabled="@IsFormLocked" />
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Tắt trạng thái nếu tạm ngưng khai thác hoặc dừng tiếp nhận hợp đồng mới.</MudText>
+                        </MudPaper>
+                    </MudItem>
+                </MudGrid>
+            </MudPaper>
+        </MudItem>
 
-                        <MudItem xs="12" md="6">
-                            <MudPaper Class="detail-section pa-4 fill-height" Elevation="1">
-                                <MudText Typo="Typo.h6">Chữ ký người đại diện</MudText>
-                                <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Hợp đồng sẽ tự động lấy chữ ký này khi xuất biểu mẫu.</MudText>
-                                <MudDivider Class="mb-3" />
-                                <SignaturePad ExistingSignatureUrl="@_detail.RepresentativeSignatureFileUrl"
-                                              SignerName="@_detail.RepresentativeName"
-                                              SignedAt="@_detail.RepresentativeSignedAt"
-                                              Disabled="@IsFormLocked"
-                                              OnSignatureSaved="SaveCompanySignatureAsync" />
+        <MudItem xs="12" md="6">
+            <MudPaper Class="ent-section-card fill-height" Elevation="0">
+                <div class="ent-section-header">
+                    <div class="ent-section-header__left">
+                        <div class="ent-section-icon"><MudIcon Icon="@Icons.Material.Filled.Draw" Size="Size.Small" /></div>
+                        <div>
+                            <MudText Class="ent-section-title">4. Chữ ký cố định người đại diện</MudText>
+                            <MudText Class="ent-section-subtitle">Hợp đồng chính &amp; Hợp đồng phụ tự động lấy chữ ký này khi xuất biểu mẫu.</MudText>
+                        </div>
+                    </div>
+                </div>
+                <SignaturePad ExistingSignatureUrl="@_detail.RepresentativeSignatureFileUrl"
+                              SignerName="@_detail.RepresentativeName"
+                              SignedAt="@_detail.RepresentativeSignedAt"
+                              Disabled="@IsFormLocked"
+                              OnSignatureSaved="SaveCompanySignatureAsync" />
 
-                                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4">
-                                    Đơn vị này hiện có @_detail.AdminCount tài khoản Quản lý, @_detail.DriverCount Chủ xe đang được cấp xe, @_detail.VehicleCount xe và @_detail.ContractCount hợp đồng.
-                                </MudAlert>
-                            </MudPaper>
-                        </MudItem>
-                    </MudGrid>
-                </MudTabPanel>
-
-                <MudTabPanel Text="Thông tin phụ">
-                    <MudPaper Class="detail-section pa-4 mt-3" Elevation="1">
-                        <MudText Typo="Typo.h6">Thông tin phụ</MudText>
-                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Thông tin bổ sung của đơn vị dùng trên hợp đồng và hồ sơ liên quan.</MudText>
-                        <MudDivider Class="mb-3" />
-                        <MudGrid>
-                            <MudItem xs="12" md="6">
-                                <MudTextField @bind-Value="_model.BusinessLicenseIssuedPlace"
-                                              Label="Nơi cấp phép"
-                                              Variant="Variant.Outlined"
-                                              Disabled="@IsFormLocked" />
-                            </MudItem>
-                            <MudItem xs="12" md="6">
-                                <MudTextField @bind-Value="_model.ComplaintContact"
-                                              Label="Liên hệ phản ánh"
-                                              HelperText="Được chụp snapshot vào hợp đồng khi tạo/phát hợp đồng."
-                                              Variant="Variant.Outlined"
-                                              Disabled="@IsFormLocked" />
-                            </MudItem>
-                        </MudGrid>
-                    </MudPaper>
-                </MudTabPanel>
-            </MudTabs>
+                <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="mt-3">
+                    Đơn vị hiện có <b>@_detail.AdminCount</b> Quản lý, <b>@_detail.DriverCount</b> Chủ xe đang cấp xe, <b>@_detail.VehicleCount</b> xe và <b>@_detail.ContractCount</b> hợp đồng.
+                </MudAlert>
+            </MudPaper>
         </MudItem>
 
         <MudItem xs="12">
-            <MudPaper Class="pa-3" Elevation="1">
+            <MudPaper Class="ent-action-bar" Elevation="0">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
-                    <MudButton Variant="Variant.Outlined" OnClick="@(() => Navigation.NavigateTo("/owner/companies"))">Quay lại danh sách</MudButton>
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Navigation.NavigateTo("/owner/companies"))">Quay lại danh sách</MudButton>
                     <MudButton Color="Color.Error"
                                Variant="Variant.Outlined"
                                Disabled="@(IsFormLocked || _saving || _deleting)"
                                StartIcon="@Icons.Material.Filled.DeleteOutline"
                                OnClick="DeleteAsync">
-                        Xóa mềm
+                        Xóa mềm đơn vị
                     </MudButton>
                     <MudSpacer />
-                    @if (_isEditing)
+                    @if (!_isEditing)
+                    {
+                        <MudButton Color="Color.Primary"
+                                   Variant="Variant.Filled"
+                                   StartIcon="@Icons.Material.Filled.Edit"
+                                   OnClick="BeginEdit">
+                            Mở khóa chỉnh sửa
+                        </MudButton>
+                    }
+                    else
                     {
                         <MudButton Color="Color.Default"
                                    Variant="Variant.Outlined"
                                    Disabled="@(_saving || _deleting)"
                                    StartIcon="@Icons.Material.Filled.Close"
                                    OnClick="CancelEdit">
-                            Hủy
+                            Hủy chỉnh sửa
+                        </MudButton>
+                        <MudButton Color="Color.Primary"
+                                   Variant="Variant.Filled"
+                                   Disabled="@(IsFormLocked || _saving || _deleting)"
+                                   StartIcon="@Icons.Material.Filled.Save"
+                                   OnClick="SaveAsync">
+                            @(_saving ? "Đang lưu..." : "Lưu thay đổi")
                         </MudButton>
                     }
-                    <MudButton Color="Color.Primary"
-                               Variant="Variant.Filled"
-                               Disabled="@(IsFormLocked || _saving || _deleting)"
-                               StartIcon="@Icons.Material.Filled.Save"
-                               OnClick="SaveAsync">
-                        @(_saving ? "Đang lưu..." : "Lưu thay đổi")
-                    </MudButton>
                 </MudStack>
             </MudPaper>
         </MudItem>

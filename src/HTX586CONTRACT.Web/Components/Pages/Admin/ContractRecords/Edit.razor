@@ -48,10 +48,18 @@ else
 else
 {
 <MudForm @ref="_form" @bind-IsValid="_valid">
-    <MudPaper Class="pa-4" Elevation="1">
-        <MudPaper Class="pa-4 mb-4" Elevation="0" Style="border:1px solid var(--mud-palette-lines-default);">
-            <MudText Typo="Typo.h6" Class="mb-3">1. Thông tin hợp đồng</MudText>
-            <MudGrid>
+    <MudStack Spacing="3">
+        <MudPaper Class="ent-section-card" Elevation="0">
+            <div class="ent-section-header">
+                <div class="ent-section-header__left">
+                    <div class="ent-section-icon"><MudIcon Icon="@Icons.Material.Filled.Description" Size="Size.Small" /></div>
+                    <div>
+                        <MudText Class="ent-section-title">1. Thông tin hợp đồng &amp; Đơn vị vận tải</MudText>
+                        <MudText Class="ent-section-subtitle">Chọn Công ty/Văn phòng phát hành và loại hợp đồng vận chuyển.</MudText>
+                    </div>
+                </div>
+            </div>
+            <MudGrid Spacing="2">
                 <MudItem xs="12" md="6">
                     <MudSelect T="Guid?"
                                Value="@_model.CompanyProfileId"
@@ -80,9 +88,17 @@ else
             </MudGrid>
         </MudPaper>
 
-        <MudPaper Class="pa-4 mb-4" Elevation="0" Style="border:1px solid var(--mud-palette-lines-default);">
-            <MudText Typo="Typo.h6" Class="mb-3">2. Phương tiện</MudText>
-            <MudGrid>
+        <MudPaper Class="ent-section-card" Elevation="0">
+            <div class="ent-section-header">
+                <div class="ent-section-header__left">
+                    <div class="ent-section-icon"><MudIcon Icon="@Icons.Material.Filled.DirectionsCar" Size="Size.Small" /></div>
+                    <div>
+                        <MudText Class="ent-section-title">2. Phương tiện, Chủ xe &amp; Tài xế điều khiển</MudText>
+                        <MudText Class="ent-section-subtitle">Chọn phương tiện thuộc đơn vị; hệ thống tự động liên kết tài khoản Chủ xe nhận hợp đồng.</MudText>
+                    </div>
+                </div>
+            </div>
+            <MudGrid Spacing="2">
                 <MudItem xs="12" md="6">
                     <MudAutocomplete T="Vehicle"
                                      Value="@SelectedVehicle"
@@ -143,8 +159,16 @@ else
             </MudGrid>
         </MudPaper>
 
-        <MudPaper Class="pa-4 mb-4" Elevation="0" Style="border:1px solid var(--mud-palette-lines-default);">
-            <MudText Typo="Typo.h6" Class="mb-3">3. @(_model.BusinessType == ContractBusinessType.Cargo ? "Bên A / Khách hàng gửi hàng" : "Khách hàng/người thuê")</MudText>
+        <MudPaper Class="ent-section-card" Elevation="0">
+            <div class="ent-section-header">
+                <div class="ent-section-header__left">
+                    <div class="ent-section-icon"><MudIcon Icon="@Icons.Material.Filled.People" Size="Size.Small" /></div>
+                    <div>
+                        <MudText Class="ent-section-title">3. @(_model.BusinessType == ContractBusinessType.Cargo ? "Bên A / Khách hàng gửi hàng" : "Khách hàng / Người thuê phương tiện")</MudText>
+                        <MudText Class="ent-section-subtitle">Chọn từ danh mục khách hàng có sẵn hoặc thêm mới trực tiếp trên hợp đồng.</MudText>
+                    </div>
+                </div>
+            </div>
             @if (_model.BusinessType == ContractBusinessType.Cargo)
             {
                 <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Dense="true" Class="mb-3">
@@ -285,9 +309,17 @@ else
             </MudGrid>
         </MudPaper>
 
-        <MudPaper Class="pa-4 mb-4" Elevation="0" Style="border:1px solid var(--mud-palette-lines-default);">
-            <MudText Typo="Typo.h6" Class="mb-3">4. Nội dung hợp đồng</MudText>
-            <MudGrid>
+        <MudPaper Class="ent-section-card" Elevation="0">
+            <div class="ent-section-header">
+                <div class="ent-section-header__left">
+                    <div class="ent-section-icon"><MudIcon Icon="@Icons.Material.Filled.Route" Size="Size.Small" /></div>
+                    <div>
+                        <MudText Class="ent-section-title">4. Nội dung lịch trình, Tuyến đường &amp; Thanh toán</MudText>
+                        <MudText Class="ent-section-subtitle">Thời gian khởi hành/kết thúc, điểm đón trả, tổng quãng đường và giá trị hợp đồng.</MudText>
+                    </div>
+                </div>
+            </div>
+            <MudGrid Spacing="2">
                 <MudItem xs="12" sm="6" md="3">
                     <MudDatePicker Date="@_startDate"
                                    DateChanged="SetStartDate"
@@ -436,17 +468,25 @@ else
 
         @if (_model.BusinessType == ContractBusinessType.Passenger)
         {
-        <MudPaper Class="pa-4" Elevation="0" Style="border:1px solid var(--mud-palette-lines-default);">
-            <MudStack Row="true" AlignItems="AlignItems.Center">
-                <MudText Typo="Typo.h6">5. Danh sách hành khách</MudText>
-                <MudNumericField T="int" Value="@PassengerCount" Label="Số lượng khách" HelperText="Tự tính theo danh sách bên dưới" Variant="Variant.Outlined" Disabled="true" Style="max-width:220px;" />
-                <MudSpacer />
-                <MudButton StartIcon="@Icons.Material.Filled.Add"
-                           Variant="Variant.Outlined"
-                           OnClick="AddPassenger">
-                    Thêm hành khách
-                </MudButton>
-            </MudStack>
+        <MudPaper Class="ent-section-card" Elevation="0">
+            <div class="ent-section-header">
+                <div class="ent-section-header__left">
+                    <div class="ent-section-icon"><MudIcon Icon="@Icons.Material.Filled.Groups" Size="Size.Small" /></div>
+                    <div>
+                        <MudText Class="ent-section-title">5. Danh sách hành khách đi theo hợp đồng</MudText>
+                        <MudText Class="ent-section-subtitle">Tối đa 20 hành khách theo mẫu PDF 2 trang.</MudText>
+                    </div>
+                </div>
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                    <MudChip T="string" Color="Color.Primary" Variant="Variant.Filled">Tổng số: @PassengerCount khách</MudChip>
+                    <MudButton StartIcon="@Icons.Material.Filled.Add"
+                               Variant="Variant.Outlined"
+                               Color="Color.Primary"
+                               OnClick="AddPassenger">
+                        Thêm hành khách
+                    </MudButton>
+                </MudStack>
+            </div>
 
             <MudCheckBox T="bool"
                          @bind-Value="_model.CustomerTravelsWithGroup"
@@ -493,17 +533,20 @@ else
         </MudPaper>
         }
 
-        <MudStack Row="true" Class="mt-4">
-            <MudButton Variant="Variant.Outlined" Href="/admin/contracts">Quay lại</MudButton>
-            <MudSpacer />
-            <MudButton Color="Color.Primary"
-                       Variant="Variant.Filled"
-                       Disabled="@(_saving || !HasRequiredDispatchSignatures)"
-                       OnClick="SaveAsync">
-                @(Id.HasValue ? "Lưu cập nhật HĐ" : "Lưu & phát HĐ")
-            </MudButton>
-        </MudStack>
-    </MudPaper>
+        <MudPaper Class="ent-action-bar" Elevation="0">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ArrowBack" Href="/admin/contracts">Quay lại danh sách</MudButton>
+                <MudSpacer />
+                <MudButton Color="Color.Primary"
+                           Variant="Variant.Filled"
+                           StartIcon="@Icons.Material.Filled.Save"
+                           Disabled="@(_saving || !HasRequiredDispatchSignatures)"
+                           OnClick="SaveAsync">
+                    @(Id.HasValue ? "Lưu cập nhật HĐ" : "Lưu & phát HĐ")
+                </MudButton>
+            </MudStack>
+        </MudPaper>
+    </MudStack>
 </MudForm>
 
 @if (Id.HasValue)

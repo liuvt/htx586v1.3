@@ -648,7 +648,8 @@ public sealed class ContractDocumentService(
         var template = subContractTemplateService.GetTemplateForCompany(
             contract.CompanyProfileId,
             companyName,
-            companyTaxCode);
+            companyTaxCode,
+            contract.CompanyProfile);
         var placeholders = SubContractTemplateService.BuildContractPlaceholders(contract);
         var docxBytes = subContractTemplateService.ExportTemplateAsDocxBytes(template, placeholders);
 

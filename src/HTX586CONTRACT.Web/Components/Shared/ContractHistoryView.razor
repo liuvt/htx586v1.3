@@ -9,9 +9,12 @@
         không lấy lại từ hồ sơ Công ty, xe, tài xế hoặc khách hàng hiện tại.
     </MudAlert>
 
-    <MudPaper Class="contract-hero" Elevation="1">
+    <MudPaper Class="contract-hero" Elevation="0">
         <div class="contract-hero__left">
-            <MudText Typo="Typo.caption" Class="section-eyebrow">HTX586 CONTRACT</MudText>
+            <div class="section-eyebrow">
+                <MudIcon Icon="@Icons.Material.Filled.VerifiedUser" Size="Size.Small" />
+                <span>HỒ SƠ HỢP ĐỒNG ĐÃ KHÓA SNAPSHOT</span>
+            </div>
             <MudText Typo="Typo.h4" Class="contract-title">@Detail.ContractNumber</MudText>
             <MudText Typo="Typo.body1" Class="contract-subtitle">
                 @Detail.CompanyName · @BusinessName(Detail.BusinessType)
@@ -20,21 +23,51 @@
                 <ContractStatusChip Status="Detail.Status" ChipSize="Size.Medium" />
                 <MudChip T="string" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Badge">@BusinessNameShort(Detail.BusinessType)</MudChip>
                 <MudChip T="string" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.DirectionsCar">@(Detail.VehiclePlate ?? "Chưa có biển số")</MudChip>
+                <MudChip T="string" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Tag">HĐ phụ: @Detail.SubContractNumber</MudChip>
+            </div>
+            <div class="contract-hero__quick-actions">
+                @if (Detail.Status == ContractStatus.Completed)
+                {
+                    <MudButton Color="Color.Error"
+                               Variant="Variant.Filled"
+                               StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                               OnClick="OpenPdfAsync">
+                        Mở PDF HĐ chính
+                    </MudButton>
+                }
+                <MudButton Color="Color.Secondary"
+                           Variant="Variant.Filled"
+                           StartIcon="@Icons.Material.Filled.PictureAsPdf"
+                           OnClick="OpenSubContractPdfAsync">
+                    Hợp đồng phụ (PDF)
+                </MudButton>
+                <MudButton Color="Color.Info"
+                           Variant="Variant.Filled"
+                           StartIcon="@Icons.Material.Filled.Article"
+                           OnClick="OpenSubContractDocxAsync">
+                    Tải HĐ phụ (.docx)
+                </MudButton>
+                <MudButton Href="@BackUrl"
+                           Variant="Variant.Outlined"
+                           Color="Color.Inherit"
+                           StartIcon="@Icons.Material.Filled.ArrowBack">
+                    Danh sách HĐ
+                </MudButton>
             </div>
         </div>
 
         <div class="contract-hero__right">
             <div class="hero-meta-card">
-                <span class="hero-meta-label">Ngày tạo</span>
+                <span class="hero-meta-label">Ngày khởi tạo</span>
                 <span class="hero-meta-value">@FormatDateTime(Detail.CreatedAt)</span>
             </div>
             <div class="hero-meta-card">
-                <span class="hero-meta-label">Hoàn thành</span>
+                <span class="hero-meta-label">Thời điểm hoàn tất</span>
                 <span class="hero-meta-value">@FormatDateTime(Detail.CompletedAt)</span>
             </div>
             <div class="hero-meta-card">
-                <span class="hero-meta-label">Người tạo</span>
-                <span class="hero-meta-value">@Detail.CreatedByName</span>
+                <span class="hero-meta-label">Người khởi tạo / Phát HĐ</span>
+                <span class="hero-meta-value">@Detail.CreatedByName · @(Detail.AssignedByName ?? "Tài xế tự tạo")</span>
             </div>
         </div>
     </MudPaper>
@@ -338,19 +371,33 @@
                 </MudButton>
             </MudStack>
         </div>
+        @{
+            var subUnit = SubContractHelper.ResolveFixedUnitProfile(
+                Detail.CompanyName,
+                Detail.CompanyTaxCode,
+                Detail.CompanyAddress,
+                Detail.CompanyPhoneNumber,
+                Detail.CompanyBusinessLicenseNumber,
+                Detail.CompanyBusinessLicenseIssuedPlace,
+                Detail.CompanyRepresentativeName,
+                Detail.CompanyRepresentativePosition,
+                Detail.CompanyRepresentativeCitizenId,
+                Detail.CompanyRepresentativeCitizenIdIssuedDate,
+                Detail.CompanyRepresentativeCitizenIdIssuedPlace);
+        }
         <div class="data-grid">
             @DataBlock("Số Hợp đồng phụ", Detail.SubContractNumber)
             @DataBlock("Thời hạn hiệu lực (4 năm)", $"{FormatDate(Detail.SubContractEffectiveFrom)} → {FormatDate(Detail.SubContractEffectiveTo)}")
-            @DataBlock("Đơn vị áp dụng (Bên A)", Detail.CompanyName, "wide")
-            @DataBlock("Mã số thuế Bên A", Detail.CompanyTaxCode)
-            @DataBlock("Số GPKDVT / ĐKKD", Detail.CompanyBusinessLicenseNumber)
-            @DataBlock("Nơi cấp GPKDVT", Detail.CompanyBusinessLicenseIssuedPlace)
-            @DataBlock("SĐT Bên A", Detail.CompanyPhoneNumber)
-            @DataBlock("Địa chỉ trụ sở Bên A", Detail.CompanyAddress, "wide")
-            @DataBlock("Đại diện Bên A", Detail.CompanyRepresentativeName)
-            @DataBlock("Chức vụ Bên A", Detail.CompanyRepresentativePosition ?? "Giám đốc")
-            @DataBlock("CCCD Đại diện Bên A", Detail.CompanyRepresentativeCitizenId)
-            @DataBlock("Ngày cấp CCCD Bên A", FormatDate(Detail.CompanyRepresentativeCitizenIdIssuedDate))
+            @DataBlock("Đơn vị áp dụng cứng (Bên A)", subUnit.PartyAName, "wide")
+            @DataBlock("Mã số thuế Bên A", subUnit.TaxCode)
+            @DataBlock("Số GPKDVT / ĐKKD", string.IsNullOrWhiteSpace(subUnit.LicenseIssuedDateText) ? subUnit.LicenseNumber : $"{subUnit.LicenseNumber} (cấp {subUnit.LicenseIssuedDateText})")
+            @DataBlock("Nơi cấp GPKDVT", subUnit.LicenseIssuedPlace)
+            @DataBlock("SĐT Bên A", subUnit.PhoneNumber)
+            @DataBlock("Địa chỉ trụ sở Bên A", subUnit.Address, "wide")
+            @DataBlock("Đại diện Bên A", subUnit.RepresentativeName)
+            @DataBlock("Chức vụ Bên A", subUnit.RepresentativePosition)
+            @DataBlock("CCCD Đại diện Bên A", subUnit.RepresentativeCitizenId)
+            @DataBlock("Ngày & nơi cấp CCCD Bên A", $"{subUnit.RepresentativeCitizenIdIssuedDateText} ({subUnit.RepresentativeCitizenIdIssuedPlace})")
             @DataBlock("Chủ phương tiện (Bên B)", Detail.OwnerName)
             @DataBlock("CCCD Bên B", Detail.OwnerCitizenId)
             @DataBlock("Ngày cấp CCCD Bên B", FormatDate(Detail.OwnerCitizenIdIssuedDate))
@@ -431,69 +478,103 @@
     }
 
     .contract-lock-alert {
-        border-radius: 18px;
+        border-radius: 16px;
+        background: #f0fdf8;
     }
 
     .contract-hero {
-        padding: 24px;
+        padding: 26px 30px;
         border-radius: 24px;
-        border: 1px solid rgba(16, 24, 40, 0.08);
-        background: linear-gradient(135deg, rgba(7, 126, 105, 0.10), rgba(7, 126, 105, 0.02));
+        border: 1px solid rgba(11, 107, 93, 0.18);
+        background: linear-gradient(135deg, #064d44 0%, #0b6b5d 56%, #138a77 100%);
+        color: #ffffff;
+        box-shadow: 0 20px 44px rgba(6, 77, 68, 0.18);
         display: grid;
-        grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr);
-        gap: 20px;
+        grid-template-columns: minmax(0, 1.65fr) minmax(300px, 0.95fr);
+        gap: 24px;
+        align-items: center;
     }
 
     .section-eyebrow {
-        color: var(--mud-palette-primary);
-        font-weight: 700;
-        letter-spacing: .12em;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        padding: 5px 11px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        color: #a7f3d0;
+        font-size: .68rem;
+        font-weight: 800;
+        letter-spacing: .09em;
         text-transform: uppercase;
-        margin-bottom: 8px;
+        margin-bottom: 12px;
     }
 
     .contract-title {
-        font-weight: 800;
+        color: #ffffff !important;
+        font-weight: 850 !important;
+        letter-spacing: -.03em;
         margin-bottom: 6px;
         word-break: break-word;
     }
 
     .contract-subtitle {
-        color: var(--mud-palette-text-secondary);
+        color: rgba(255, 255, 255, 0.80) !important;
+        font-weight: 500;
         margin-bottom: 16px;
     }
 
     .contract-chip-row {
         display: flex;
         flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .contract-hero .mud-chip.mud-chip-outlined {
+        color: #ffffff !important;
+        border-color: rgba(255, 255, 255, 0.28) !important;
+        background: rgba(255, 255, 255, 0.08) !important;
+    }
+
+    .contract-hero__quick-actions {
+        display: flex;
+        flex-wrap: wrap;
         gap: 10px;
+        margin-top: 18px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(255, 255, 255, 0.14);
     }
 
     .contract-hero__right {
         display: grid;
         grid-template-columns: 1fr;
-        gap: 12px;
+        gap: 10px;
     }
 
     .hero-meta-card {
-        background: rgba(255,255,255,0.72);
-        border: 1px solid rgba(16, 24, 40, 0.08);
-        border-radius: 16px;
-        padding: 14px 16px;
+        background: rgba(255, 255, 255, 0.10);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        backdrop-filter: blur(8px);
+        border-radius: 15px;
+        padding: 12px 16px;
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 3px;
     }
 
     .hero-meta-label {
-        font-size: .78rem;
-        color: var(--mud-palette-text-secondary);
+        font-size: .71rem;
+        font-weight: 750;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: rgba(255, 255, 255, 0.68);
     }
 
     .hero-meta-value {
-        font-size: .98rem;
-        font-weight: 700;
-        color: var(--mud-palette-text-primary);
+        font-size: .94rem;
+        font-weight: 750;
+        color: #ffffff;
         word-break: break-word;
     }
 
@@ -504,37 +585,53 @@
     }
 
     .kpi-card {
-        background: var(--mud-palette-surface);
-        border: 1px solid rgba(16, 24, 40, 0.08);
+        position: relative;
+        overflow: hidden;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbfa 100%);
+        border: 1px solid #dce7e4;
         border-radius: 18px;
-        padding: 18px;
-        box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+        padding: 18px 20px;
+        box-shadow: 0 6px 20px rgba(15, 35, 30, 0.045);
+    }
+
+    .kpi-card::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 14px;
+        bottom: 14px;
+        width: 4px;
+        border-radius: 0 4px 4px 0;
+        background: linear-gradient(180deg, #0b6b5d, #2dd4bf);
     }
 
     .kpi-label {
-        font-size: .8rem;
-        color: var(--mud-palette-text-secondary);
-        margin-bottom: 10px;
+        font-size: .72rem;
+        font-weight: 800;
+        color: #647873;
+        margin-bottom: 8px;
         text-transform: uppercase;
-        letter-spacing: .03em;
+        letter-spacing: .04em;
     }
 
     .kpi-value {
-        font-size: 1.35rem;
-        font-weight: 800;
+        font-size: 1.28rem;
+        font-weight: 850;
         line-height: 1.3;
-        color: var(--mud-palette-text-primary);
+        color: #132520;
     }
 
     .kpi-value--sm {
-        font-size: 1rem;
+        font-size: .95rem;
+        font-weight: 750;
     }
 
     .section-card {
-        padding: 24px;
-        border-radius: 24px;
-        border: 1px solid rgba(16, 24, 40, 0.08);
-        box-shadow: 0 6px 24px rgba(15, 23, 42, 0.04);
+        padding: 24px 26px;
+        border-radius: 22px;
+        border: 1px solid #dfe9e7;
+        background: #ffffff;
+        box-shadow: 0 8px 26px rgba(15, 35, 30, 0.04);
     }
 
     .section-header {
@@ -542,41 +639,62 @@
         justify-content: space-between;
         align-items: center;
         gap: 16px;
+        padding-bottom: 14px;
         margin-bottom: 18px;
+        border-bottom: 1px solid #ebf1ef;
+    }
+
+    .section-header .mud-typography-h6 {
+        font-weight: 800 !important;
+        color: #12241f;
+        letter-spacing: -.015em;
     }
 
     .data-grid {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 16px;
+        gap: 12px;
     }
 
     .data-card {
-        border: 1px solid rgba(16, 24, 40, 0.08);
-        border-radius: 18px;
-        padding: 16px 18px;
-        background: rgba(250, 251, 252, 0.85);
-        min-height: 88px;
+        position: relative;
+        border: 1px solid #e0eae7;
+        border-radius: 14px;
+        padding: 13px 16px;
+        background: linear-gradient(180deg, #ffffff 0%, #f9fbfb 100%);
+        min-height: 76px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        transition: border-color .16s ease, box-shadow .16s ease;
+    }
+
+    .data-card:hover {
+        border-color: #b7d4cd;
+        box-shadow: 0 5px 15px rgba(11, 107, 93, 0.05);
     }
 
     .data-card.wide {
         grid-column: span 2;
+        background: linear-gradient(180deg, #fcfefe 0%, #f4f9f8 100%);
     }
 
     .data-label {
         display: block;
-        color: var(--mud-palette-primary);
-        font-size: .82rem;
-        font-weight: 600;
-        margin-bottom: 8px;
+        color: #627671;
+        font-size: .71rem;
+        font-weight: 750;
+        text-transform: uppercase;
+        letter-spacing: .025em;
+        margin-bottom: 5px;
     }
 
     .data-value {
         display: block;
-        color: var(--mud-palette-text-primary);
-        font-size: 1.02rem;
-        font-weight: 600;
-        line-height: 1.45;
+        color: #142520;
+        font-size: .94rem;
+        font-weight: 750;
+        line-height: 1.42;
         word-break: break-word;
         white-space: pre-wrap;
     }
@@ -584,22 +702,33 @@
     .signature-grid {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 16px;
+        gap: 14px;
     }
 
     .signature-card {
-        border: 1px solid rgba(16, 24, 40, 0.08);
-        border-radius: 20px;
+        border: 1px solid #dfe9e6;
+        border-radius: 18px;
         padding: 16px;
-        background: rgba(250, 251, 252, 0.88);
+        background: #fafcfb;
     }
 
     .signature-card__title {
-        font-weight: 700;
+        font-size: .86rem;
+        font-weight: 800;
+        color: #162923;
+        text-transform: uppercase;
+        letter-spacing: .02em;
         margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px dashed #dce7e4;
     }
 
     .contract-actions {
+        padding: 16px 22px;
+        border-radius: 18px;
+        border: 1px solid #dce7e4;
+        background: #ffffff;
+        box-shadow: 0 8px 24px rgba(15, 35, 30, 0.05);
         display: flex;
         justify-content: space-between;
         align-items: center;
