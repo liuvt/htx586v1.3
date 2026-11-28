@@ -35,6 +35,12 @@
                         Mở PDF HĐ chính
                     </MudButton>
                 }
+                <MudButton Color="Color.Primary"
+                           Variant="Variant.Filled"
+                           StartIcon="@Icons.Material.Filled.Description"
+                           OnClick="OpenMainContractDocxAsync">
+                    Tải HĐ chính (.docx)
+                </MudButton>
                 <MudButton Color="Color.Secondary"
                            Variant="Variant.Filled"
                            StartIcon="@Icons.Material.Filled.PictureAsPdf"
@@ -357,6 +363,12 @@
                 <MudText Typo="Typo.body2" Color="Color.Secondary">Hợp đồng dịch vụ vận tải đi kèm theo Đơn vị (@Detail.CompanyName) và Chủ phương tiện/Xe, tự động ánh xạ từ dữ liệu hợp đồng.</MudText>
             </div>
             <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
+                <MudButton Color="Color.Primary"
+                           Variant="Variant.Outlined"
+                           StartIcon="@Icons.Material.Filled.Description"
+                           OnClick="OpenMainContractDocxAsync">
+                    Tải HĐ chính (.docx)
+                </MudButton>
                 <MudButton Color="Color.Secondary"
                            Variant="Variant.Filled"
                            StartIcon="@Icons.Material.Filled.PictureAsPdf"
@@ -444,6 +456,12 @@
                 Quay lại danh sách
             </MudButton>
             <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
+                <MudButton Color="Color.Primary"
+                           Variant="Variant.Outlined"
+                           StartIcon="@Icons.Material.Filled.Description"
+                           OnClick="OpenMainContractDocxAsync">
+                    Tải HĐ chính (.docx)
+                </MudButton>
                 <MudButton Color="Color.Secondary"
                            Variant="Variant.Filled"
                            StartIcon="@Icons.Material.Filled.PictureAsPdf"
@@ -902,6 +920,19 @@
         try
         {
             var url = await DocumentService.GeneratePdfAsync(Detail.Id);
+            await JS.InvokeVoidAsync("open", url, "_blank");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task OpenMainContractDocxAsync()
+    {
+        try
+        {
+            var url = await DocumentService.GenerateMainContractDocxAsync(Detail.Id);
             await JS.InvokeVoidAsync("open", url, "_blank");
         }
         catch (Exception ex)

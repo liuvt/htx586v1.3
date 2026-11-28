@@ -74,6 +74,12 @@ else
                                    OnClick="OpenSubContractDocxAsync">
                             Tải HĐ phụ (.docx)
                         </MudButton>
+                        <MudButton Color="Color.Primary"
+                                   Variant="Variant.Filled"
+                                   StartIcon="@Icons.Material.Filled.Description"
+                                   OnClick="OpenMainContractDocxAsync">
+                            Tải HĐ chính (.docx)
+                        </MudButton>
                         @if (_detail.Status == ContractStatus.Completed)
                         {
                             <MudButton Color="Color.Error"
@@ -598,6 +604,7 @@ else
                 }
                 <MudButton Color="Color.Secondary" Variant="Variant.Filled" StartIcon="@Icons.Material.Filled.PictureAsPdf" OnClick="OpenSubContractPdfAsync">Hợp đồng phụ (PDF)</MudButton>
                 <MudButton Color="Color.Info" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Article" OnClick="OpenSubContractDocxAsync">Tải HĐ phụ (.docx)</MudButton>
+                <MudButton Color="Color.Primary" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Description" OnClick="OpenMainContractDocxAsync">Tải HĐ chính (.docx)</MudButton>
                 @if (_detail.Status == ContractStatus.Completed)
                 {
                     <MudButton Color="Color.Success" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.PictureAsPdf" OnClick="OpenPdfAsync">Mở PDF HĐ chính</MudButton>
@@ -709,6 +716,19 @@ else
         try
         {
             var url = await DocumentService.GeneratePdfAsync(Id);
+            await JS.InvokeVoidAsync("open", url, "_blank");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task OpenMainContractDocxAsync()
+    {
+        try
+        {
+            var url = await DocumentService.GenerateMainContractDocxAsync(Id);
             await JS.InvokeVoidAsync("open", url, "_blank");
         }
         catch (Exception ex)

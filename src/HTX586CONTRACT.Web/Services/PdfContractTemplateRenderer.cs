@@ -20,6 +20,7 @@ public sealed class PdfContractTemplateRenderer(
     IWebHostEnvironment environment,
     IConfiguration configuration,
     IUploadFileStorage storage,
+    MainContractTemplateService mainContractTemplateService,
     SubContractTemplateService subContractTemplateService,
     ILogger<PdfContractTemplateRenderer> logger)
 {
@@ -37,128 +38,461 @@ public sealed class PdfContractTemplateRenderer(
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var isCargo = contract.BusinessType == ContractBusinessType.Cargo;
-        var templatePath = ResolveContentPath(
-            configuration[isCargo ? "DocumentGeneration:CargoContractTemplatePath" : "DocumentGeneration:ContractTemplatePath"],
-            Path.Combine("Templates", "Contracts", isCargo
-                ? "HopDongVanChuyenHangHoa.template.pdf"
-                : "HopDongVanChuyenHanhKhach.template.pdf"));
-
-        var layoutPath = ResolveContentPath(
-            configuration["DocumentGeneration:ContractLayoutsPath"],
-            Path.Combine("Templates", "Contracts", "HopDongVanChuyen.layout.json"));
-
-        if (!File.Exists(templatePath))
-            throw new FileNotFoundException(
-                $"Không tìm thấy PDF nền tại '{templatePath}'.", templatePath);
-
-        if (!File.Exists(layoutPath))
-            throw new FileNotFoundException(
-                $"Không tìm thấy file tọa độ PDF tại '{layoutPath}'.", layoutPath);
-
-        var layoutInfo = GetLayoutRuntimeInfo();
-        var layoutBundle = ReadActiveLayoutBundle(layoutPath);
-
-        logger.LogInformation(
-            "Render PDF bằng layout JSON đang active. Layout={LayoutPath}, UpdatedAtUtc={UpdatedAtUtc}, Sha256={LayoutSha256}",
-            layoutInfo.Path,
-            layoutInfo.LastWriteTimeUtc,
-            layoutInfo.Sha256);
-
-        var layout = isCargo ? layoutBundle.Cargo : layoutBundle.Passenger;
-        if (layout is null)
-            throw new InvalidOperationException(
-                $"File layout dùng chung chưa có cấu hình cho {(isCargo ? "hợp đồng hàng hóa" : "hợp đồng hành khách")}.");
-
-        ValidateRuntimeLayout(layout, isCargo ? "hợp đồng hàng hóa" : "hợp đồng hành khách");
-
-        var textValues = BuildTextValues(contract);
-        var imageValues = BuildImageValues(contract);
         var fixedFontFiles = ResolveFixedFontFiles();
+        var fallbackFonts = new[] { "Liberation Serif", "Tinos", "DejaVu Serif", "Noto Serif", "Arial", "sans-serif" };
         var tempOutputPath = outputPdfPath + $".{Guid.NewGuid():N}.tmp";
-
         Directory.CreateDirectory(Path.GetDirectoryName(outputPdfPath)!);
+
+        var snapshot = ContractSnapshotData.FromJson(contract.ContractDataJson);
+        var companyName = snapshot is not null
+            ? First(snapshot.Company.Name, contract.CompanyNameSnapshot, contract.CompanyProfile?.CompanyName)
+            : First(contract.CompanyNameSnapshot, contract.CompanyProfile?.CompanyName);
+
+        var template = mainContractTemplateService.GetTemplate(
+            contract.BusinessType,
+            contract.CompanyProfileId,
+            companyName);
+        var placeholders = MainContractTemplateService.BuildContractPlaceholders(contract);
+        var imageValues = BuildImageValues(contract);
+
+        string R(string? text) => MainContractTemplateService.ReplacePlaceholders(text, placeholders);
+
+        const double pageWidth = 595.5;
+        const double pageHeight = 841.5;
+        const double marginX = 42.0;
+        const double contentWidth = pageWidth - (marginX * 2.0);
+        const double bottomLimitY = 785.0;
 
         try
         {
-            using var document = PdfReader.Open(templatePath, PdfDocumentOpenMode.Modify);
+            using var document = new PdfDocument();
 
-            var expectedPages = Math.Max(
-                layout.TextFields.Select(x => x.Page).DefaultIfEmpty(0).Max(),
-                layout.ImageFields.Select(x => x.Page).DefaultIfEmpty(0).Max());
+            // ==================== TRANG 1/2: HỢP ĐỒNG CHÍNH ====================
+            var page = document.AddPage();
+            page.Width = XUnit.FromPoint(pageWidth);
+            page.Height = XUnit.FromPoint(pageHeight);
+            var graphics = XGraphics.FromPdfPage(page);
+            var currentY = 34.0;
 
-            if (document.PageCount < expectedPages)
-                throw new InvalidOperationException(
-                    $"PDF nền chỉ có {document.PageCount} trang nhưng layout cần {expectedPages} trang.");
-
-            for (var pageNumber = 1; pageNumber <= expectedPages; pageNumber++)
+            void DrawBoxedText(
+                string text,
+                double x,
+                double y,
+                double width,
+                double height,
+                float fontSize,
+                bool bold = false,
+                bool italic = false,
+                string alignment = "Left",
+                int maxLines = 10)
             {
-                cancellationToken.ThrowIfCancellationRequested();
+                if (string.IsNullOrWhiteSpace(text))
+                    return;
 
-                using var graphics = XGraphics.FromPdfPage(
-                    document.Pages[pageNumber - 1],
-                    XGraphicsPdfPageOptions.Append);
-
-                foreach (var field in layout.TextFields.Where(x => x.Page == pageNumber))
+                var field = new PdfTextFieldLayout
                 {
-                    if (!textValues.TryGetValue(field.Key, out var value) ||
-                        string.IsNullOrWhiteSpace(value))
-                        continue;
+                    Key = "MAIN_BOX",
+                    Page = 1,
+                    X = x,
+                    Y = y,
+                    Width = width,
+                    Height = height,
+                    FontSize = fontSize,
+                    MinFontSize = Math.Max(7.5f, fontSize - 2.0f),
+                    MaxLines = maxLines,
+                    Alignment = alignment,
+                    VerticalAlignment = "Top",
+                    Bold = bold,
+                    Italic = italic
+                };
 
-                    var text = field.Uppercase
-                        ? value.ToUpper(CultureInfo.GetCultureInfo("vi-VN"))
-                        : value;
+                var rendered = TextPngRenderer.Render(
+                    text,
+                    field,
+                    "Times New Roman",
+                    fallbackFonts,
+                    fixedFontFiles);
 
-                    if (field.ClearBackground)
-                    {
-                        graphics.DrawRectangle(
-                            XBrushes.White,
-                            field.X,
-                            field.Y,
-                            field.Width,
-                            field.Height);
-                    }
+                using var stream = new MemoryStream(
+                    rendered.PngBytes,
+                    0,
+                    rendered.PngBytes.Length,
+                    writable: false,
+                    publiclyVisible: true);
+                using var image = XImage.FromStream(stream);
 
-                    var renderedText = TextPngRenderer.Render(
-                        text,
-                        field,
-                        layout.FontFamily,
-                        layout.FallbackFontFamilies,
-                        fixedFontFiles);
+                var drawX = alignment.Equals("Center", StringComparison.OrdinalIgnoreCase)
+                    ? x + Math.Max(0d, (width - rendered.WidthPoints) / 2d)
+                    : alignment.Equals("Right", StringComparison.OrdinalIgnoreCase)
+                        ? x + Math.Max(0d, width - rendered.WidthPoints)
+                        : x;
 
-                    using var stream = new MemoryStream(
-                        renderedText.PngBytes,
-                        0,
-                        renderedText.PngBytes.Length,
-                        writable: false,
-                        publiclyVisible: true);
-                    using var image = XImage.FromStream(stream);
+                graphics.DrawImage(image, drawX, y, rendered.WidthPoints, rendered.HeightPoints);
+            }
 
-                    var drawX = ResolveAlignedX(field, renderedText.WidthPoints);
-                    var drawY = ResolveAlignedY(field, renderedText.HeightPoints);
+            void DrawParagraph(
+                string text,
+                float fontSize = 9.8f,
+                bool bold = false,
+                bool italic = false,
+                string alignment = "Left",
+                double indent = 0.0,
+                double spacingAfter = 2.0)
+            {
+                if (string.IsNullOrWhiteSpace(text))
+                    return;
 
-                    graphics.DrawImage(
-                        image,
-                        drawX,
-                        drawY,
-                        renderedText.WidthPoints,
-                        renderedText.HeightPoints);
+                var width = contentWidth - indent;
+                var field = new PdfTextFieldLayout
+                {
+                    Key = "MAIN_PARA",
+                    Page = 1,
+                    X = marginX + indent,
+                    Y = currentY,
+                    Width = width,
+                    Height = 320.0,
+                    FontSize = fontSize,
+                    MinFontSize = Math.Max(8.0f, fontSize - 1.2f),
+                    MaxLines = 20,
+                    Alignment = alignment,
+                    VerticalAlignment = "Top",
+                    Bold = bold,
+                    Italic = italic
+                };
+
+                var rendered = TextPngRenderer.Render(
+                    text,
+                    field,
+                    "Times New Roman",
+                    fallbackFonts,
+                    fixedFontFiles);
+
+                if (currentY + rendered.HeightPoints > bottomLimitY)
+                {
+                    graphics.Dispose();
+                    page = document.AddPage();
+                    page.Width = XUnit.FromPoint(pageWidth);
+                    page.Height = XUnit.FromPoint(pageHeight);
+                    graphics = XGraphics.FromPdfPage(page);
+                    currentY = 38.0;
                 }
 
-                foreach (var field in layout.ImageFields.Where(x => x.Page == pageNumber))
+                using var stream = new MemoryStream(
+                    rendered.PngBytes,
+                    0,
+                    rendered.PngBytes.Length,
+                    writable: false,
+                    publiclyVisible: true);
+                using var image = XImage.FromStream(stream);
+
+                var drawX = alignment.Equals("Center", StringComparison.OrdinalIgnoreCase)
+                    ? marginX + indent + Math.Max(0d, (width - rendered.WidthPoints) / 2d)
+                    : alignment.Equals("Right", StringComparison.OrdinalIgnoreCase)
+                        ? marginX + indent + Math.Max(0d, width - rendered.WidthPoints)
+                        : marginX + indent;
+
+                graphics.DrawImage(image, drawX, currentY, rendered.WidthPoints, rendered.HeightPoints);
+                currentY += rendered.HeightPoints + spacingAfter;
+            }
+
+            void DrawMultiLineBlock(
+                string? rawBlock,
+                float fontSize = 9.7f,
+                bool bold = false,
+                bool italic = false,
+                string alignment = "Left",
+                double indent = 0.0,
+                double spacingAfter = 1.8)
+            {
+                var resolved = R(rawBlock);
+                if (string.IsNullOrWhiteSpace(resolved))
+                    return;
+
+                var lines = resolved.Replace("\r\n", "\n").Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var rawLine in lines)
                 {
-                    if (!imageValues.TryGetValue(field.Key, out var imagePath) ||
-                        string.IsNullOrWhiteSpace(imagePath) ||
-                        !File.Exists(imagePath))
+                    var line = rawLine.Trim();
+                    if (string.IsNullOrWhiteSpace(line))
                         continue;
 
-                    // Giữ nguyên màu/nét của ảnh chữ ký gốc khi đưa vào PDF.
-                    // Không recolor tại bước render vì xử lý pixel có thể làm nét ký dày,
-                    // đặc biệt với chữ ký/con dấu Đại diện HTX và ảnh có anti-alias.
-                    using var image = XImage.FromFile(imagePath);
-                    DrawContainedImage(graphics, image, field);
+                    var isArticleHead = line.StartsWith("Điều ", StringComparison.OrdinalIgnoreCase);
+                    DrawParagraph(
+                        line,
+                        fontSize: fontSize,
+                        bold: bold || isArticleHead,
+                        italic: italic,
+                        alignment: alignment,
+                        indent: indent,
+                        spacingAfter: spacingAfter);
                 }
             }
+
+            if (contract.BusinessType == ContractBusinessType.Cargo)
+            {
+                DrawBoxedText(R(template.LeftHeaderLine1).ToUpper(CultureInfo.GetCultureInfo("vi-VN")), 36, currentY, 250, 16, 9.5f, bold: true, alignment: "Center", maxLines: 1);
+                DrawBoxedText(R(template.LeftHeaderLine2).ToUpper(CultureInfo.GetCultureInfo("vi-VN")), 36, currentY + 14, 250, 28, 9.2f, bold: true, alignment: "Center", maxLines: 2);
+                DrawBoxedText("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", 292, currentY, 265, 16, 10.2f, bold: true, alignment: "Center", maxLines: 1);
+                DrawBoxedText("Độc lập - Tự do - Hạnh phúc", 292, currentY + 15, 265, 16, 10.5f, bold: true, alignment: "Center", maxLines: 1);
+                currentY += 42.0;
+            }
+            else
+            {
+                DrawParagraph("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", fontSize: 11.2f, bold: true, alignment: "Center", spacingAfter: 1.5);
+                DrawParagraph("Độc lập – Tự do – Hạnh phúc", fontSize: 10.8f, bold: true, alignment: "Center", spacingAfter: 6.0);
+            }
+
+            DrawParagraph(R(template.DocumentTitle), fontSize: 13.5f, bold: true, alignment: "Center", spacingAfter: 2.0);
+            DrawParagraph(R(template.ContractNumberLine), fontSize: 10.2f, bold: false, alignment: "Center", spacingAfter: 5.0);
+
+            if (!string.IsNullOrWhiteSpace(template.LegalBasesText))
+                DrawMultiLineBlock(template.LegalBasesText, fontSize: 9.6f, spacingAfter: 1.8);
+
+            DrawMultiLineBlock(template.IntroDateLocationText, fontSize: 9.7f, spacingAfter: 2.2);
+
+            DrawParagraph(R(template.PartyASectionTitle), fontSize: 10.2f, bold: true, spacingAfter: 1.8);
+            DrawMultiLineBlock(template.PartyABodyText, fontSize: 9.6f, spacingAfter: 1.8);
+
+            DrawParagraph(R(template.PartyBSectionTitle), fontSize: 10.2f, bold: true, spacingAfter: 1.8);
+            DrawMultiLineBlock(template.PartyBBodyText, fontSize: 9.6f, spacingAfter: 1.8);
+
+            if (!string.IsNullOrWhiteSpace(template.TransportDetailsTitle))
+                DrawParagraph(R(template.TransportDetailsTitle), fontSize: 9.8f, bold: false, spacingAfter: 1.8);
+            DrawMultiLineBlock(template.TransportDetailsBodyText, fontSize: 9.6f, spacingAfter: 1.8);
+
+            DrawParagraph(R(template.ResponsibilitiesSectionTitle), fontSize: 10.2f, bold: true, spacingAfter: 1.8);
+
+            DrawParagraph(R(template.ResponsibilityHtxTitle), fontSize: 9.8f, bold: true, spacingAfter: 1.5);
+            DrawMultiLineBlock(template.ResponsibilityHtxBodyText, fontSize: 9.3f, spacingAfter: 1.5);
+
+            DrawParagraph(R(template.ResponsibilityOwnerTitle), fontSize: 9.8f, bold: true, spacingAfter: 1.5);
+            DrawMultiLineBlock(template.ResponsibilityOwnerBodyText, fontSize: 9.3f, spacingAfter: 1.5);
+
+            DrawParagraph(R(template.ResponsibilityCustomerTitle), fontSize: 9.8f, bold: true, spacingAfter: 1.5);
+            DrawMultiLineBlock(template.ResponsibilityCustomerBodyText, fontSize: 9.3f, spacingAfter: 1.8);
+
+            DrawMultiLineBlock(template.GeneralCommitmentText, fontSize: 9.4f, spacingAfter: 4.0);
+
+            // Chữ ký 3 cột Trang 1
+            if (currentY + 100.0 > bottomLimitY)
+            {
+                graphics.Dispose();
+                page = document.AddPage();
+                page.Width = XUnit.FromPoint(pageWidth);
+                page.Height = XUnit.FromPoint(pageHeight);
+                graphics = XGraphics.FromPdfPage(page);
+                currentY = 42.0;
+            }
+
+            var colW = contentWidth / 3.0;
+            DrawBoxedText(R(template.Page1SigLeftTitle), marginX, currentY, colW, 18, 10.2f, bold: true, alignment: "Center", maxLines: 1);
+            DrawBoxedText(R(template.Page1SigCenterTitle), marginX + colW, currentY, colW, 18, 10.2f, bold: true, alignment: "Center", maxLines: 1);
+            DrawBoxedText(R(template.Page1SigRightTitle), marginX + (colW * 2.0), currentY, colW, 18, 10.2f, bold: true, alignment: "Center", maxLines: 1);
+
+            void DrawSignatureImageIfPresent(string key, double boxX, double boxY, double boxW, double boxH)
+            {
+                if (!imageValues.TryGetValue(key, out var imgPath) ||
+                    string.IsNullOrWhiteSpace(imgPath) ||
+                    !File.Exists(imgPath))
+                    return;
+
+                using var img = XImage.FromFile(imgPath);
+                DrawContainedImage(graphics, img, new PdfImageFieldLayout
+                {
+                    X = boxX,
+                    Y = boxY,
+                    Width = boxW,
+                    Height = boxH
+                });
+            }
+
+            DrawSignatureImageIfPresent("SIG_OFFICE", marginX + 12, currentY + 16, colW - 24, 58);
+            DrawSignatureImageIfPresent("SIG_OWNER", marginX + colW + 12, currentY + 16, colW - 24, 58);
+            DrawSignatureImageIfPresent("SIG_CUSTOMER", marginX + (colW * 2.0) + 12, currentY + 16, colW - 24, 58);
+
+            var sigOfficeName = R("{{SIG_OFFICE_NAME}}").ToUpper(CultureInfo.GetCultureInfo("vi-VN"));
+            var sigOwnerName = R("{{SIG_OWNER_NAME}}").ToUpper(CultureInfo.GetCultureInfo("vi-VN"));
+            var sigCustomerName = R("{{SIG_CUSTOMER_NAME}}").ToUpper(CultureInfo.GetCultureInfo("vi-VN"));
+
+            DrawBoxedText(sigOfficeName, marginX, currentY + 76, colW, 18, 9.8f, bold: true, alignment: "Center", maxLines: 1);
+            DrawBoxedText(sigOwnerName, marginX + colW, currentY + 76, colW, 18, 9.8f, bold: true, alignment: "Center", maxLines: 1);
+            DrawBoxedText(sigCustomerName, marginX + (colW * 2.0), currentY + 76, colW, 18, 9.8f, bold: true, alignment: "Center", maxLines: 1);
+
+            graphics.Dispose();
+
+            // ==================== TRANG 2/2: DANH SÁCH HÀNH KHÁCH HOẶC GIẤY VẬN TẢI ====================
+            page = document.AddPage();
+            page.Width = XUnit.FromPoint(pageWidth);
+            page.Height = XUnit.FromPoint(pageHeight);
+            graphics = XGraphics.FromPdfPage(page);
+            currentY = 34.0;
+
+            DrawBoxedText(R(template.Page2LeftHeaderLine1).ToUpper(CultureInfo.GetCultureInfo("vi-VN")), 36, currentY, 250, 18, 9.4f, bold: true, alignment: "Center", maxLines: 2);
+            if (!string.IsNullOrWhiteSpace(template.Page2LeftHeaderLine2))
+                DrawBoxedText(R(template.Page2LeftHeaderLine2).ToUpper(CultureInfo.GetCultureInfo("vi-VN")), 36, currentY + 15, 250, 26, 9.2f, bold: true, alignment: "Center", maxLines: 2);
+
+            DrawBoxedText("CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM", 292, currentY, 265, 16, 10.2f, bold: true, alignment: "Center", maxLines: 1);
+            DrawBoxedText("Độc lập - Tự do - Hạnh phúc", 292, currentY + 15, 265, 16, 10.5f, bold: true, alignment: "Center", maxLines: 1);
+            currentY += 42.0;
+
+            DrawParagraph(R(template.Page2Title), fontSize: 13.8f, bold: true, alignment: "Center", spacingAfter: 2.0);
+            DrawMultiLineBlock(template.Page2Subtitle, fontSize: 9.8f, italic: true, alignment: "Center", spacingAfter: 6.0);
+
+            var borderPen = new XPen(XColor.FromArgb(55, 65, 81), 0.75);
+
+            if (contract.BusinessType == ContractBusinessType.Passenger)
+            {
+                double[] colWidths = [36.0, 246.0, 78.0, contentWidth - 360.0];
+                string[] headers = ["STT", "Họ tên hành khách", "Năm sinh", "Ghi chú"];
+                const double rowH = 22.0;
+
+                var xPos = marginX;
+                for (var c = 0; c < 4; c++)
+                {
+                    graphics.DrawRectangle(borderPen, xPos, currentY, colWidths[c], rowH);
+                    DrawBoxedText(headers[c], xPos + 3, currentY + 4, colWidths[c] - 6, rowH - 6, 9.8f, bold: true, alignment: "Center", maxLines: 1);
+                    xPos += colWidths[c];
+                }
+                currentY += rowH;
+
+                for (var i = 1; i <= 20; i++)
+                {
+                    xPos = marginX;
+                    string[] rowCells =
+                    [
+                        i.ToString(CultureInfo.InvariantCulture),
+                        R($"{{{{P{i:00}_NAME}}}}"),
+                        R($"{{{{P{i:00}_BIRTH_YEAR}}}}"),
+                        R($"{{{{P{i:00}_NOTE}}}}")
+                    ];
+
+                    for (var c = 0; c < 4; c++)
+                    {
+                        graphics.DrawRectangle(borderPen, xPos, currentY, colWidths[c], rowH);
+                        var align = (c == 0 || c == 2) ? "Center" : "Left";
+                        DrawBoxedText(rowCells[c], xPos + 4, currentY + 4, colWidths[c] - 8, rowH - 6, 9.6f, bold: false, alignment: align, maxLines: 1);
+                        xPos += colWidths[c];
+                    }
+                    currentY += rowH;
+                }
+
+                // Dòng TỔNG SỐ
+                xPos = marginX;
+                for (var c = 0; c < 4; c++)
+                {
+                    graphics.DrawRectangle(borderPen, xPos, currentY, colWidths[c], rowH);
+                    if (c == 1)
+                        DrawBoxedText(R(template.Page2FooterSummaryLine), xPos + 4, currentY + 4, colWidths[c] - 8, rowH - 6, 10.0f, bold: true, alignment: "Center", maxLines: 1);
+                    xPos += colWidths[c];
+                }
+                currentY += rowH + 14.0;
+            }
+            else
+            {
+                var halfW = contentWidth / 2.0;
+
+                void DrawTwoColTableRow(string leftHead, string rightHead, IReadOnlyList<string> leftLines, IReadOnlyList<string> rightLines, double bodyHeight)
+                {
+                    const double headH = 22.0;
+                    graphics.DrawRectangle(borderPen, marginX, currentY, halfW, headH);
+                    graphics.DrawRectangle(borderPen, marginX + halfW, currentY, halfW, headH);
+                    DrawBoxedText(leftHead, marginX + 5, currentY + 4, halfW - 10, headH - 6, 9.5f, bold: true, maxLines: 1);
+                    DrawBoxedText(rightHead, marginX + halfW + 5, currentY + 4, halfW - 10, headH - 6, 9.5f, bold: true, maxLines: 1);
+                    currentY += headH;
+
+                    graphics.DrawRectangle(borderPen, marginX, currentY, halfW, bodyHeight);
+                    graphics.DrawRectangle(borderPen, marginX + halfW, currentY, halfW, bodyHeight);
+
+                    var ly = currentY + 5;
+                    foreach (var line in leftLines)
+                    {
+                        DrawBoxedText(line, marginX + 6, ly, halfW - 12, 26, 9.1f, maxLines: 2);
+                        ly += 15.5;
+                    }
+
+                    var ry = currentY + 5;
+                    foreach (var line in rightLines)
+                    {
+                        DrawBoxedText(line, marginX + halfW + 6, ry, halfW - 12, 26, 9.1f, maxLines: 2);
+                        ry += 15.5;
+                    }
+
+                    currentY += bodyHeight;
+                }
+
+                DrawTwoColTableRow(
+                    "1. Thông tin về đơn vị kinh doanh",
+                    "2. Thông tin về người lái xe",
+                    [
+                        R("Đơn vị vận tải: {{TRANSPORT_COMPANY_NAME}}"),
+                        R("(MST: {{TRANSPORT_COMPANY_TAX_CODE}} - Số GPKDVT: {{TRANSPORT_COMPANY_LICENSE}})"),
+                        R("Địa chỉ trụ sở: {{TRANSPORT_COMPANY_ADDRESS}}")
+                    ],
+                    [
+                        R("TX1: {{TRANSPORT_DRIVER1_NAME}}"),
+                        R("Giấy phép lái xe số: {{TRANSPORT_DRIVER1_LICENSE_NUMBER}}"),
+                        R("TX2: {{TRANSPORT_DRIVER2_NAME}}"),
+                        R("Giấy phép lái xe số: {{TRANSPORT_DRIVER2_LICENSE_NUMBER}}")
+                    ],
+                    bodyHeight: 74.0);
+
+                DrawTwoColTableRow(
+                    "3. Thông tin về chuyến đi",
+                    "4. Thông tin về hàng hóa",
+                    [
+                        R("Người đại diện: {{TRANSPORT_COMPANY_REPRESENTATIVE}} - CCCD: {{TRANSPORT_COMPANY_REP_CITIZEN_ID}}"),
+                        R("Số điện thoại liên hệ: {{TRANSPORT_COMPANY_PHONE}}"),
+                        R("Tuyến vận chuyển: {{TRANSPORT_ROUTE}}"),
+                        R("Điểm xếp hàng: {{TRANSPORT_LOADING_POINT}}"),
+                        R("Điểm giao hàng: {{TRANSPORT_DELIVERY_POINT}}")
+                    ],
+                    [
+                        R("Tên hàng hóa: {{TRANSPORT_GOODS_NAME}}"),
+                        R("Khối lượng hàng hóa: {{TRANSPORT_CARGO_WEIGHT}}"),
+                        R("Thông tin khác: {{TRANSPORT_OTHER_INFO}}")
+                    ],
+                    bodyHeight: 92.0);
+
+                var loadLines = new List<string>();
+                var unloadLines = new List<string>();
+                for (var i = 1; i <= 3; i++)
+                {
+                    loadLines.Add(R($"- Xếp lần {i}: Địa điểm: {{{{LOAD{i}_LOCATION}}}}"));
+                    loadLines.Add(R($"- Khối lượng: {{{{LOAD{i}_WEIGHT}}}} - Thời gian: {{{{LOAD{i}_TIME}}}}"));
+                    loadLines.Add(R($"- Xác nhận: {{{{LOAD{i}_CONFIRMATION}}}}"));
+
+                    unloadLines.Add(R($"- Dỡ lần {i}: Địa điểm: {{{{UNLOAD{i}_LOCATION}}}}"));
+                    unloadLines.Add(R($"- Khối lượng: {{{{UNLOAD{i}_WEIGHT}}}} - Thời gian: {{{{UNLOAD{i}_TIME}}}}"));
+                    unloadLines.Add(R($"- Xác nhận: {{{{UNLOAD{i}_CONFIRMATION}}}}"));
+                }
+
+                DrawTwoColTableRow(
+                    "5. Phần dành cho người xếp, dỡ hàng hóa — Xếp hàng lên xe",
+                    "Thông tin về dỡ hàng xuống xe",
+                    loadLines,
+                    unloadLines,
+                    bodyHeight: 155.0);
+
+                currentY += 16.0;
+            }
+
+            // Chữ ký 2 cột Trang 2
+            var halfColW = contentWidth / 2.0;
+            DrawBoxedText(R(template.Page2SigLeftTitle), marginX, currentY, halfColW, 18, 10.5f, bold: true, alignment: "Center", maxLines: 1);
+            DrawBoxedText(R(template.Page2SigRightTitle), marginX + halfColW, currentY, halfColW, 18, 10.5f, bold: true, alignment: "Center", maxLines: 1);
+
+            if (!string.IsNullOrWhiteSpace(template.Page2SigLeftSubTitle))
+                DrawBoxedText(R(template.Page2SigLeftSubTitle), marginX, currentY + 15, halfColW, 16, 9.2f, italic: true, alignment: "Center", maxLines: 1);
+            if (!string.IsNullOrWhiteSpace(template.Page2SigRightSubTitle))
+                DrawBoxedText(R(template.Page2SigRightSubTitle), marginX + halfColW, currentY + 15, halfColW, 16, 9.2f, italic: true, alignment: "Center", maxLines: 1);
+
+            DrawSignatureImageIfPresent("SIG_CUSTOMER_2", marginX + 35, currentY + 30, halfColW - 70, 58);
+            DrawSignatureImageIfPresent("SIG_DRIVER", marginX + halfColW + 35, currentY + 30, halfColW - 70, 58);
+
+            var sigDriverName = R("{{SIG_DRIVER_NAME}}").ToUpper(CultureInfo.GetCultureInfo("vi-VN"));
+            DrawBoxedText(sigCustomerName, marginX, currentY + 90, halfColW, 18, 10.0f, bold: true, alignment: "Center", maxLines: 1);
+            DrawBoxedText(sigDriverName, marginX + halfColW, currentY + 90, halfColW, 18, 10.0f, bold: true, alignment: "Center", maxLines: 1);
+
+            graphics.Dispose();
 
             NormalizeDocumentMetadata(document, contract);
             document.Save(tempOutputPath);
@@ -166,7 +500,7 @@ public sealed class PdfContractTemplateRenderer(
             File.Move(tempOutputPath, outputPdfPath, overwrite: true);
 
             logger.LogInformation(
-                "Đã xuất PDF từ PDF nền. ContractId={ContractId}, Output={Output}",
+                "Đã xuất PDF Hợp đồng chính 2 trang từ mẫu Web/Word. ContractId={ContractId}, Output={Output}",
                 contract.Id,
                 outputPdfPath);
 
@@ -630,20 +964,20 @@ public sealed class PdfContractTemplateRenderer(
 
     public PdfLayoutRuntimeInfo GetLayoutRuntimeInfo()
     {
-        var layoutPath = ResolveContentPath(
-            configuration["DocumentGeneration:ContractLayoutsPath"],
-            Path.Combine("Templates", "Contracts", "HopDongVanChuyen.layout.json"));
+        var templatePath = mainContractTemplateService.GetTemplatesJsonPath();
+        if (File.Exists(templatePath))
+        {
+            var bytes = File.ReadAllBytes(templatePath);
+            return new PdfLayoutRuntimeInfo(
+                templatePath,
+                File.GetLastWriteTimeUtc(templatePath),
+                Convert.ToHexString(SHA256.HashData(bytes)));
+        }
 
-        if (!File.Exists(layoutPath))
-            throw new FileNotFoundException(
-                $"Không tìm thấy file layout PDF đang active tại '{layoutPath}'.",
-                layoutPath);
-
-        var bytes = File.ReadAllBytes(layoutPath);
         return new PdfLayoutRuntimeInfo(
-            layoutPath,
-            File.GetLastWriteTimeUtc(layoutPath),
-            Convert.ToHexString(SHA256.HashData(bytes)));
+            templatePath,
+            DateTime.UnixEpoch,
+            "DEFAULT_MAIN_CONTRACT_TEMPLATE");
     }
 
     private string ResolveContentPath(string? configuredPath, string defaultRelativePath)
